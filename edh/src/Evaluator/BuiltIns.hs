@@ -21,9 +21,11 @@ len :: Object
 len = OBuiltInFn "len" 1 go
   where
     go :: BuiltInFn
-    go [OString t  ] = breturn . OInt . fromIntegral $ T.length t
-    go [OArray  arr] = breturn . OInt . fromIntegral $ length arr
-    go args          = invalid len $ tshow args
+    go [OString t] =
+        breturn . ODecimal . vanillaInt . fromIntegral $ T.length t
+    go [OArray arr] =
+        breturn . ODecimal . vanillaInt . fromIntegral $ length arr
+    go args = invalid len $ tshow args
 
 bhead :: Object
 bhead = OBuiltInFn "head" 1 go

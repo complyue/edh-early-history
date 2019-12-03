@@ -1,10 +1,10 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Evaluator where
 
 import           RIO                     hiding ( Hashable )
 
 import           Control.Monad.Except
 
-import           Data.List                      ( last )
 import qualified Data.Map.Strict               as M
 import           Evaluator.Object
 import           Evaluator.Types
@@ -56,27 +56,30 @@ evalIdent i = do
         Nothing -> evalError $ "identifier not found: " <> tshow i
 
 evalLiteral :: Literal -> Evaluator Object
-evalLiteral (IntLiteral    i) = return $ OInt i
+evalLiteral (DecLiteral n e ) = return $ ODecimal $ Decimal e 1 n
 evalLiteral (BoolLiteral   b) = return $ OBool b
 evalLiteral (StringLiteral s) = return $ OString s
 
 evalPrefix :: Prefix -> Expr -> Evaluator Object
 evalPrefix Not         = fmap (OBool . not) . (evalExpr >=> o2b)
-evalPrefix PrefixPlus  = fmap OInt . (evalExpr >=> o2n)
-evalPrefix PrefixMinus = fmap (OInt . negate) . (evalExpr >=> o2n)
+evalPrefix PrefixPlus  = fmap ODecimal . (evalExpr >=> o2n)
+evalPrefix PrefixMinus = fmap (ODecimal . negateDecimal) . (evalExpr >=> o2n)
 
 evalInfix :: Infix -> Expr -> Expr -> Evaluator Object
-evalInfix Plus        = (join .) . ee2x (oAdd) return
-evalInfix Minus       = (fmap OInt .) . ee2x (-) o2n
-evalInfix Multiply    = (fmap OInt .) . ee2x (*) o2n
-evalInfix Divide      = (fmap OInt .) . ee2x div o2n
+evalInfix Plus  = (join .) . ee2x oAdd return
+evalInfix Minus = \e e' -> do
+    d  <- o2n =<< evalExpr e
+    d' <- o2n =<< evalExpr e'
+    return $ ODecimal $ addDecimal d $ negateDecimal d'
+evalInfix Multiply    = (fmap ODecimal .) . ee2x mulDecimal o2n
+evalInfix Divide      = (fmap ODecimal .) . ee2x divDecimal o2n
 evalInfix Eq          = (fmap OBool .) . ee2x (==) return
 evalInfix NotEq       = (fmap OBool .) . ee2x (/=) return
 evalInfix GreaterThan = (fmap OBool .) . ee2x (>) o2n
 evalInfix LessThan    = (fmap OBool .) . ee2x (<) o2n
 
 oAdd :: Object -> Object -> Evaluator Object
-oAdd (OInt x) (OInt y) = return . OInt $ x + y
+oAdd (ODecimal x) (ODecimal y) = return . ODecimal $ addDecimal x y
 oAdd (OString x) (OString y) = return . OString $ x <> y
 oAdd x y = evalError $ tshow x <> " and " <> tshow y <> " are not addable"
 
@@ -150,12 +153,17 @@ evalHash hs = do
         o <- evalExpr e
         return (h, o)
 
+decimalAsIndex :: Integral i => Decimal -> Evaluator i
+decimalAsIndex o@(Decimal e d n)
+    | d == 1 && e >= 0 = return $ fromIntegral n * 10 ^ e
+    | otherwise        = evalError $ tshow o <> " is not a valid index"
+
 evalIndex :: Expr -> Expr -> Evaluator Object
 evalIndex targetE idxE = do
     target <- evalExpr targetE
     case target of
         OArray arr -> do
-            idx <- evalExpr idxE >>= o2n
+            (idx :: Integer) <- evalExpr idxE >>= o2n >>= decimalAsIndex
             return $ fromMaybe nil (arr `at` idx)
         OHash hash -> do
             h <- evalExpr idxE >>= o2h
@@ -166,9 +174,9 @@ o2b :: Object -> Evaluator Bool
 o2b (OBool b) = return b
 o2b o         = evalError $ tshow o <> " is not a bool"
 
-o2n :: Object -> Evaluator Integer
-o2n (OInt i) = return i
-o2n o        = evalError $ tshow o <> " is not a number"
+o2n :: Object -> Evaluator Decimal
+o2n (ODecimal d) = return d
+o2n o            = evalError $ tshow o <> " is not a number"
 
 o2f :: Object -> Evaluator Object
 o2f o@(OFn        _ _ _) = return o
@@ -176,10 +184,10 @@ o2f o@(OBuiltInFn _ _ _) = return o
 o2f o                    = evalError $ tshow o <> " is not a function"
 
 o2h :: Object -> Evaluator Hashable
-o2h (OInt    i) = return $ IntHash i
-o2h (OBool   b) = return $ BoolHash b
-o2h (OString t) = return $ StringHash t
-o2h o           = evalError $ tshow o <> " is not hashable"
+o2h (ODecimal d) = return $ DecimalHash d
+o2h (OBool    b) = return $ BoolHash b
+o2h (OString  t) = return $ StringHash t
+o2h o            = evalError $ tshow o <> " is not hashable"
 
 l2h :: Literal -> Evaluator Hashable
 l2h = evalLiteral >=> o2h

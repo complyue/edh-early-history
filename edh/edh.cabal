@@ -36,7 +36,6 @@ library
         Parser.AST
         Parser.Types
         Utils
-        NiceLook
     hs-source-dirs: src
     other-modules:
         Paths_edh

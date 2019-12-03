@@ -6,7 +6,7 @@ data Token = Illegal
            | EOF
            -- identifier and literals
            | Ident Text
-           | IntLiteral Integer
+           | DecLiteral Integer Integer
            | BoolLiteral Bool
            | StringLiteral Text
            -- statements

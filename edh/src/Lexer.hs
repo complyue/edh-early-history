@@ -96,10 +96,13 @@ lexReservedOrIdent = do
 
 lexInteger :: Lexer Token
 lexInteger = many1 digit >>= \n ->
-    ((string "e" <|> string "E") >> many1 digit >>= \e ->
-            return $ IntLiteral $ read n * (10 :: Integer) ^ (read e :: Integer)
+    ((string "e-" <|> string "E-") >> many1 digit >>= \e ->
+            return $ DecLiteral (read n) (-(read e))
         )
-        <|> return (IntLiteral (read n))
+        <|> ((atom 'e' <|> atom 'E') >> many1 digit >>= \e ->
+                return $ DecLiteral (read n) (read e)
+            )
+        <|> (return $ DecLiteral (read n) 0)
 
 lexIllegal :: Lexer Token
 lexIllegal = consume $> Illegal

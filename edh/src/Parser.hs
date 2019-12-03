@@ -122,7 +122,7 @@ parseHashExpr = do
 parseLiteral :: Parser Literal
 parseLiteral = next >>= go
   where
-    go (Tk.IntLiteral    i) = return $ IntLiteral i
+    go (Tk.DecLiteral n e ) = return $ DecLiteral n e
     go (Tk.BoolLiteral   b) = return $ BoolLiteral b
     go (Tk.StringLiteral s) = return $ StringLiteral s
     go _                    = fail "fail to parse a literal"

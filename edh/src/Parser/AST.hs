@@ -37,7 +37,7 @@ data Expr = IdentExpr Ident
                       }
           deriving (Show, Eq)
 
-data Literal = IntLiteral Integer
+data Literal = DecLiteral Integer Integer
              | BoolLiteral Bool
              | StringLiteral Text
              deriving (Show, Eq)
