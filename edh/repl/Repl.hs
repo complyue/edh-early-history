@@ -18,7 +18,7 @@ import           System.Console.Haskeline
 import qualified GHC.Show                      as G
 
 read :: IO (Maybe Text)
-read = runInputT defaultSettings $ (fmap . fmap) T.pack $ getInputLine "> "
+read = runInputT defaultSettings $ (fmap . fmap) T.pack $ getInputLine "Đ: "
 
 data InterpretError = P ParserError | E EvalError
 
