@@ -1,0 +1,40 @@
+cabal-version: 2.4
+name: edh
+version: 0.1.0.0
+license: BSD-3-Clause
+copyright: 2019 Compl Yue
+maintainer: compl.yue@icloud.com
+author: Compl Yue
+stability: experimental
+homepage: https://github.com/complyue/edh
+bug-reports: https://github.com/complyue/edh/issues
+synopsis: the language/runtime for Event Distributing & Hosting
+description:
+    Please see the README on Github at <https://github.com/complyue/edh>
+category: Distributed,Event,Distributing,Hosting,Runtime,Language
+build-type: Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+    type: git
+    location: https://github.com/complyue/edh
+
+library
+    exposed-modules:
+        PoC
+    hs-source-dirs: src
+    other-modules:
+        Paths_edh
+    autogen-modules:
+        Paths_edh
+    default-language: Haskell2010
+    default-extensions: NoImplicitPrelude OverloadedStrings
+    ghc-options: -Wall
+    build-depends:
+        ghc >=8.6.5,
+        base >=4.12 && <5,
+        rio -any,
+        transformers -any,
+        containers -any
