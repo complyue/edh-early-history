@@ -39,13 +39,11 @@ repl :: EvalState -> IO EvalState
 repl state = read >>= \case
     Nothing   -> return state
     Just text -> case T.strip text of
-        ""    -> repl state
-        text' -> do
-            result <- evaluate state text'
-            case result of
-                Left err -> do
-                    putStrLn $ tshow err
-                    repl state
-                Right (object, state') -> do
-                    putStrLn $ tshow object
-                    repl state'
+        "" -> repl state
+        _  -> evaluate state text >>= \case
+            Left err -> do
+                putStrLn $ tshow err
+                repl state
+            Right (object, state') -> do
+                putStrLn $ tshow object
+                repl state'
