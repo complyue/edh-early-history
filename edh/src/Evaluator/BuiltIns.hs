@@ -58,7 +58,7 @@ bprint = OBuiltInFn "print" 1 go
 
 builtIns :: [(Ident, Object)]
 builtIns =
-    [ (Ident "null" , ONull)
+    [ (Ident "null" , nil)
     , (Ident "len"  , len)
     , (Ident "head" , bhead)
     , (Ident "tail" , btail)
