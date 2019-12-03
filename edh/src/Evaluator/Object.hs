@@ -35,9 +35,11 @@ instance Eq Decimal where
         else n * d' == n' * d * 10 ^ (e' - e)
 
 normalizeDecimal :: Decimal -> Decimal
-normalizeDecimal (Decimal e d n) = if d'' < 0
-    then Decimal (ne - de) (-d'') (-n'')
-    else Decimal (ne - de) d'' n''
+normalizeDecimal (Decimal e d n) = if d == 0
+    then (Decimal 0 0 $ if n == 0 then 0 else if n < 0 then (-1) else 1)
+    else if d'' < 0
+        then Decimal (ne - de) (-d'') (-n'')
+        else Decimal (ne - de) d'' n''
   where
     (n', d') =
         if e >= 0 then simplify (n * 10 ^ e) d else simplify n (d * 10 ^ (-e))
@@ -69,21 +71,23 @@ divDecimal (Decimal e d n) (Decimal e' d' n') =
     mulDecimal (Decimal e d n) (Decimal (-e') n' d')
 
 showDecimal :: Decimal -> String
-showDecimal (Decimal e d n) = if abs e < 5
-    then
-        (if e < 0
-            then show n <> "/" <> show (d * 10 ^ (-e))
-            else if d == 1
-                then show (n * 10 ^ e)
-                else show (n * 10 ^ e) <> "/" <> show d
-        )
-    else if d == 1
-        then (if e == 0 then show n else show n <> "e" <> show e)
-        else if e == 0
-            then (show n <> "/" <> show d)
-            else if e > 0
-                then (show n <> "e" <> show e <> "/" <> show d)
-                else (show n <> "/" <> show d <> "e" <> show (-e))
+showDecimal (Decimal e d n) = if d == 0
+    then (if n == 0 then "NaN" else if n < 0 then "-Inf" else "Inf")
+    else if abs e < 5
+        then
+            (if e < 0
+                then show n <> "/" <> show (d * 10 ^ (-e))
+                else if d == 1
+                    then show (n * 10 ^ e)
+                    else show (n * 10 ^ e) <> "/" <> show d
+            )
+        else if d == 1
+            then (if e == 0 then show n else show n <> "e" <> show e)
+            else if e == 0
+                then (show n <> "/" <> show d)
+                else if e > 0
+                    then (show n <> "e" <> show e <> "/" <> show d)
+                    else (show n <> "/" <> show d <> "e" <> show (-e))
 
 
 data Object = ODecimal Decimal
