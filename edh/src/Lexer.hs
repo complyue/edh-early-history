@@ -95,7 +95,11 @@ lexReservedOrIdent = do
         _        -> Ident (T.pack str)
 
 lexInteger :: Lexer Token
-lexInteger = IntLiteral . read <$> many1 digit
+lexInteger = many1 digit >>= \n ->
+    ((string "e" <|> string "E") >> many1 digit >>= \e ->
+            return $ IntLiteral $ read n * (10 :: Integer) ^ (read e :: Integer)
+        )
+        <|> return (IntLiteral (read n))
 
 lexIllegal :: Lexer Token
 lexIllegal = consume $> Illegal

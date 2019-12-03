@@ -6,7 +6,9 @@ import qualified Data.Text                     as T
 
 import qualified Data.Map.Strict               as M
 import           GHC.Show                       ( Show(..) )
+
 import           Parser.AST
+import           NiceLook
 
 data Object = OInt Integer
             | OBool Bool
@@ -25,7 +27,7 @@ data Object = OInt Integer
             | OReturn Object
 
 instance Show Object where
-    show (OInt    x) = show x
+    show (OInt    x) = shortenDecimal x
     show (OBool   x) = if x then "true" else "false"
     show (OString x) = show x
     show (OArray  x) = show x
