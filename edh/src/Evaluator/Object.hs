@@ -31,6 +31,7 @@ instance Show Object where
     show (OArray  x) = show x
     show (OHash   m) = "{" ++ go (M.toList m) ++ "}"
       where
+        go []       = ""
         go [(l, o)] = show l ++ ":" ++ show o
         go (x : xs) = go [x] ++ "," ++ go xs
     show ONull              = "null"
