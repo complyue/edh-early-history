@@ -15,7 +15,7 @@ category: Distributed,Event,Distributing,Hosting,Runtime,Language
 build-type: Simple
 extra-source-files:
     README.md
-    ChangeLog.md
+    CHANGELOG.md
 
 source-repository head
     type: git
