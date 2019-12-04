@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module EDH.Lexer where
 
 import           Prelude                        ( read )
@@ -8,10 +9,8 @@ import qualified Data.Text                     as T
 import           EDH.Common.ParserT
 import           EDH.Lexer.Token
 import           EDH.Lexer.Types
-import           EDH.Utils                      ( unsafeFromRight
-                                                , isLetter
+import           EDH.Utils                      ( isLetter
                                                 , isDigit
-                                                , (<||>)
                                                 )
 
 lexToken :: Lexer Token
@@ -56,25 +55,22 @@ lexPunctuation = choose
 
 lexString :: Lexer Token
 lexString = do
-    atom '"'
-    x <- go -- will lex the closing double quotation mark too
-    return $ StringLiteral x
+    void $ atom '"'
+    StringLiteral <$> go
   where
     go :: Lexer Text
-    go = do
-        c <- next
-        case c of
-            '"'  -> return ""
-            '\\' -> do
-                c <- next
-                T.cons
-                        (case c of
-                            'n' -> '\n'
-                            't' -> '\t'
-                            c   -> c
-                        )
-                    <$> go
-            c -> T.cons c <$> go
+    go = next >>= \case
+        '"'  -> return ""
+        '\\' -> do
+            c <- next
+            T.cons
+                    (case c of
+                        'n' -> '\n'
+                        't' -> '\t'
+                        c_  -> c_
+                    )
+                <$> go
+        c -> T.cons c <$> go
 
 letter :: Lexer Char
 letter = predicate isLetter
@@ -118,7 +114,6 @@ lex = execLexer go
     go :: Lexer [Token]
     go = do
         skipWhitespaces
-        c <- preview
-        case c of
+        preview >>= \case
             Nothing -> return [EOF]
-            Just x  -> (:) <$> lexToken <*> go
+            _       -> (:) <$> lexToken <*> go

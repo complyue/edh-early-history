@@ -29,7 +29,7 @@ ma << mb = ma >>= \a -> mb $> a
 type (~>) f1 f2 = forall a . f1 a -> f2 a
 
 returnOrThrow :: (MonadError e m) => e -> Maybe ~> m
-returnOrThrow e (Just a) = return a
+returnOrThrow _ (Just a) = return a
 returnOrThrow e Nothing  = throwError e
 
 at :: Integral n => [a] -> n -> Maybe a

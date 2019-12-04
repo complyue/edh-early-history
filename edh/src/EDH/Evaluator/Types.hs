@@ -10,7 +10,7 @@ import           Control.Monad.Trans.Class      ( MonadTrans(..) )
 
 import           EDH.Evaluator.BuiltIns         ( builtIns )
 import           EDH.Evaluator.Object
-import           EDH.Parser.AST                 ( Ident )
+import           EDH.Parser.AST                 ( )
 
 
 newtype EvalError = EvalError Text

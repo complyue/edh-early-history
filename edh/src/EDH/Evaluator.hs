@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 module EDH.Evaluator where
 
 import           RIO                     hiding ( Hashable )
@@ -31,28 +32,28 @@ evalStmt (LetStmt ident expr) = evalExpr expr >>= registerIdent ident
 registerIdent :: Ident -> Object -> Evaluator Object
 registerIdent ident o = do
     ref <- getEnvRef
-    lift $ insertVar ident o ref
+    void $ lift $ insertVar ident o ref
     return o
 
 evalError :: Text -> Evaluator a
 evalError = throwError . EvalError
 
 evalExpr :: Expr -> Evaluator Object
-evalExpr (IdentExpr i                    ) = evalIdent i
-evalExpr (LitExpr   l                    ) = evalLiteral l
-evalExpr (PrefixExpr p e                 ) = evalPrefix p e
-evalExpr (InfixExpr i    l     r         ) = evalInfix i l r
-evalExpr (IfExpr    cond conse maybeAlter) = evalIf cond conse maybeAlter
-evalExpr (FnExpr   params body           ) = evalFn params body
-evalExpr (CallExpr fn     args           ) = evalCall fn args
-evalExpr (ArrayExpr es                   ) = evalArray es
-evalExpr (HashExpr  hs                   ) = evalHash hs
-evalExpr (IndexExpr a i                  ) = evalIndex a i
+evalExpr (IdentExpr i                     ) = evalIdent i
+evalExpr (LitExpr   l                     ) = evalLiteral l
+evalExpr (PrefixExpr p e                  ) = evalPrefix p e
+evalExpr (InfixExpr i     l     r         ) = evalInfix i l r
+evalExpr (IfExpr    cond_ conse maybeAlter) = evalIf cond_ conse maybeAlter
+evalExpr (FnExpr   params_ body_          ) = evalFn params_ body_
+evalExpr (CallExpr fn_     args           ) = evalCall fn_ args
+evalExpr (ArrayExpr es                    ) = evalArray es
+evalExpr (HashExpr  hs                    ) = evalHash hs
+evalExpr (IndexExpr a i                   ) = evalIndex a i
 
 evalIdent :: Ident -> Evaluator Object
 evalIdent i = do
-    env <- getEnvRef
-    var <- lift $ getVar i env
+    env_ <- getEnvRef
+    var  <- lift $ getVar i env_
     case var of
         Just o  -> return o
         Nothing -> evalError $ "identifier not found: " <> tshow i
@@ -83,8 +84,8 @@ oAdd (OString x) (OString y) = return . OString $ x <> y
 oAdd x y = evalError $ tshow x <> " and " <> tshow y <> " are not addable"
 
 evalIf :: Expr -> BlockStmt -> Maybe BlockStmt -> Evaluator Object
-evalIf cond conse maybeAlter = do
-    condBool <- evalExpr cond >>= o2b
+evalIf cond_ conse maybeAlter = do
+    condBool <- evalExpr cond_ >>= o2b
     if condBool
         then evalBlockStmt conse
         else case maybeAlter of
@@ -92,51 +93,46 @@ evalIf cond conse maybeAlter = do
             Nothing    -> return nil
 
 evalFn :: [Ident] -> BlockStmt -> Evaluator Object
-evalFn params body = do
-    ref <- getEnvRef
-    return $ OFn params body ref
+evalFn params_ body_ = OFn params_ body_ <$> getEnvRef
 
 evalCall :: Expr -> [Expr] -> Evaluator Object
-evalCall fnExpr argExprs = do
-    fn <- evalExpr fnExpr >>= o2f
-    case fn of
-        OFn        params body      fRef -> evalFnCall params body fRef
-        OBuiltInFn _      numParams fn   -> evalBuiltInFnCall numParams fn
+evalCall fnExpr argExprs = evalExpr fnExpr >>= \case
+    OFn params_ body_ fRef -> evalFnCall params_ body_ fRef
+    OBuiltInFn _ numParams_ fn_ -> evalBuiltInFnCall numParams_ fn_
+    o -> evalError $ tshow o <> " is not a function"
   where
     evalFnCall :: [Ident] -> BlockStmt -> EnvRef -> Evaluator Object
-    evalFnCall params body fRef = do
-        if length params /= length argExprs
-            then
-                evalError
-                $  "wrong number of arguments: "
-                <> tshow (length params)
-                <> " expected but "
-                <> tshow (length argExprs)
-                <> " given"
-            else do
-                args    <- traverse evalExpr argExprs
-                origRef <- getEnvRef
-                lift (wrapEnv fRef $ zip params args) >>= setEnvRef
-                o <- returned <$> evalBlockStmt body
-                setEnvRef origRef
-                return o
+    evalFnCall params_ body_ fRef = if length params_ /= length argExprs
+        then
+            evalError
+            $  "wrong number of arguments: "
+            <> tshow (length params_)
+            <> " expected but "
+            <> tshow (length argExprs)
+            <> " given"
+        else do
+            args    <- traverse evalExpr argExprs
+            origRef <- getEnvRef
+            lift (wrapEnv fRef $ zip params_ args) >>= setEnvRef
+            o <- returned <$> evalBlockStmt body_
+            setEnvRef origRef
+            return o
 
     evalBuiltInFnCall :: Int -> BuiltInFn -> Evaluator Object
-    evalBuiltInFnCall numParams fn = do
-        if numParams /= length argExprs
-            then
-                evalError
-                $  "wrong number of arguments: "
-                <> tshow (numParams)
-                <> " expected but "
-                <> tshow (length argExprs)
-                <> " given"
-            else do
-                args <- traverse evalExpr argExprs
-                res  <- lift $ fn args
-                case res of
-                    Left  t -> evalError t
-                    Right o -> return o
+    evalBuiltInFnCall numParams_ fn_ = if numParams_ /= length argExprs
+        then
+            evalError
+            $  "wrong number of arguments: "
+            <> tshow numParams_
+            <> " expected but "
+            <> tshow (length argExprs)
+            <> " given"
+        else do
+            args <- traverse evalExpr argExprs
+            res  <- lift $ fn_ args
+            case res of
+                Left  t -> evalError t
+                Right o -> return o
 
 evalArray :: [Expr] -> Evaluator Object
 evalArray = fmap OArray . traverse evalExpr
@@ -177,11 +173,6 @@ o2n :: Object -> Evaluator Decimal
 o2n (ODecimal d) = return d
 o2n o            = evalError $ tshow o <> " is not a number"
 
-o2f :: Object -> Evaluator Object
-o2f o@(OFn        _ _ _) = return o
-o2f o@(OBuiltInFn _ _ _) = return o
-o2f o                    = evalError $ tshow o <> " is not a function"
-
 o2h :: Object -> Evaluator Hashable
 o2h (ODecimal d) = return $ DecimalHash d
 o2h (OBool    b) = return $ BoolHash b
@@ -201,4 +192,4 @@ eval p = do
 
 evalWithState
     :: Program -> EvalState -> IO (Either EvalError (Object, EvalState))
-evalWithState p s = execEvaluatorT (evalProgram p) s
+evalWithState p = execEvaluatorT (evalProgram p ) 

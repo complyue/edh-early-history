@@ -84,7 +84,7 @@ inf :: Object
 inf = ODecimal D.inf
 
 ret :: Object -> Object
-ret o = OReturn o
+ret = OReturn
 
 isReturned :: Object -> Bool
 isReturned (OReturn _) = True
@@ -111,7 +111,7 @@ insertVar :: Ident -> Object -> EnvRef -> IO EnvRef
 insertVar i o ref = modifyIORef ref (go i o) $> ref
   where
     go :: Ident -> Object -> Environment -> Environment
-    go i o (Environment m p) = Environment (M.insert i o m) p
+    go i_ o_ (Environment m p) = Environment (M.insert i_ o_ m) p
 
 getVar :: Ident -> EnvRef -> IO (Maybe Object)
 getVar i ref = do
@@ -119,5 +119,5 @@ getVar i ref = do
     case M.lookup i m of
         Just o  -> return $ Just o
         Nothing -> case p of
-            Just parent -> getVar i parent
-            Nothing     -> return $ Nothing
+            Just p_ -> getVar i p_
+            Nothing -> return Nothing

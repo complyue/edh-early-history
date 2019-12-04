@@ -3,7 +3,6 @@ module EDH.Parser where
 import           RIO                     hiding ( fail
                                                 , many
                                                 , optional
-                                                , preview
                                                 )
 
 import           EDH.Common.ParserT
@@ -26,16 +25,16 @@ parseIdent = next >>= go
 
 parseLetStmt :: Parser Stmt
 parseLetStmt = do
-    atom Tk.Let
+    void $ atom Tk.Let
     ident <- parseIdent
-    atom Tk.Assign
+    void $ atom Tk.Assign
     expr <- parseExpr
     optional $ atom Tk.SemiColon
     return $ LetStmt ident expr
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
-    atom Tk.Return
+    void $ atom Tk.Return
     expr <- parseExpr
     optional $ atom Tk.SemiColon
     return $ ReturnStmt expr
@@ -48,9 +47,9 @@ parseExprStmt = ExprStmt <$> do
 
 parseBlockStmt :: Parser BlockStmt
 parseBlockStmt = do
-    atom Tk.LBrace
+    void $ atom Tk.LBrace
     ss <- many parseStmt
-    atom Tk.RBrace
+    void $ atom Tk.RBrace
     return ss
 
 infixOp :: Tk.Token -> (Precedence, Maybe Infix)
@@ -80,42 +79,42 @@ parseAtomExpr = choose
 
 parseParenExpr :: Parser Expr
 parseParenExpr = do
-    atom Tk.LParen
+    void $ atom Tk.LParen
     expr <- parseExpr
-    atom Tk.RParen
+    void $ atom Tk.RParen
     return expr
 
 parseArrayExpr :: Parser Expr
 parseArrayExpr = do
-    atom Tk.LBracket
+    void $ atom Tk.LBracket
     exprs <- parseExprs <|> return []
-    atom Tk.RBracket
+    void $ atom Tk.RBracket
     return $ ArrayExpr exprs
   where
     parseExprs :: Parser [Expr]
     parseExprs = do
         e  <- parseExpr
         es <- many $ do
-            atom Tk.Comma
+            void $ atom Tk.Comma
             parseExpr
         return $ e : es
 
 parseHashExpr :: Parser Expr
 parseHashExpr = do
-    atom Tk.LBrace
+    void $ atom Tk.LBrace
     pairs <-
         (parseHashPair >>= \pair -> do
                 morePairs <- many $ atom Tk.Comma >> parseHashPair
                 return $ pair : morePairs
             )
             <|> return []
-    atom Tk.RBrace
+    void $ atom Tk.RBrace
     return $ HashExpr pairs
   where
     parseHashPair :: Parser (Literal, Expr)
     parseHashPair = do
         l <- parseLiteral
-        atom Tk.Colon
+        void $ atom Tk.Colon
         e <- parseExpr
         return $ (l, e)
 
@@ -136,18 +135,18 @@ parsePrattExpr precedence = do
     go precedence left
   where
     go :: Precedence -> Expr -> Parser Expr
-    go precedence left = do
+    go p left = do
         maybePeekInfixOp <- fmap infixOp <$> preview
         case maybePeekInfixOp of
-            Just (PCall, _) | precedence < PCall -> do
+            Just (PCall, _) | p < PCall -> do
                 left' <- parseCallExpr left
-                go precedence left'
-            Just (PIndex, _) | precedence < PIndex -> do
+                go p left'
+            Just (PIndex, _) | p < PIndex -> do
                 left' <- parseIndexExpr left
-                go precedence left'
-            Just (peekPrecedence, _) | precedence < peekPrecedence -> do
+                go p left'
+            Just (peekPrecedence, _) | p < peekPrecedence -> do
                 left' <- parseInfixExpr left
-                go precedence left'
+                go p left'
             _ -> return left
 
 parsePrefixExpr :: Parser Expr
@@ -170,21 +169,21 @@ parseInfixExpr left = do
 
 parseCallExpr :: Expr -> Parser Expr
 parseCallExpr fnHandle = do
-    atom Tk.LParen
+    void $ atom Tk.LParen
     args <-
         (parseExpr >>= \arg -> do
                 moreArgs <- many $ atom Tk.Comma >> parseExpr
                 return $ arg : moreArgs
             )
             <|> return []
-    atom Tk.RParen
+    void $ atom Tk.RParen
     return $ CallExpr fnHandle args
 
 parseIndexExpr :: Expr -> Parser Expr
 parseIndexExpr arr = do
-    atom Tk.LBracket
+    void $ atom Tk.LBracket
     idx <- parseExpr
-    atom Tk.RBracket
+    void $ atom Tk.RBracket
     return $ IndexExpr arr idx
 
 parseLitExpr :: Parser Expr
@@ -195,14 +194,14 @@ parseIdentExpr = IdentExpr <$> parseIdent
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do
-    atom Tk.If
-    atom Tk.LParen
+    void $ atom Tk.If
+    void $ atom Tk.LParen
     expr <- parseExpr
-    atom Tk.RParen
-    consequence <- parseBlockStmt
-    IfExpr expr consequence
+    void $ atom Tk.RParen
+    consequence_ <- parseBlockStmt
+    IfExpr expr consequence_
         <$> (   (do
-                    atom Tk.Else
+                    void $ atom Tk.Else
                     Just <$> parseBlockStmt
                 )
             <|> return Nothing
@@ -210,18 +209,17 @@ parseIfExpr = do
 
 parseFnExpr :: Parser Expr
 parseFnExpr = do
-    atom Tk.Function
-    atom Tk.LParen
-    params <- parseParams <|> return []
-    atom Tk.RParen
-    body <- parseBlockStmt
-    return $ FnExpr params body
+    void $ atom Tk.Function
+    void $ atom Tk.LParen
+    params_ <- parseParams <|> return []
+    void $ atom Tk.RParen
+    FnExpr params_ <$> parseBlockStmt
   where
     parseParams :: Parser [Ident]
     parseParams = do
         p  <- parseIdent
         ps <- many $ do
-            atom Tk.Comma
+            void $ atom Tk.Comma
             parseIdent
         return $ p : ps
 
