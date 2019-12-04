@@ -60,6 +60,7 @@ infixOp Tk.Plus        = (PSum, Just Plus)
 infixOp Tk.Minus       = (PSum, Just Minus)
 infixOp Tk.Multiply    = (PProduct, Just Multiply)
 infixOp Tk.Divide      = (PProduct, Just Divide)
+infixOp Tk.UpdHash     = (PHashUpd, Just UpdHash)
 infixOp Tk.LParen      = (PCall, Nothing) -- for call expr
 infixOp Tk.LBracket    = (PIndex, Nothing) -- for index expr
 infixOp _              = (PLowest, Nothing)

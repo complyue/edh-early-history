@@ -39,6 +39,7 @@ lexOperator = choose
     , parseMap "!"  Not
     , parseMap ">"  GreaterThan
     , parseMap "<"  LessThan
+    , parseMap "#"  UpdHash
     ]
 
 lexPunctuation :: Lexer Token

@@ -23,6 +23,7 @@ data Token = Illegal
            | GreaterThan
            | LessThan
            | Not
+           | UpdHash
            -- reserved words
            | Function
            | Return

@@ -77,11 +77,17 @@ evalInfix Eq          = (fmap OBool .) . ee2x (==) return
 evalInfix NotEq       = (fmap OBool .) . ee2x (/=) return
 evalInfix GreaterThan = (fmap OBool .) . ee2x decimalGreater o2n
 evalInfix LessThan    = (fmap OBool .) . ee2x decimalLess o2n
+evalInfix UpdHash     = (join .) . ee2x updHash return
 
 oAdd :: Object -> Object -> Evaluator Object
 oAdd (ODecimal x) (ODecimal y) = return . ODecimal $ addDecimal x y
 oAdd (OString x) (OString y) = return . OString $ x <> y
 oAdd x y = evalError $ tshow x <> " and " <> tshow y <> " are not addable"
+
+updHash :: Object -> Object -> Evaluator Object
+updHash (OHash x) (OHash y) = return $ OHash $ M.union y x
+updHash x y =
+    evalError $ tshow x <> " and " <> tshow y <> " both need to be hash map"
 
 evalIf :: Expr -> BlockStmt -> Maybe BlockStmt -> Evaluator Object
 evalIf cond_ conse maybeAlter = do

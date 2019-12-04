@@ -59,6 +59,7 @@ data Infix = Plus
            | NotEq
            | GreaterThan
            | LessThan
+           | UpdHash
            deriving (Show, Eq)
 
 data Precedence = PLowest
@@ -66,6 +67,7 @@ data Precedence = PLowest
                 | PLessGreater
                 | PSum
                 | PProduct
+                | PHashUpd
                 | PCall
                 | PIndex
                 deriving (Show, Eq, Ord)
