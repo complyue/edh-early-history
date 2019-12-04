@@ -25,14 +25,51 @@ instance Show Decimal where
     show = showDecimal
 
 instance Ord Decimal where
-    compare (Decimal x'e x'd x'n) (Decimal y'e y'd y'n) = if x'e >= y'e
-        then compare (x'n * y'd * 10 ^ (x'e - y'e)) (y'n * x'd)
-        else compare (x'n * y'd) (y'n * x'd * 10 ^ (y'e - x'e))
+    compare (Decimal x'e x'd x'n) (Decimal y'e y'd y'n) =
+        if x'd == 0 || y'd == 0
+            then -- at least one nan or inf involved
+                (case () of
+                    -- nan vs
+                    () | x'n == 0 && x'd == 0 ->
+                        -- it's considered equal compared to another nan,
+                        -- and even greater compared to +inf, so that
+                        -- nans are sorted last in ascending order.
+                        if y'n == 0 && y'd == 0 then EQ else GT
+                    -- -inf vs 
+                    () | x'n < 0 && x'd == 0 ->
+                        if y'n < 0 && y'd == 0 then EQ else LT
+                    -- inf vs 
+                    () | x'n > 0 && x'd == 0 ->
+                        if y'n > 0 && y'd == 0 then EQ else GT
+                    () | otherwise -> error "imposible case"
+                )
+            else if x'e >= y'e -- no nan/inf involved
+                then compare (x'n * y'd * 10 ^ (x'e - y'e)) (y'n * x'd)
+                else compare (x'n * y'd) (y'n * x'd * 10 ^ (y'e - x'e))
 
 instance Eq Decimal where
-    Decimal e d n == Decimal e' d' n' = if e >= e'
-        then n * d' * 10 ^ (e - e') == n' * d
-        else n * d' == n' * d * 10 ^ (e' - e)
+    Decimal x'e x'd x'n == Decimal y'e y'd y'n = if x'd == 0 || y'd == 0
+        then -- at least one nan or inf involved
+            (if x'n == 0 || y'n == 0
+                -- at least one nan or zero involved
+                then False
+                -- no nan, inf is considered equal iff exactly equal
+                -- todo handle unnormalized inf if that's possible
+                else x'e == y'e && x'd == y'd && x'n == y'n
+            )
+        else if x'e >= y'e -- no nan/inf involved
+            then x'n * y'd * 10 ^ (x'e - y'e) == y'n * y'd
+            else x'n * y'd == y'n * x'd * 10 ^ (y'e - x'e)
+
+decimalGreater :: Decimal -> Decimal -> Bool
+decimalGreater x@(Decimal _x'e x'd x'n) y@(Decimal _y'e y'd y'n) =
+    -- always False when nan involved
+    if (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) then False else x > y
+
+decimalLess :: Decimal -> Decimal -> Bool
+decimalLess x@(Decimal _x'e x'd x'n) y@(Decimal _y'e y'd y'n) =
+    -- always False when nan involved
+    if (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) then False else x < y
 
 normalizeDecimal :: Decimal -> Decimal
 normalizeDecimal (Decimal e d n) = if d == 0

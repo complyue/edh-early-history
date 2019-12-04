@@ -72,8 +72,8 @@ evalInfix Multiply    = (fmap ODecimal .) . ee2x mulDecimal o2n
 evalInfix Divide      = (fmap ODecimal .) . ee2x divDecimal o2n
 evalInfix Eq          = (fmap OBool .) . ee2x (==) return
 evalInfix NotEq       = (fmap OBool .) . ee2x (/=) return
-evalInfix GreaterThan = (fmap OBool .) . ee2x (>) o2n
-evalInfix LessThan    = (fmap OBool .) . ee2x (<) o2n
+evalInfix GreaterThan = (fmap OBool .) . ee2x decimalGreater o2n
+evalInfix LessThan    = (fmap OBool .) . ee2x decimalLess o2n
 
 oAdd :: Object -> Object -> Evaluator Object
 oAdd (ODecimal x) (ODecimal y) = return . ODecimal $ addDecimal x y
