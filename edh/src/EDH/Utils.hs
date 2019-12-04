@@ -14,6 +14,9 @@ unsafeFromRight _         = undefined
 isLetter :: Char -> Bool
 isLetter = flip elem $ '_' : ['a' .. 'z'] ++ ['A' .. 'Z']
 
+isIdentChar :: Char -> Bool
+isIdentChar c = isLetter c || elem c ("'$" :: [Char])
+
 isDigit :: Char -> Bool
 isDigit = flip elem ['0' .. '9']
 

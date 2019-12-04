@@ -10,6 +10,7 @@ import           EDH.Common.ParserT
 import           EDH.Lexer.Token
 import           EDH.Lexer.Types
 import           EDH.Utils                      ( isLetter
+                                                , isIdentChar
                                                 , isDigit
                                                 )
 
@@ -74,12 +75,15 @@ lexString = do
 letter :: Lexer Char
 letter = predicate isLetter
 
+identChar :: Lexer Char
+identChar = predicate isIdentChar
+
 digit :: Lexer Char
 digit = predicate isDigit
 
 lexReservedOrIdent :: Lexer Token
 lexReservedOrIdent = do
-    str <- (:) <$> letter <*> many (letter <|> digit)
+    str <- (:) <$> letter <*> many (identChar <|> digit)
     return $ case str of
         "let"    -> Let
         "fn"     -> Function
