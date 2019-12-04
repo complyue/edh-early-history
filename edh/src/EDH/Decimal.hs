@@ -155,7 +155,8 @@ showDecimal (Decimal d e n)
 
 
 decodeRadix'10 :: Integer -> Integer -> (Integer, Integer)
-decodeRadix'10 e_ n_ | r == 0    = decodeRadix'10 (e_ + 1) n_'
+decodeRadix'10 e_ n_ | n_ == 0   = (0, 0)
+                     | r == 0    = decodeRadix'10 (e_ + 1) n_'
                      | otherwise = (e_, n_)
     where (n_', r) = quotRem n_ 10
 
