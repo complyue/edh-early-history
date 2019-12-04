@@ -66,11 +66,8 @@ evalPrefix PrefixPlus  = fmap ODecimal . (evalExpr >=> o2n)
 evalPrefix PrefixMinus = fmap (ODecimal . negateDecimal) . (evalExpr >=> o2n)
 
 evalInfix :: Infix -> Expr -> Expr -> Evaluator Object
-evalInfix Plus  = (join .) . ee2x oAdd return
-evalInfix Minus = \e e' -> do
-    d  <- o2n =<< evalExpr e
-    d' <- o2n =<< evalExpr e'
-    return $ ODecimal $ addDecimal d $ negateDecimal d'
+evalInfix Plus        = (join .) . ee2x oAdd return
+evalInfix Minus       = (fmap ODecimal .) . ee2x subsDecimal o2n
 evalInfix Multiply    = (fmap ODecimal .) . ee2x mulDecimal o2n
 evalInfix Divide      = (fmap ODecimal .) . ee2x divDecimal o2n
 evalInfix Eq          = (fmap OBool .) . ee2x (==) return

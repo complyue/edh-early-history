@@ -25,9 +25,9 @@ instance Show Decimal where
     show = showDecimal
 
 instance Ord Decimal where
-    compare (Decimal e d n) (Decimal e' d' n') = if e >= e'
-        then compare (n * d' * 10 ^ (e - e')) (n' * d)
-        else compare (n * d') (n' * d * 10 ^ (e' - e))
+    compare (Decimal x'e x'd x'n) (Decimal y'e y'd y'n) = if x'e >= y'e
+        then compare (x'n * y'd * 10 ^ (x'e - y'e)) (y'n * x'd)
+        else compare (x'n * y'd) (y'n * x'd * 10 ^ (y'e - x'e))
 
 instance Eq Decimal where
     Decimal e d n == Decimal e' d' n' = if e >= e'
@@ -49,6 +49,7 @@ normalizeDecimal (Decimal e d n) = if d == 0
     decodeBase10 n_ e_ = case n_ `rem` 10 of
         0 -> let n_' = n_ `quot` 10 in decodeBase10 n_' (e_ + 1)
         _ -> (n_, e_)
+    simplify :: Integer -> Integer -> (Integer, Integer)
     simplify x y | x == 0 || y == 0 = (x, y)
                  | cd <= 1          = (x, y)
                  | otherwise        = (x `div` cd, y `div` cd)
@@ -58,21 +59,25 @@ negateDecimal :: Decimal -> Decimal
 negateDecimal (Decimal e d n) = Decimal e d (-n)
 
 addDecimal :: Decimal -> Decimal -> Decimal
-addDecimal (Decimal e d n) (Decimal e' d' n') = normalizeDecimal $ if e >= e'
-    then Decimal 0 (d * d') (n * d' * 10 ^ (e - e') + n' * d)
-    else Decimal 0 (d * d') (n * d' + n' * d * 10 ^ (e' - e))
+addDecimal (Decimal x'e x'd x'n) (Decimal y'e y'd y'n) =
+    normalizeDecimal $ if x'e >= y'e
+        then Decimal 0 (x'd * y'd) (x'n * y'd * 10 ^ (x'e - y'e) + y'n * x'd)
+        else Decimal 0 (x'd * y'd) (x'n * y'd + y'n * x'd * 10 ^ (y'e - x'e))
+
+subsDecimal :: Decimal -> Decimal -> Decimal
+subsDecimal x y = addDecimal x $ negateDecimal y
 
 mulDecimal :: Decimal -> Decimal -> Decimal
-mulDecimal (Decimal e d n) (Decimal e' d' n') =
-    normalizeDecimal $ Decimal (e + e') (d * d') (n * n')
+mulDecimal (Decimal x'e x'd x'n) (Decimal y'e y'd y'n) =
+    normalizeDecimal $ Decimal (x'e + y'e) (x'd * y'd) (x'n * y'n)
 
 divDecimal :: Decimal -> Decimal -> Decimal
-divDecimal (Decimal e d n) (Decimal e' d' n') =
-    mulDecimal (Decimal e d n) (Decimal (-e') n' d')
+divDecimal (Decimal x'e x'd x'n) (Decimal y'e y'd y'n) =
+    mulDecimal (Decimal x'e x'd x'n) (Decimal (-y'e) y'n y'd)
 
 showDecimal :: Decimal -> String
 showDecimal (Decimal e d n) = if d == 0
-    then (if n == 0 then "NaN" else if n < 0 then "-Inf" else "Inf")
+    then (if n == 0 then "nan" else if n < 0 then "-inf" else "inf")
     else if abs e < 5
         then
             (if e < 0
@@ -88,7 +93,6 @@ showDecimal (Decimal e d n) = if d == 0
                 else if e > 0
                     then (show n <> "e" <> show e <> "/" <> show d)
                     else (show n <> "/" <> show d <> "e" <> show (-e))
-
 
 data Object = ODecimal Decimal
             | OBool Bool
@@ -155,6 +159,12 @@ false = OBool False
 
 nil :: Object
 nil = ONull
+
+nan :: Object
+nan = ODecimal $ Decimal 0 0 0
+
+inf :: Object
+inf = ODecimal $ Decimal 0 0 1
 
 ret :: Object -> Object
 ret o = OReturn o
