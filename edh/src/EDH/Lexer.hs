@@ -55,22 +55,21 @@ lexPunctuation = choose
 
 lexString :: Lexer Token
 lexString = do
-    void $ atom '"'
+    delim <- atom '"' <|> atom '\''
+    let go :: Lexer Text
+        go = next >>= \case
+            '\\' -> do
+                c <- next
+                T.cons
+                        (case c of
+                            'n' -> '\n'
+                            't' -> '\t'
+                            c_  -> c_
+                        )
+                    <$> go
+            c | delim == c -> return ""
+              | otherwise  -> T.cons c <$> go
     StringLiteral <$> go
-  where
-    go :: Lexer Text
-    go = next >>= \case
-        '"'  -> return ""
-        '\\' -> do
-            c <- next
-            T.cons
-                    (case c of
-                        'n' -> '\n'
-                        't' -> '\t'
-                        c_  -> c_
-                    )
-                <$> go
-        c -> T.cons c <$> go
 
 letter :: Lexer Char
 letter = predicate isLetter
