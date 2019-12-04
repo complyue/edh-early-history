@@ -85,7 +85,6 @@ lexReservedOrIdent :: Lexer Token
 lexReservedOrIdent = do
     str <- (:) <$> letter <*> many (identChar <|> digit)
     return $ case str of
-        "let"    -> Let
         "fn"     -> Function
         "if"     -> If
         "else"   -> Else

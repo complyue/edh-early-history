@@ -25,7 +25,6 @@ data Token = Illegal
            | Not
            -- reserved words
            | Function
-           | Let
            | Return
            -- punctuations
            | Comma

@@ -25,12 +25,11 @@ parseIdent = next >>= go
 
 parseLetStmt :: Parser Stmt
 parseLetStmt = do
-    void $ atom Tk.Let
     ident <- parseIdent
     void $ atom Tk.Assign
     expr <- parseExpr
     optional $ atom Tk.SemiColon
-    return $ LetStmt ident expr
+    return $ AssignStmt ident expr
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do

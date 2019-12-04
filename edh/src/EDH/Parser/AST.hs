@@ -9,7 +9,7 @@ import qualified GHC.Show                      as G
 newtype Program = Program BlockStmt
                 deriving (Show, Eq)
 
-data Stmt = LetStmt Ident Expr
+data Stmt = AssignStmt Ident Expr
           | ReturnStmt Expr
           | ExprStmt Expr
           deriving (Show, Eq)

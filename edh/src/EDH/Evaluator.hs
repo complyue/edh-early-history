@@ -25,9 +25,9 @@ evalBlockStmt (s : ss) = do
     if isReturned o then return o else evalBlockStmt ss
 
 evalStmt :: Stmt -> Evaluator Object
-evalStmt (ExprStmt   expr   ) = evalExpr expr
-evalStmt (ReturnStmt expr   ) = ret <$> evalExpr expr
-evalStmt (LetStmt ident expr) = evalExpr expr >>= registerIdent ident
+evalStmt (ExprStmt   expr      ) = evalExpr expr
+evalStmt (ReturnStmt expr      ) = ret <$> evalExpr expr
+evalStmt (AssignStmt ident expr) = evalExpr expr >>= registerIdent ident
 
 registerIdent :: Ident -> Object -> Evaluator Object
 registerIdent ident o = do
@@ -192,4 +192,4 @@ eval p = do
 
 evalWithState
     :: Program -> EvalState -> IO (Either EvalError (Object, EvalState))
-evalWithState p = execEvaluatorT (evalProgram p ) 
+evalWithState p = execEvaluatorT (evalProgram p)
