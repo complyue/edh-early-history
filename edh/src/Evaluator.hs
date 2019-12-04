@@ -6,6 +6,8 @@ import           RIO                     hiding ( Hashable )
 import           Control.Monad.Except
 
 import qualified Data.Map.Strict               as M
+
+import           Decimal
 import           Evaluator.Object
 import           Evaluator.Types
 import           Parser.AST

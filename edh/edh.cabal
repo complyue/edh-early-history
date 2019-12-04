@@ -36,6 +36,7 @@ library
         Parser.AST
         Parser.Types
         Utils
+        Decimal
     hs-source-dirs: src
     other-modules:
         Paths_edh
