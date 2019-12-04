@@ -6,16 +6,18 @@ import           RIO                     hiding ( evaluate )
 
 import           Data.Text.IO                   ( putStrLn )
 import qualified Data.Text                     as T
-import           Lexer                          ( lex )
-import           Parser                         ( parse )
-import           Evaluator                      ( evalWithState )
-import           Evaluator.Types                ( EvalError
+
+import qualified GHC.Show                      as G
+import           System.Console.Haskeline
+
+import           EDH.Lexer                      ( lex )
+import           EDH.Parser                     ( parse )
+import           EDH.Evaluator                  ( evalWithState )
+import           EDH.Evaluator.Types            ( EvalError
                                                 , EvalState
                                                 )
-import           Evaluator.Object               ( Object )
-import           Common.ParserT                 ( ParserError )
-import           System.Console.Haskeline
-import qualified GHC.Show                      as G
+import           EDH.Evaluator.Object           ( Object )
+import           EDH.Common.ParserT             ( ParserError )
 
 read :: IO (Maybe Text)
 read = runInputT defaultSettings $ (fmap . fmap) T.pack $ getInputLine "Đ: "

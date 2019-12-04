@@ -1,16 +1,14 @@
-module Evaluator.Object where
+module EDH.Evaluator.Object where
 
-import           RIO                     hiding ( Hashable
-                                                , exponent
-                                                )
+import           RIO                     hiding ( Hashable )
 
 import qualified Data.Text                     as T
 
 import qualified Data.Map.Strict               as M
 import           GHC.Show                       ( Show(..) )
 
-import           Decimal
-import           Parser.AST
+import           EDH.Decimal                   as D
+import           EDH.Parser.AST
 
 
 data Object = ODecimal Decimal
@@ -18,7 +16,7 @@ data Object = ODecimal Decimal
             | OString Text
             | OArray [Object]
             | OHash (M.Map Hashable Object)
-            | ONull
+            | ONil
             | OFn { params :: [Ident]
                   , body :: BlockStmt
                   , env :: EnvRef
@@ -39,7 +37,7 @@ instance Show Object where
         go []       = ""
         go [(l, o)] = show l ++ ":" ++ show o
         go (x : xs) = go [x] ++ "," ++ go xs
-    show ONull              = "null"
+    show ONil               = "nil"
     show (OFn        _ _ _) = "[function]"
     show (OBuiltInFn n _ _) = "[built-in function: " ++ T.unpack n ++ "]"
     show (OReturn o       ) = show o
@@ -50,7 +48,7 @@ instance Eq Object where
     OString  x       == OString  y         = x == y
     OArray   x       == OArray   y         = x == y
     OHash    x       == OHash    y         = x == y
-    ONull            == ONull              = True
+    ONil             == ONil               = True
     OFn p b e        == OFn p' b' e'       = p == p' && b == b' && e == e'
     OReturn o        == o'                 = o == o'
     o                == OReturn o'         = o == o'
@@ -77,13 +75,13 @@ false :: Object
 false = OBool False
 
 nil :: Object
-nil = ONull
+nil = ONil
 
 nan :: Object
-nan = ODecimal $ Decimal 0 0 0
+nan = ODecimal D.nan
 
 inf :: Object
-inf = ODecimal $ Decimal 0 0 1
+inf = ODecimal D.inf
 
 ret :: Object -> Object
 ret o = OReturn o

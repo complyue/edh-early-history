@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Evaluator where
+module EDH.Evaluator where
 
 import           RIO                     hiding ( Hashable )
 
@@ -7,11 +7,11 @@ import           Control.Monad.Except
 
 import qualified Data.Map.Strict               as M
 
-import           Decimal
-import           Evaluator.Object
-import           Evaluator.Types
-import           Parser.AST
-import           Utils                          ( at )
+import           EDH.Decimal
+import           EDH.Evaluator.Object
+import           EDH.Evaluator.Types
+import           EDH.Parser.AST
+import           EDH.Utils                      ( at )
 
 evalProgram :: Program -> Evaluator Object
 evalProgram (Program blockStmt) = returned <$> evalBlockStmt blockStmt
@@ -58,7 +58,7 @@ evalIdent i = do
         Nothing -> evalError $ "identifier not found: " <> tshow i
 
 evalLiteral :: Literal -> Evaluator Object
-evalLiteral (DecLiteral n e ) = return $ ODecimal $ Decimal e 1 n
+evalLiteral (DecLiteral n e ) = return $ ODecimal $ Decimal 1 e n
 evalLiteral (BoolLiteral   b) = return $ OBool b
 evalLiteral (StringLiteral s) = return $ OString s
 
@@ -153,7 +153,7 @@ evalHash hs = do
         return (h, o)
 
 decimalAsIndex :: Integral i => Decimal -> Evaluator i
-decimalAsIndex o@(Decimal e d n)
+decimalAsIndex o@(Decimal d e n)
     | d == 1 && e >= 0 = return $ fromIntegral n * 10 ^ e
     | otherwise        = evalError $ tshow o <> " is not a valid index"
 

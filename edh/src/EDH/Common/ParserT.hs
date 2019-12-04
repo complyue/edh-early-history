@@ -2,20 +2,20 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Common.ParserT where
+module EDH.Common.ParserT where
 
 import           RIO                     hiding ( fail
                                                 , many
                                                 )
 import           RIO.State
 
+import qualified Data.Text                     as T
 import           Control.Applicative            ( empty )
 import           Control.Monad.Except    hiding ( fail )
-
-import qualified Common.Stream                 as S
 import           Control.Monad.Trans.Class      ( MonadTrans(..) )
-import qualified Data.Text                     as T
-import           Utils                          ( (<<)
+
+import qualified EDH.Common.Stream             as S
+import           EDH.Utils                      ( (<<)
                                                 , returnOrThrow
                                                 )
 

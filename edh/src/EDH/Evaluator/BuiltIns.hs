@@ -1,13 +1,13 @@
-module Evaluator.BuiltIns where
+module EDH.Evaluator.BuiltIns where
 
 import           RIO
 
 import           Prelude                        ( putStrLn )
 import qualified Data.Text                     as T
 
-import           Decimal
-import           Evaluator.Object
-import           Parser.AST                     ( Ident(Ident) )
+import           EDH.Decimal
+import           EDH.Evaluator.Object          as O
+import           EDH.Parser.AST                 ( Ident(Ident) )
 
 breturn :: Object -> IO BuiltInFnResult
 breturn = return . Right
@@ -24,9 +24,9 @@ len = OBuiltInFn "len" 1 go
   where
     go :: BuiltInFn
     go [OString t] =
-        breturn . ODecimal . (Decimal 0 1) . fromIntegral $ T.length t
+        breturn . ODecimal . Decimal 1 0 . fromIntegral $ T.length t
     go [OArray arr] =
-        breturn . ODecimal . (Decimal 0 1) . fromIntegral $ length arr
+        breturn . ODecimal . Decimal 1 0 . fromIntegral $ length arr
     go args = invalid len $ tshow args
 
 bhead :: Object
@@ -62,9 +62,9 @@ bprint = OBuiltInFn "print" 1 go
 
 builtIns :: [(Ident, Object)]
 builtIns =
-    [ (Ident "null" , nil)
-    , (Ident "nan"  , nan)
-    , (Ident "inf"  , inf)
+    [ (Ident "nil"  , nil)
+    , (Ident "nan"  , O.nan)
+    , (Ident "inf"  , O.inf)
     , (Ident "len"  , len)
     , (Ident "head" , bhead)
     , (Ident "tail" , btail)

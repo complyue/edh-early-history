@@ -1,4 +1,4 @@
-module Lexer.Token where
+module EDH.Lexer.Token where
 
 import           RIO
 

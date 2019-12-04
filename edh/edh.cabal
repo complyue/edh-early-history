@@ -23,20 +23,21 @@ source-repository head
 
 library
     exposed-modules:
-        Common.ParserT
-        Common.Stream
-        Evaluator
-        Evaluator.BuiltIns
-        Evaluator.Object
-        Evaluator.Types
-        Lexer
-        Lexer.Token
-        Lexer.Types
-        Parser
-        Parser.AST
-        Parser.Types
-        Utils
-        Decimal
+        EHI
+        EDH.Decimal
+        EDH.Common.ParserT
+        EDH.Common.Stream
+        EDH.Evaluator
+        EDH.Evaluator.BuiltIns
+        EDH.Evaluator.Object
+        EDH.Evaluator.Types
+        EDH.Lexer
+        EDH.Lexer.Token
+        EDH.Lexer.Types
+        EDH.Parser
+        EDH.Parser.AST
+        EDH.Parser.Types
+        EDH.Utils
     hs-source-dirs: src
     other-modules:
         Paths_edh

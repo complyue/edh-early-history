@@ -1,11 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Lexer.Types where
+module EDH.Lexer.Types where
 
 import           RIO
 
 import qualified Data.Text                     as T
-import           Common.ParserT
-import           Common.Stream
+
+import           EDH.Common.ParserT
+import           EDH.Common.Stream
 
 instance Stream Text Char where
     read = T.uncons

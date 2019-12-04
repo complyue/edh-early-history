@@ -1,17 +1,17 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators #-}
-module Evaluator.Types where
+module EDH.Evaluator.Types where
 
 import           RIO
 import           RIO.State
 
 import           Control.Monad.Except
-
-import           Evaluator.BuiltIns             ( builtIns )
-import           Evaluator.Object
-import           Parser.AST                     ( Ident )
-
 import           Control.Monad.Trans.Class      ( MonadTrans(..) )
+
+import           EDH.Evaluator.BuiltIns         ( builtIns )
+import           EDH.Evaluator.Object
+import           EDH.Parser.AST                 ( Ident )
+
 
 newtype EvalError = EvalError Text
                     deriving (Show, Eq, Typeable)

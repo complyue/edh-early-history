@@ -1,13 +1,14 @@
-module Lexer where
+module EDH.Lexer where
 
 import           Prelude                        ( read )
 import           RIO                     hiding ( many )
 
-import           Common.ParserT
 import qualified Data.Text                     as T
-import           Lexer.Token
-import           Lexer.Types
-import           Utils                          ( unsafeFromRight
+
+import           EDH.Common.ParserT
+import           EDH.Lexer.Token
+import           EDH.Lexer.Types
+import           EDH.Utils                      ( unsafeFromRight
                                                 , isLetter
                                                 , isDigit
                                                 , (<||>)
