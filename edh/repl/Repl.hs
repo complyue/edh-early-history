@@ -10,14 +10,16 @@ import qualified Data.Text                     as T
 import qualified GHC.Show                      as G
 import           System.Console.Haskeline
 
-import           EDH.Lexer                      ( lex )
-import           EDH.Parser                     ( parse )
-import           EDH.Evaluator                  ( evalWithState )
-import           EDH.Evaluator.Types            ( EvalError
+import           Language.Edh.Compiler.Lexer    ( lex )
+import           Language.Edh.Compiler.Parser   ( parse )
+import           Language.Edh.Runtime.Evaluator ( evalWithState )
+import           Language.Edh.Runtime.Evaluator.Types
+                                                ( EvalError
                                                 , EvalState
                                                 )
-import           EDH.Evaluator.Object           ( Object )
-import           EDH.Common.ParserT             ( ParserError )
+import           Language.Edh.Runtime.Evaluator.Object
+                                                ( Object )
+import           Language.Edh.Compiler.ParserT  ( ParserError )
 
 read :: IO (Maybe Text)
 read = runInputT defaultSettings $ (fmap . fmap) T.pack $ getInputLine "Đ: "

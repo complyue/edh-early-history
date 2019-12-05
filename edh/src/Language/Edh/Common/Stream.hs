@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-module EDH.Common.Stream where
+module Language.Edh.Common.Stream where
 
 import           RIO
 

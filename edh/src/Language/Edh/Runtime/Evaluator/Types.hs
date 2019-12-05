@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators #-}
-module EDH.Evaluator.Types where
+module Language.Edh.Runtime.Evaluator.Types where
 
 import           RIO
 import           RIO.State
@@ -8,9 +8,11 @@ import           RIO.State
 import           Control.Monad.Except
 import           Control.Monad.Trans.Class      ( MonadTrans(..) )
 
-import           EDH.Evaluator.BuiltIns         ( builtIns )
-import           EDH.Evaluator.Object
-import           EDH.Parser.AST                 ( )
+import           Language.Edh.Runtime.Evaluator.BuiltIns
+                                                ( builtIns )
+import           Language.Edh.Runtime.Evaluator.Object
+import           Language.Edh.Compiler.Parser.AST
+                                                ( )
 
 
 newtype EvalError = EvalError Text

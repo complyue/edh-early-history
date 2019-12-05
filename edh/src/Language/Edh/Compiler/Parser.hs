@@ -1,15 +1,16 @@
-module EDH.Parser where
+module Language.Edh.Compiler.Parser where
 
 import           RIO                     hiding ( fail
                                                 , many
                                                 , optional
                                                 )
 
-import           EDH.Common.ParserT
-import qualified EDH.Lexer.Token               as Tk
-import           EDH.Parser.AST
-import           EDH.Parser.Types
-import           EDH.Utils                      ( (<<) )
+import           Language.Edh.Compiler.ParserT
+import qualified Language.Edh.Compiler.Lexer.Token
+                                               as Tk
+import           Language.Edh.Compiler.Parser.AST
+import           Language.Edh.Compiler.Parser.Types
+import           Language.Edh.Common.Utils      ( (<<) )
 
 parseProgram :: Parser Program
 parseProgram = Program <$> many parseStmt

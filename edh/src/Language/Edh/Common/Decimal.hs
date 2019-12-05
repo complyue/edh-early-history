@@ -3,7 +3,7 @@
 -- the only odd thing with this type is absence of the
 -- `decimal point`, i.e. you write '123e-9' instead of
 -- '1.23e-7', '123e-2' instead of '1.23'
-module EDH.Decimal where
+module Language.Edh.Common.Decimal where
 
 import           RIO
 

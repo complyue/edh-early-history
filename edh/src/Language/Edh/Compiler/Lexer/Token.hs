@@ -1,4 +1,4 @@
-module EDH.Lexer.Token where
+module Language.Edh.Compiler.Lexer.Token where
 
 import           RIO
 

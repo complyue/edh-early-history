@@ -1,7 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
-module EDH.Utils where
+module Language.Edh.Common.Utils where
 
 import           RIO
 

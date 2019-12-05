@@ -1,9 +1,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-module EDH.Lexer.Types where
+module Language.Edh.Compiler.Lexer.Types where
 
 import           RIO
 
-import           EDH.Common.ParserT
+import           Language.Edh.Compiler.ParserT
 
 type Lexer = ParserT Text Identity
 

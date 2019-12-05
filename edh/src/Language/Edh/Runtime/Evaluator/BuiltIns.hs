@@ -1,13 +1,15 @@
-module EDH.Evaluator.BuiltIns where
+module Language.Edh.Runtime.Evaluator.BuiltIns where
 
 import           RIO
 
 import           Prelude                        ( putStrLn )
 import qualified Data.Text                     as T
 
-import           EDH.Decimal
-import           EDH.Evaluator.Object          as O
-import           EDH.Parser.AST                 ( Ident(Ident) )
+import           Language.Edh.Common.Decimal
+import           Language.Edh.Runtime.Evaluator.Object
+                                               as O
+import           Language.Edh.Compiler.Parser.AST
+                                                ( Ident(Ident) )
 
 breturn :: Object -> IO BuiltInFnResult
 breturn = return . Right

@@ -1,4 +1,4 @@
-module EDH.Parser.AST where
+module Language.Edh.Compiler.Parser.AST where
 
 import           RIO
 

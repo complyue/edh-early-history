@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
-module EDH.Evaluator where
+module Language.Edh.Runtime.Evaluator where
 
 import           RIO                     hiding ( Hashable )
 
@@ -8,11 +8,11 @@ import           Control.Monad.Except
 
 import qualified Data.Map.Strict               as M
 
-import           EDH.Decimal
-import           EDH.Evaluator.Object
-import           EDH.Evaluator.Types
-import           EDH.Parser.AST
-import           EDH.Utils                      ( at )
+import           Language.Edh.Common.Decimal
+import           Language.Edh.Runtime.Evaluator.Object
+import           Language.Edh.Runtime.Evaluator.Types
+import           Language.Edh.Compiler.Parser.AST
+import           Language.Edh.Common.Utils      ( at )
 
 evalProgram :: Program -> Evaluator Object
 evalProgram (Program stmts) = evalSeqStmts stmts

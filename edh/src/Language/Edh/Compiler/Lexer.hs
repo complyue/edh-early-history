@@ -1,15 +1,15 @@
 {-# LANGUAGE LambdaCase #-}
-module EDH.Lexer where
+module Language.Edh.Compiler.Lexer where
 
 import           Prelude                        ( read )
 import           RIO                     hiding ( many )
 
 import qualified Data.Text                     as T
 
-import           EDH.Common.ParserT
-import           EDH.Lexer.Token
-import           EDH.Lexer.Types
-import           EDH.Utils                      ( isLetter
+import           Language.Edh.Compiler.ParserT
+import           Language.Edh.Compiler.Lexer.Token
+import           Language.Edh.Compiler.Lexer.Types
+import           Language.Edh.Common.Utils      ( isLetter
                                                 , isIdentChar
                                                 , isDigit
                                                 )

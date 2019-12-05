@@ -1,4 +1,4 @@
-module EDH.Evaluator.Object where
+module Language.Edh.Runtime.Evaluator.Object where
 
 import           RIO                     hiding ( Hashable )
 
@@ -7,8 +7,8 @@ import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as M
 import           GHC.Show                       ( Show(..) )
 
-import           EDH.Decimal                   as D
-import           EDH.Parser.AST
+import           Language.Edh.Common.Decimal   as D
+import           Language.Edh.Compiler.Parser.AST
 
 
 data Object = ODecimal Decimal

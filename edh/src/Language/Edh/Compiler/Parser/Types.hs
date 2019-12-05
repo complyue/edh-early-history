@@ -1,9 +1,9 @@
-module EDH.Parser.Types where
+module Language.Edh.Compiler.Parser.Types where
 
 import           RIO
 
-import           EDH.Common.ParserT
-import           EDH.Lexer.Token
+import           Language.Edh.Compiler.ParserT
+import           Language.Edh.Compiler.Lexer.Token
 
 type Parser = ParserT [Token] Identity
 

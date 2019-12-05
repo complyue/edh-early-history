@@ -1,5 +1,5 @@
 -- | Event Hosting Interface
-module EHI
+module Language.Edh.EHI
     ( Object(..)
     , nil
     , true
@@ -15,6 +15,7 @@ module EHI
     )
 where
 
-import  qualified         EDH.Decimal as D 
-import           EDH.Evaluator.Object as O
+import qualified Language.Edh.Common.Decimal   as D
+import           Language.Edh.Runtime.Evaluator.Object
+                                               as O
 
