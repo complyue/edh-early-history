@@ -18,8 +18,10 @@ evalProgram :: Program -> Evaluator Object
 evalProgram (Program blockStmt) = evalBlockStmt blockStmt
 
 evalBlockStmt :: BlockStmt -> Evaluator Object
-evalBlockStmt []       = return nil
-evalBlockStmt [s     ] = evalStmt s
+evalBlockStmt []  = return nil
+evalBlockStmt [s] = evalStmt s >>= \case
+    OReturn o -> return o
+    o         -> return o
 evalBlockStmt (s : ss) = evalStmt s >>= \case
     OReturn o -> return o
     _         -> evalBlockStmt ss
