@@ -15,7 +15,7 @@ parseProgram :: Parser Program
 parseProgram = Program <$> many parseStmt
 
 parseStmt :: Parser Stmt
-parseStmt = choose [parseLetStmt, parseReturnStmt, parseExprStmt]
+parseStmt = choose [parseAssignStmt, parseReturnStmt, parseExprStmt]
 
 parseIdent :: Parser Ident
 parseIdent = next >>= go
@@ -23,8 +23,8 @@ parseIdent = next >>= go
     go (Tk.Ident name) = return $ Ident name
     go _               = fail "fail to parse an identifier"
 
-parseLetStmt :: Parser Stmt
-parseLetStmt = do
+parseAssignStmt :: Parser Stmt
+parseAssignStmt = do
     ident <- parseIdent
     void $ atom Tk.Assign
     expr <- parseExpr
