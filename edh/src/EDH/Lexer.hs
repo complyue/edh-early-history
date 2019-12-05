@@ -88,6 +88,7 @@ lexReservedOrIdent = do
     return $ case str of
         "fn"     -> Function
         "if"     -> If
+        "then"   -> Then
         "else"   -> Else
         "return" -> Return
         "true"   -> BoolLiteral True

@@ -15,21 +15,22 @@ import           EDH.Parser.AST
 import           EDH.Utils                      ( at )
 
 evalProgram :: Program -> Evaluator Object
-evalProgram (Program blockStmt) = evalBlockStmt blockStmt
+evalProgram (Program stmts) = evalSeqStmts stmts
 
-evalBlockStmt :: BlockStmt -> Evaluator Object
-evalBlockStmt []  = return nil
-evalBlockStmt [s] = evalStmt s >>= \case
+evalSeqStmts :: SeqStmts -> Evaluator Object
+evalSeqStmts []  = return nil
+evalSeqStmts [s] = evalStmt s >>= \case
     OReturn o -> return o
     o         -> return o
-evalBlockStmt (s : ss) = evalStmt s >>= \case
+evalSeqStmts (s : ss) = evalStmt s >>= \case
     OReturn o -> return o
-    _         -> evalBlockStmt ss
+    _         -> evalSeqStmts ss
 
 evalStmt :: Stmt -> Evaluator Object
 evalStmt (ExprStmt   expr      ) = evalExpr expr
 evalStmt (ReturnStmt expr      ) = ret <$> evalExpr expr
 evalStmt (AssignStmt ident expr) = evalExpr expr >>= registerIdent ident
+evalStmt (BlockStmt stmts      ) = mapM_ evalStmt stmts >> return nil
 
 registerIdent :: Ident -> Object -> Evaluator Object
 registerIdent ident o = do
@@ -91,16 +92,16 @@ updHash (OHash x) (OHash y) = return $ OHash $ M.union y x
 updHash x y =
     evalError $ tshow x <> " and " <> tshow y <> " both need to be hash map"
 
-evalIf :: Expr -> BlockStmt -> Maybe BlockStmt -> Evaluator Object
+evalIf :: Expr -> Stmt -> Maybe Stmt -> Evaluator Object
 evalIf cond_ conse maybeAlter = do
     condBool <- evalExpr cond_ >>= o2b
     if condBool
-        then evalBlockStmt conse
+        then evalStmt conse
         else case maybeAlter of
-            Just alter -> evalBlockStmt alter
+            Just alter -> evalStmt alter
             Nothing    -> return nil
 
-evalFn :: [Ident] -> BlockStmt -> Evaluator Object
+evalFn :: [Ident] -> SeqStmts -> Evaluator Object
 evalFn params_ body_ = OFn params_ body_ <$> getEnvRef
 
 evalCall :: Expr -> [Expr] -> Evaluator Object
@@ -109,7 +110,7 @@ evalCall fnExpr argExprs = evalExpr fnExpr >>= \case
     OBuiltInFn _ numParams_ fn_ -> evalBuiltInFnCall numParams_ fn_
     o -> evalError $ tshow o <> " is not a function"
   where
-    evalFnCall :: [Ident] -> BlockStmt -> EnvRef -> Evaluator Object
+    evalFnCall :: [Ident] -> SeqStmts -> EnvRef -> Evaluator Object
     evalFnCall params_ body_ fRef = if length params_ /= length argExprs
         then
             evalError
@@ -122,7 +123,7 @@ evalCall fnExpr argExprs = evalExpr fnExpr >>= \case
             args    <- traverse evalExpr argExprs
             origRef <- getEnvRef
             lift (wrapEnv fRef $ zip params_ args) >>= setEnvRef
-            o <- evalBlockStmt body_
+            o <- evalSeqStmts body_
             setEnvRef origRef
             return o
 

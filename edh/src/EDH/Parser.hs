@@ -15,7 +15,12 @@ parseProgram :: Parser Program
 parseProgram = Program <$> many parseStmt
 
 parseStmt :: Parser Stmt
-parseStmt = choose [parseAssignStmt, parseReturnStmt, parseExprStmt]
+parseStmt = choose
+    [ BlockStmt <$> parseBlockStmt
+    , parseAssignStmt
+    , parseReturnStmt
+    , parseExprStmt
+    ]
 
 parseIdent :: Parser Ident
 parseIdent = next >>= go
@@ -44,7 +49,7 @@ parseExprStmt = ExprStmt <$> do
     optional $ atom Tk.SemiColon
     return expr
 
-parseBlockStmt :: Parser BlockStmt
+parseBlockStmt :: Parser SeqStmts
 parseBlockStmt = do
     void $ atom Tk.LBrace
     ss <- many parseStmt
@@ -195,14 +200,13 @@ parseIdentExpr = IdentExpr <$> parseIdent
 parseIfExpr :: Parser Expr
 parseIfExpr = do
     void $ atom Tk.If
-    void $ atom Tk.LParen
     expr <- parseExpr
-    void $ atom Tk.RParen
-    consequence_ <- parseBlockStmt
+    void $ atom Tk.Then
+    consequence_ <- parseStmt
     IfExpr expr consequence_
         <$> (   (do
                     void $ atom Tk.Else
-                    Just <$> parseBlockStmt
+                    Just <$> parseStmt
                 )
             <|> return Nothing
             )

@@ -12,6 +12,7 @@ data Token = Illegal
            -- statements
            | Assign
            | If
+           | Then
            | Else
            -- operators
            | Plus

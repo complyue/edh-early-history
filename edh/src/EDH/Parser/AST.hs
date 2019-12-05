@@ -6,26 +6,27 @@ import qualified Data.Text                     as T
 
 import qualified GHC.Show                      as G
 
-newtype Program = Program BlockStmt
+newtype Program = Program SeqStmts
                 deriving (Show, Eq)
 
 data Stmt = AssignStmt Ident Expr
           | ReturnStmt Expr
           | ExprStmt Expr
+          | BlockStmt [Stmt]
           deriving (Show, Eq)
 
-type BlockStmt = [Stmt]
+type SeqStmts = [Stmt]
 
 data Expr = IdentExpr Ident
           | LitExpr Literal
           | PrefixExpr Prefix Expr
           | InfixExpr Infix Expr Expr
           | IfExpr { cond :: Expr
-                   , consequence :: BlockStmt
-                   , alternative :: Maybe BlockStmt
+                   , consequence :: Stmt
+                   , alternative :: Maybe Stmt
                    }
           | FnExpr { params :: [Ident]
-                   , body :: BlockStmt
+                   , body :: SeqStmts
                    }
           | CallExpr { function :: Expr
                      , arguments :: [Expr]

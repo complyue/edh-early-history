@@ -18,7 +18,7 @@ data Object = ODecimal Decimal
             | OHash (M.Map Hashable Object)
             | ONil
             | OFn { params :: [Ident]
-                  , body :: BlockStmt
+                  , body :: SeqStmts
                   , env :: EnvRef
                   }
             | OBuiltInFn { name :: Text
