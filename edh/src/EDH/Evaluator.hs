@@ -15,14 +15,14 @@ import           EDH.Parser.AST
 import           EDH.Utils                      ( at )
 
 evalProgram :: Program -> Evaluator Object
-evalProgram (Program blockStmt) = returned <$> evalBlockStmt blockStmt
+evalProgram (Program blockStmt) = evalBlockStmt blockStmt
 
 evalBlockStmt :: BlockStmt -> Evaluator Object
 evalBlockStmt []       = return nil
-evalBlockStmt (s : []) = evalStmt s
-evalBlockStmt (s : ss) = do
-    o <- evalStmt s
-    if isReturned o then return o else evalBlockStmt ss
+evalBlockStmt [s     ] = evalStmt s
+evalBlockStmt (s : ss) = evalStmt s >>= \case
+    OReturn o -> return o
+    _         -> evalBlockStmt ss
 
 evalStmt :: Stmt -> Evaluator Object
 evalStmt (ExprStmt   expr      ) = evalExpr expr
@@ -120,7 +120,7 @@ evalCall fnExpr argExprs = evalExpr fnExpr >>= \case
             args    <- traverse evalExpr argExprs
             origRef <- getEnvRef
             lift (wrapEnv fRef $ zip params_ args) >>= setEnvRef
-            o <- returned <$> evalBlockStmt body_
+            o <- evalBlockStmt body_
             setEnvRef origRef
             return o
 

@@ -86,14 +86,6 @@ inf = ODecimal D.inf
 ret :: Object -> Object
 ret = OReturn
 
-isReturned :: Object -> Bool
-isReturned (OReturn _) = True
-isReturned _           = False
-
-returned :: Object -> Object
-returned (OReturn o) = o
-returned o           = o
-
 type EnvRef = IORef Environment
 
 data Environment = Environment { varMap :: M.Map Ident Object
