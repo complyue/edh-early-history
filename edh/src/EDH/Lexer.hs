@@ -57,7 +57,7 @@ lexPunctuation = choose
 
 lexString :: Lexer Token
 lexString = do
-    delim <- atom '"' <|> atom '\''
+    delim <- atom '"' <|> atom '\'' <|> atom '`'
     let go :: Lexer Text
         go = next >>= \case
             '\\' -> do
