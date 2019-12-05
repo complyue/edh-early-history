@@ -99,8 +99,8 @@ emptyEnv = newIORef $ Environment M.empty Nothing
 wrapEnv :: EnvRef -> [(Ident, Object)] -> IO EnvRef
 wrapEnv = (newIORef .) . flip (Environment . M.fromList) . Just
 
-insertVar :: Ident -> Object -> EnvRef -> IO EnvRef
-insertVar i o ref = atomicModifyIORef' ref (go i o) $> ref
+setVar :: Ident -> Object -> EnvRef -> IO EnvRef
+setVar i o ref = atomicModifyIORef' ref (go i o) $> ref
   where
     go :: Ident -> Object -> Environment -> (Environment, ())
     go i_ o_ (Environment m p) = (Environment (M.insert i_ o_ m) p, ())

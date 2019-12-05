@@ -35,7 +35,7 @@ evalStmt (BlockStmt stmts      ) = mapM_ evalStmt stmts >> return nil
 registerIdent :: Ident -> Object -> Evaluator Object
 registerIdent ident o = do
     ref <- getEnvRef
-    void $ lift $ insertVar ident o ref
+    void $ lift $ setVar ident o ref
     return o
 
 evalError :: Text -> Evaluator a

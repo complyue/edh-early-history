@@ -10,7 +10,7 @@ module EHI
     , EnvRef
     , emptyEnv
     , wrapEnv
-    , insertVar
+    , setVar
     , getVar
     )
 where
