@@ -108,10 +108,10 @@ wrapEnv :: EnvRef -> [(Ident, Object)] -> IO EnvRef
 wrapEnv = (newIORef .) . flip (Environment . M.fromList) . Just
 
 insertVar :: Ident -> Object -> EnvRef -> IO EnvRef
-insertVar i o ref = modifyIORef ref (go i o) $> ref
+insertVar i o ref = atomicModifyIORef' ref (go i o) $> ref
   where
-    go :: Ident -> Object -> Environment -> Environment
-    go i_ o_ (Environment m p) = Environment (M.insert i_ o_ m) p
+    go :: Ident -> Object -> Environment -> (Environment, ())
+    go i_ o_ (Environment m p) = (Environment (M.insert i_ o_ m) p, ())
 
 getVar :: Ident -> EnvRef -> IO (Maybe Object)
 getVar i ref = do
