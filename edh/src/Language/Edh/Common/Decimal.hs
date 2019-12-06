@@ -58,67 +58,57 @@ instance Fractional Decimal where
     fromRational x = Decimal (denominator x) 0 (numerator x)
     (/) = divDecimal
 
--- | neither x nor y can be nan or inf, but not checked
-compareVanillaDecimal :: Decimal -> Decimal -> Ordering
-compareVanillaDecimal (Decimal x'd x'e x'n) (Decimal y'd y'e y'n) =
-    if x'e >= y'e
+-- | neither x nor y can be nan, but not checked
+compareNonNanDecimal :: Decimal -> Decimal -> Ordering
+compareNonNanDecimal (Decimal x'd x'e x'n) (Decimal y'd y'e y'n)
+    | -- both are inf, but may be different sign
+      x'd == 0 && y'd == 0 = compare (signum x'n) (signum y'n)
+    | otherwise = if x'e >= y'e
         then compare (x'n * y'd * 10 ^ (x'e - y'e)) (y'n * x'd)
         else compare (x'n * y'd) (y'n * x'd * 10 ^ (y'e - x'e))
 
 instance Ord Decimal where
+    -- | this is to implement proper sorting order,
+    -- in equality and order testing, nans should be treated specially.
     -- a nan is considered greater even compared to +inf,
     -- so that nans are sorted to last in ascending order.
-    -- a nan is considered equal compared to another nan,
-    -- this only hold in sorting, not in equality testing.
+    -- a nan is considered equal compared to another nan for stable
+    -- sorting order.
     compare x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
-        | x'd == 0 = if x'n == 0
-            then -- nan vs y
-                (case () of
-                    () | y'd /= 0 -> -- nan vs vanilla y
-                        GT
-                    () | y'n == 0 -> -- nan vs nan 
-                        EQ
-                    _ -> -- nan vs ±inf
-                        GT
-                )
-            else -- ±inf vs y
-                (case () of
-                    () | y'd /= 0 -> -- ±inf vs vanilla y
-                        if x'n < 0 then LT else GT
-                    () | y'n == 0 -> -- ±inf vs nan 
-                        LT
-                    () | x'n < 0 -> -- -inf vs ±inf
-                        if y'n < 0 then EQ else LT
-                    _ -> -- +inf vs ±inf
-                        if y'n < 0 then GT else EQ
-                )
-        | y'd == 0 = -- vanilla x vs nan or ±inf
-                     if y'n < 0 then GT else LT
-        | -- no nan/inf involved
-          otherwise = compareVanillaDecimal x y
+        | x'd == 0 && x'n == 0 = if y'd == 0 && y'n == 0 then EQ else GT
+        | y'd == 0 && y'n == 0 = LT
+        | otherwise            = compareNonNanDecimal x y
 
 instance Eq Decimal where
-    x@(Decimal x'd x'e x'n) == y@(Decimal y'd y'e y'n)
-        | nanInvolved'or'notBothInf = False
-        | -- no nan involved, 1 or both inf, considered equal iff exactly equal
-          -- todo handle unnormalized inf if that's possible
-          nanOrInfInvolved          = x'e == y'e && x'd == y'd && x'n == y'n
-        | otherwise                 = EQ == compareVanillaDecimal x y
-      where
-        nanOrInfInvolved          = x'd == 0 || y'd == 0
-        nanInvolved'or'notBothInf = nanOrInfInvolved && (x'n == 0 || y'n == 0)
+    -- | nan equals to nothing, including another nan
+    x@(Decimal x'd _x'e x'n) == y@(Decimal y'd _y'e y'n)
+        | -- either is nan
+          (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
+        | otherwise = EQ == compareNonNanDecimal x y
 
 decimalGreater :: Decimal -> Decimal -> Bool
 decimalGreater x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
     | -- always False when nan involved
       (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
-    | otherwise = GT == compareVanillaDecimal x y
+    | otherwise = GT == compareNonNanDecimal x y
+
+decimalGreaterOrEq :: Decimal -> Decimal -> Bool
+decimalGreaterOrEq x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
+    | -- always False when nan involved
+      (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
+    | otherwise = LT /= compareNonNanDecimal x y
 
 decimalLess :: Decimal -> Decimal -> Bool
 decimalLess x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
     | -- always False when nan involved
       (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
-    | otherwise = LT == compareVanillaDecimal x y
+    | otherwise = LT == compareNonNanDecimal x y
+
+decimalLessOrEq :: Decimal -> Decimal -> Bool
+decimalLessOrEq x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
+    | -- always False when nan involved
+      (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
+    | otherwise = GT /= compareNonNanDecimal x y
 
 negateDecimal :: Decimal -> Decimal
 negateDecimal (Decimal d e n) = Decimal d e (-n)
