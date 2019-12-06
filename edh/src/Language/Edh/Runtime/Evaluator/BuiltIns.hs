@@ -5,7 +5,7 @@ import           RIO
 import           Prelude                        ( putStrLn )
 import qualified Data.Text                     as T
 
-import           Language.Edh.Common.Decimal
+import           Data.Lossless.Decimal
 import           Language.Edh.Runtime.Evaluator.Object
                                                as O
 import           Language.Edh.Compiler.Parser.AST

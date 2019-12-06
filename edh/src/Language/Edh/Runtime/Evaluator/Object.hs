@@ -7,7 +7,7 @@ import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as M
 import           GHC.Show                       ( Show(..) )
 
-import           Language.Edh.Common.Decimal   as D
+import           Data.Lossless.Decimal         as D
 import           Language.Edh.Compiler.Parser.AST
 
 

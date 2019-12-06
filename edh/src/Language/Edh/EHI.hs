@@ -15,7 +15,7 @@ module Language.Edh.EHI
     )
 where
 
-import qualified Language.Edh.Common.Decimal   as D
+import qualified Data.Lossless.Decimal         as D
 import           Language.Edh.Runtime.Evaluator.Object
                                                as O
 

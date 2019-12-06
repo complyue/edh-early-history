@@ -1,12 +1,5 @@
--- | a lossless numeric type for decimal arithmetic
-module Language.Edh.Common.Decimal where
-
-import           RIO
-
-import           Prelude                        ( Num(..)
-                                                , Real(..)
-                                                , toEnum
-                                                )
+-- | a numeric type for lossless decimal arithmetic
+module Data.Lossless.Decimal where
 
 import           Data.Ratio
 import           GHC.Show                       ( Show(..) )

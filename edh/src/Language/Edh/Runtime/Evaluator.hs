@@ -8,7 +8,7 @@ import           Control.Monad.Except
 
 import qualified Data.Map.Strict               as M
 
-import           Language.Edh.Common.Decimal
+import           Data.Lossless.Decimal
 import           Language.Edh.Runtime.Evaluator.Object
 import           Language.Edh.Runtime.Evaluator.Types
 import           Language.Edh.Compiler.Parser.AST
