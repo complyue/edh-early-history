@@ -6,8 +6,6 @@ import           RIO                     hiding ( evaluate )
 
 import qualified Data.Text                     as T
 
-import qualified GHC.Show                      as G
-
 import           System.Console.Haskeline
 
 import           Language.Edh.Compiler.Lexer    ( lex )
@@ -24,7 +22,7 @@ import           Language.Edh.Compiler.ParserT  ( ParserError )
 
 data InterpretError = P ParserError | E EvalError
 
-instance G.Show InterpretError where
+instance Show InterpretError where
     show (P p) = show p
     show (E p) = show p
 
