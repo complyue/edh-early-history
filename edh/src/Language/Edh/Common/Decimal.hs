@@ -1,13 +1,12 @@
 -- | a lossless numeric type for decimal arithmetic
---
--- the only odd thing with this type is absence of the
--- `decimal point`, i.e. you write '123e-9' instead of
--- '1.23e-7', '123e-2' instead of '1.23'
 module Language.Edh.Common.Decimal where
 
 import           RIO
 
-import           Prelude                        ( Num(..) )
+import           Prelude                        ( Num(..)
+                                                , Real(..)
+                                                , toEnum
+                                                )
 
 import           Data.Ratio
 import           GHC.Show                       ( Show(..) )
@@ -42,21 +41,8 @@ normalizeDecimal (Decimal d e n)
                  | otherwise        = (x `div` cd, y `div` cd)
         where cd = gcd x y
 
-
 instance Show Decimal where
     show = showDecimal
-
-instance Num Decimal where
-    fromInteger = uncurry (Decimal 1) . (decodeRadix'10 0 . fromIntegral)
-    (+)         = addDecimal
-    (*)         = mulDecimal
-    abs (Decimal d e n) = Decimal (abs d) e (abs n)
-    signum (Decimal d e n) = Decimal (abs d) e $ signum n * signum d
-    negate = negateDecimal
-
-instance Fractional Decimal where
-    fromRational x = Decimal (denominator x) 0 (numerator x)
-    (/) = divDecimal
 
 -- | neither x nor y can be nan, but not checked
 compareNonNanDecimal :: Decimal -> Decimal -> Ordering
@@ -85,6 +71,22 @@ instance Eq Decimal where
         | -- either is nan
           (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
         | otherwise = EQ == compareNonNanDecimal x y
+
+instance Num Decimal where
+    fromInteger = uncurry (Decimal 1) . (decodeRadix'10 0 . fromIntegral)
+    (+)         = addDecimal
+    (*)         = mulDecimal
+    abs (Decimal d e n) = Decimal (abs d) e (abs n)
+    signum (Decimal d e n) = Decimal (abs d) e $ signum n * signum d
+    negate = negateDecimal
+
+instance Real Decimal where
+    toRational (Decimal d e n) =
+        if e < 0 then n % d * 10 ^ (-e) else n * 10 ^ e % d
+
+instance Fractional Decimal where
+    fromRational x = Decimal (denominator x) 0 (numerator x)
+    (/) = divDecimal
 
 decimalGreater :: Decimal -> Decimal -> Bool
 decimalGreater x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
@@ -132,21 +134,56 @@ divDecimal (Decimal x'd x'e x'n) (Decimal y'd y'e y'n) =
 
 showDecimal :: Decimal -> String
 showDecimal (Decimal d e n)
-    | d == 0 = if n == 0 then "nan" else if n < 0 then "-inf" else "inf"
-    | abs e < 5 = if e < 0
-        then show n <> "/" <> show (d * 10 ^ (-e))
-        else if d == 1
-            then show (n * 10 ^ e)
-            else show (n * 10 ^ e) <> "/" <> show d
-    | d == 1 = if e == 0 then show n else show n <> "e" <> show e
-    | e == 0 = show n <> "/" <> show d
-    | e > 0 = show n <> "e" <> show e <> "/" <> show d
-    | otherwise = show n <> "/" <> show d <> "e" <> show (-e)
-
+    | d == 0    = if n == 0 then "nan" else if n < 0 then "-inf" else "inf"
+    | d == 1    = showDecInt n e
+    | d == (-1) = showDecInt (-n) e
+    | e < 0     = showDecInt n 0 ++ "/" ++ showDecInt d (-e)
+    | otherwise = showDecInt n e ++ "/" ++ showDecInt d 0
+  where
+    showDecInt :: Integer -> Integer -> String
+    showDecInt n_ e_ =
+        if n_ < 0 then '-' : positiveInt (-n_) e_ else positiveInt n_ e_
+    positiveInt :: Integer -> Integer -> String
+    positiveInt n_ e_
+        | n_ >= 0 = case encodeInt n_ 0 "" of
+            (0, _) -> "0"
+            (l, s@(d1 : ds)) ->
+                let
+                    cmpcForm = s
+                    normForm = d1 : fractPart ds ++ if ee == 0
+                        then ""
+                        else "e" ++ straightInt ee
+                    ee = e_ + fromIntegral l - 1
+                in
+                    if l < 5 && e_ == 0 then cmpcForm else normForm
+            _ -> error "impossible case"
+        | otherwise = undefined
+    straightInt :: Integer -> String
+    straightInt n_ = let (_l, s) = encodeInt n_ 0 "" in s
+    encodeInt :: Integer -> Int -> String -> (Int, String)
+    encodeInt n_ l buf
+        | abs n_ < 10
+        = if n_ == 0
+            then (l, buf)
+            else if n_ < 0
+                then (l + 2, '-' : digitChar n_ : buf)
+                else (l + 1, digitChar n_ : buf)
+        | otherwise
+        = let (n', r) = n_ `quotRem` 10
+          in  encodeInt n' (l + 1) $ digitChar r : buf
+    digitChar :: Integer -> Char
+    digitChar n_
+        | n_ < 10 = toEnum ((fromEnum '0' :: Int) + (fromIntegral n_ :: Int))
+        | otherwise = undefined
+    trimTrailingZeros :: String -> String
+    trimTrailingZeros = reverse . dropWhile (== '0') . reverse
+    fractPart :: String -> String
+    fractPart ds_ = case trimTrailingZeros ds_ of
+        ""   -> ""
+        ds_' -> '.' : ds_'
 
 decodeRadix'10 :: Integer -> Integer -> (Integer, Integer)
 decodeRadix'10 e_ n_ | n_ == 0   = (0, 0)
                      | r == 0    = decodeRadix'10 (e_ + 1) n_'
                      | otherwise = (e_, n_)
     where (n_', r) = quotRem n_ 10
-
