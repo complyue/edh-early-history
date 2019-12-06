@@ -25,19 +25,6 @@ source-repository head
 library
     exposed-modules:
         Language.Edh.EHI
-        Language.Edh.Runtime.Evaluator
-        Language.Edh.Runtime.Evaluator.BuiltIns
-        Language.Edh.Runtime.Evaluator.Object
-        Language.Edh.Runtime.Evaluator.Types
-        Language.Edh.Compiler.Lexer
-        Language.Edh.Compiler.Lexer.Token
-        Language.Edh.Compiler.Lexer.Types
-        Language.Edh.Compiler.ParserT
-        Language.Edh.Compiler.Parser
-        Language.Edh.Compiler.Parser.AST
-        Language.Edh.Compiler.Parser.Types
-        Language.Edh.Common.Stream
-        Language.Edh.Common.Utils
     hs-source-dirs: src
     other-modules:
         Paths_edh
@@ -50,6 +37,8 @@ library
         ghc >=8.6.5,
         base >=4.12 && <5,
         lossless-decimal -any,
+        megaparsec >=8.0,
+        scientific >=0.3.6,
         rio -any,
         text -any,
         transformers -any,
