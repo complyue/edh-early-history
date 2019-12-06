@@ -1,7 +1,8 @@
 module Main where
 
 import           RIO
-import           Data.Text.IO                   ( putStrLn )
+
+import           System.Console.Haskeline
 
 import           Language.Edh.Runtime.Evaluator.Types
                                                 ( createEmptyState )
@@ -9,5 +10,15 @@ import           Language.Edh.Runtime.Evaluator.Types
 import           Repl                           ( repl )
 
 main :: IO ()
-main = putStrLn ("(EDHi)" :: Text) >> void (createEmptyState >>= repl)
-
+main =
+    runInputT
+            (Settings { complete       = \(_left, _right) -> return ("", [])
+                      , historyFile    = Nothing
+                      , autoAddHistory = True
+                      }
+            )
+        $ do
+              outputStrLn "(EDHi)"
+              state   <- liftIO createEmptyState
+              _state' <- repl state
+              return ()
