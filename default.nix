@@ -6,7 +6,8 @@ import (<nixpkgs>) (args // {
         pkgsWithEdh = super.haskellPackages.override {
           overrides = hself: hsuper: {
             edh = hself.callCabal2nix "edh" ./edh { };
-            lossless-decimal = hself.callCabal2nix "lossless-decimal" ./lossless-decimal { };
+            lossless-decimal =
+              hself.callCabal2nix "lossless-decimal" ./lossless-decimal { };
           };
         };
       in {
