@@ -1,6 +1,8 @@
 -- | a numeric type for lossless decimal arithmetic
 module Data.Lossless.Decimal where
 
+import           Prelude
+
 import           Data.Ratio
 import           GHC.Show                       ( Show(..) )
 
