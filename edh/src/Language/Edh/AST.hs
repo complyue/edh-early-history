@@ -4,7 +4,7 @@ module Language.Edh.AST where
 
 import           Prelude
 import           Data.Text                     as T
-import           Data.Scientific
+import           Data.Lossless.Decimal          ( Decimal )
 
 type ModulePath = FilePath
 
@@ -13,42 +13,42 @@ data Module = Module ModulePath SeqStmts
 
 type SeqStmts = [Stmt]
 
-data Stmt = ImportStmt CallReceiver ImportSource
-            | AssignStmt AttrRef Expr
-            | OperatorDeclStmt OpSymbol Precedence FnDecl
-            | OperatorOvrdStmt OpSymbol FnDecl
+data Stmt = ImportStmt CallReceiver Expr
+            | ClassStmt AttrName FnDecl
+            | ExtendsStmt Expr
+            | MethodStmt AttrName FnDecl
             | ReturnStmt Expr
+            | TryStmt { try'trunk :: Stmt
+                    , try'catches :: [(Expr, Maybe AttrName, Stmt)]
+                    , try'finally :: Maybe Stmt
+                    }
             | BlockStmt [Stmt]
+            | OpDeclStmt OpSymbol Precedence FnDecl
+            | OpOvrdStmt OpSymbol FnDecl
             | ExprStmt Expr
+            | AssignStmt AttrRef Expr
+    deriving (Show)
+
+data FnDecl = FnDecl { fn'args :: CallReceiver
+                    ,  fn'body :: Stmt
+                    }
     deriving (Show)
 
 data CallReceiver = WildReceiver | CallReceiver [ArgReceiver]
     deriving (Show)
 
-data ArgReceiver = RecvPosArg AttrId
-                    | RecvRestArgs AttrId
-                    | RecvOptArg AttrId Expr
-                    | RecvWildArgs
-    deriving (Show)
-
-data ImportSource = ImpFromModule ModulePath
-                    | ImpFromObject Expr
+data ArgReceiver = RecvArg AttrName (Maybe Expr)
+                    | RecvRestArgs AttrName
     deriving (Show)
 
 data AttrRef = ThisRef
-            | NamedRef AttrId
-            | RefPath [AttrRef]
+            | DirectRef AttrName
+            | IndirectRef Expr AttrName
     deriving (Show)
 
-data AttrId = Attribute AttrName | Operator OpSymbol
-    deriving (Eq, Ord)
-
 type AttrName = Text
-type OpSymbol = Text
 
-instance Show AttrId where
-    show (Attribute a ) = T.unpack a
-    show (Operator  op) = "(" <> T.unpack op <> ")"
+type OpSymbol = Text
 
 type Precedence = Int
 
@@ -58,38 +58,27 @@ precCall = 10
 precIndex :: Int
 precIndex = 10
 
-data Expr = LitExpr Literal
-            | AttrExpr AttrRef
-            | PrefixExpr Prefix Expr
-            | InfixExpr Infix Expr Expr
+data Expr = PrefixExpr Prefix Expr
             | IfExpr { if'condition :: Expr
                     , if'consequence :: Stmt
                     , if'alternative :: Maybe Stmt
                     }
-            | TryExpr { try'trunk :: Stmt
-                    , try'catches :: [(Expr, Maybe AttrId, Stmt)]
-                    , try'finally :: Maybe Stmt
-                    }
-            | ClassFnDecl FnDecl
-            | MethodFnDecl FnDecl
-            | CallExpr Expr [ArgSender]
             | ListExpr [Expr]
             | DictExpr [(Expr, Expr)]
+            | LitExpr Literal
+            | AttrExpr AttrRef
+            | CallExpr Expr [ArgSender]
             | IndexExpr { index'value :: Expr
                         , index'target :: Expr
                         }
-    deriving (Show)
-
-data FnDecl = FnDecl { fn'args :: CallReceiver
-                    ,  fn'body :: SeqStmts
-                    }
+            | InfixExpr Infix Expr Expr
     deriving (Show)
 
 data ArgSender = SendPosArg Expr
-                | SendNamedArg AttrId Expr
+                | SendNamedArg AttrName Expr
     deriving (Show)
 
-data Literal = DecLiteral Scientific
+data Literal = DecLiteral Decimal
             | BoolLiteral Bool
             | StringLiteral Text
     deriving (Show)
