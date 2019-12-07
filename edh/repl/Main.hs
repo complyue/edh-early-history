@@ -20,5 +20,5 @@ main =
         $ do
               outputStrLn "(EDHi)"
               state   <- liftIO createEmptyState
-              _state' <- repl state
+              _state' <- repl state []
               return ()

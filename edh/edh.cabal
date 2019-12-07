@@ -25,9 +25,32 @@ source-repository head
 library
     exposed-modules:
         Language.Edh.EHI
-    hs-source-dirs: src
-    other-modules:
+    hs-source-dirs: pub
+    default-language: Haskell2010
+    default-extensions: NoImplicitPrelude OverloadedStrings
+    build-depends:
+        edh-internal -any,
+        base >=4.12 && <5,
+        lossless-decimal -any,
+        rio -any
+
+library edh-internal
+    exposed-modules:
+        Language.Edh.Runtime.Evaluator
+        Language.Edh.Runtime.Evaluator.BuiltIns
+        Language.Edh.Runtime.Evaluator.Object
+        Language.Edh.Runtime.Evaluator.Types
+        Language.Edh.Compiler.Lexer
+        Language.Edh.Compiler.Lexer.Token
+        Language.Edh.Compiler.Lexer.Types
+        Language.Edh.Compiler.ParserT
+        Language.Edh.Compiler.Parser
+        Language.Edh.Compiler.Parser.AST
+        Language.Edh.Compiler.Parser.Types
+        Language.Edh.Common.Stream
+        Language.Edh.Common.Utils
         Paths_edh
+    hs-source-dirs: src
     autogen-modules:
         Paths_edh
     default-language: Haskell2010
@@ -53,8 +76,8 @@ executable edhi
     default-language: Haskell2010
     default-extensions: OverloadedStrings NoImplicitPrelude
     build-depends:
+        edh-internal -any,
         base >=4.12 && <5,
         rio -any,
         text -any,
-        haskeline -any,
-        edh -any
+        haskeline -any

@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BlockArguments #-}
 module Repl where
 
 import           RIO                     hiding ( evaluate )
@@ -38,17 +39,42 @@ evaluate state input = do
             Left  err -> return $ Left (E err)
         Left err -> return $ Left (P err)
 
-repl :: EvalState -> InputT IO EvalState
-repl state = getInputLine "Đ: " >>= \case
-    Nothing -> return state
-    Just text ->
-        let code = T.pack text
-        in  case T.strip code of
-                "" -> repl state
-                _  -> (evaluate state code) >>= \case
-                    Left err -> do
-                        outputStrLn $ show err
-                        repl state
-                    Right (object, state') -> do
-                        outputStrLn $ show object
-                        repl state'
+repl :: EvalState -> [Text] -> InputT IO EvalState
+repl state blkLines =
+    getInputLine
+            (case blkLines of
+                [] -> "Đ: "
+                _  -> "Đ| "
+            )
+        >>= \case
+                Nothing -> case blkLines of
+                    [] -> return state
+                    _ -> -- TODO warn about premature EOF ?
+                        return state
+                Just text -> case blkLines of
+                    [] -> case text of
+                        "{" -> repl state [T.pack text]
+                        _ ->
+                            let code = T.pack text
+                            in  case T.strip code of
+                                    "" -> repl state []
+                                    _  -> evalAndPrint code state
+
+                    _ -> case text of
+                        "}" ->
+                            let
+                                code =
+                                    (T.unlines . reverse)
+                                        $ (T.pack text)
+                                        : blkLines
+                            in  evalAndPrint code state
+                        _ -> repl state $ (T.pack text) : blkLines
+  where
+    evalAndPrint :: Text -> EvalState -> InputT IO EvalState
+    evalAndPrint c s = evaluate s c >>= \case
+        Left err -> do
+            outputStrLn $ show err
+            repl state []
+        Right (object, state') -> do
+            outputStrLn $ show object
+            repl state' []
