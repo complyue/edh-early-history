@@ -3,6 +3,7 @@ module Data.Lossless.Decimal where
 
 import           Prelude
 
+import           Data.Char
 import           Data.Ratio
 import           GHC.Show                       ( Show(..) )
 
@@ -152,7 +153,7 @@ showDecimal (Decimal d e n)
                 in
                     if l < 5 && e_ == 0 then cmpcForm else normForm
             _ -> error "impossible case"
-        | otherwise = undefined
+        | otherwise = error "bug"
     straightInt :: Integer -> String
     straightInt n_ = let (_l, s) = encodeInt n_ 0 "" in s
     encodeInt :: Integer -> Int -> String -> (Int, String)
@@ -168,8 +169,8 @@ showDecimal (Decimal d e n)
           in  encodeInt n' (l + 1) $ digitChar r : buf
     digitChar :: Integer -> Char
     digitChar n_
-        | n_ < 10 = toEnum ((fromEnum '0' :: Int) + (fromIntegral n_ :: Int))
-        | otherwise = undefined
+        | 0 <= n_ && n_ < 10 = chr $ ord '0' + (fromIntegral n_ :: Int)
+        | otherwise          = error "bug"
     trimTrailingZeros :: String -> String
     trimTrailingZeros = reverse . dropWhile (== '0') . reverse
     fractPart :: String -> String
