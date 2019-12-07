@@ -21,12 +21,6 @@ import           Language.Edh.Runtime.Evaluator.Object
 import           Language.Edh.Compiler.ParserT  ( ParserError )
 
 
-data InterpretError = P ParserError | E EvalError
-
-instance Show InterpretError where
-    show (P p) = show p
-    show (E p) = show p
-
 inputSettings :: Settings IO
 inputSettings = Settings { complete       = \(_left, _right) -> return ("", [])
                          , historyFile    = Nothing
@@ -67,6 +61,9 @@ doRead pendingLines =
                                     doRead $ code : pendingLines
 
 
+data InterpretError = P ParserError | E EvalError
+
+
 doEval :: EvalState -> Text -> IO (EvalState, Either InterpretError Object)
 doEval s c = case (lex c >>= parse) of
     Right ast -> evalWithState ast s >>= \case
@@ -77,9 +74,13 @@ doEval s c = case (lex c >>= parse) of
 
 doPrint :: (Either InterpretError Object) -> InputT IO ()
 doPrint = \case
-    Left err -> do
-        outputStrLn "* 😱 *"
-        outputStrLn $ show err
+    Left err -> case err of
+        P parseErr -> do
+            outputStrLn "* 😓 *"
+            outputStrLn $ show parseErr
+        E evalErr -> do
+            outputStrLn "* 😱 *"
+            outputStrLn $ show evalErr
     Right o -> case o of
         ONil -> return ()
         _    -> do
