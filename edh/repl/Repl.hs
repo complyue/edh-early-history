@@ -17,7 +17,7 @@ import           Language.Edh.Runtime.Evaluator.Types
                                                 , EvalState
                                                 )
 import           Language.Edh.Runtime.Evaluator.Object
-                                                ( Object )
+                                                ( Object(ONil) )
 import           Language.Edh.Compiler.ParserT  ( ParserError )
 
 
@@ -27,54 +27,72 @@ instance Show InterpretError where
     show (P p) = show p
     show (E p) = show p
 
-evaluate
-    :: EvalState
-    -> Text
-    -> InputT IO (Either InterpretError (Object, EvalState))
-evaluate state input = do
-    let result = lex input >>= parse
-    case result of
-        Right ast -> liftIO $ evalWithState ast state >>= \case
-            Right x   -> return $ Right x
-            Left  err -> return $ Left (E err)
-        Left err -> return $ Left (P err)
+inputSettings :: Settings IO
+inputSettings = Settings { complete       = \(_left, _right) -> return ("", [])
+                         , historyFile    = Nothing
+                         , autoAddHistory = True
+                         }
 
-repl :: EvalState -> [Text] -> InputT IO EvalState
-repl state blkLines =
-    getInputLine
-            (case blkLines of
+doRead :: [Text] -> InputT IO (Maybe Text)
+doRead pendingLines =
+    handleInterrupt (return $ Just "")
+        $   withInterrupt
+        $   getInputLine case pendingLines of
                 [] -> "Đ: "
                 _  -> "Đ| "
-            )
         >>= \case
-                Nothing -> case blkLines of
-                    [] -> return state
+                Nothing -> case pendingLines of
+                    [] -> return Nothing
                     _ -> -- TODO warn about premature EOF ?
-                        return state
-                Just text -> case blkLines of
-                    [] -> case text of
-                        "{" -> repl state [T.pack text]
-                        _ ->
-                            let code = T.pack text
-                            in  case T.strip code of
-                                    "" -> repl state []
-                                    _  -> evalAndPrint code state
+                        return Nothing
+                Just text ->
+                    let code = T.pack text
+                    in  case pendingLines of
+                            [] -> case T.stripEnd code of
+                                "{" -> -- an unindented `{` marks start of multi-line input
+                                    doRead [code]
+                                _ -> case T.strip code of
+                                    "" -> -- got an empty line in single-line input mode
+                                        doRead [] -- start over in single-line input mode
+                                    _ -> -- got a single line input
+                                        return $ Just code
+                            _ -> case T.stripEnd code of
+                                "}" -> -- an unindented `}` marks end of multi-line input
+                                    return
+                                        $ Just
+                                        $ (T.unlines . reverse)
+                                        $ code
+                                        : pendingLines
+                                _ -> -- got a line in multi-line input mode
+                                    doRead $ code : pendingLines
 
-                    _ -> case text of
-                        "}" ->
-                            let
-                                code =
-                                    (T.unlines . reverse)
-                                        $ (T.pack text)
-                                        : blkLines
-                            in  evalAndPrint code state
-                        _ -> repl state $ (T.pack text) : blkLines
-  where
-    evalAndPrint :: Text -> EvalState -> InputT IO EvalState
-    evalAndPrint c s = evaluate s c >>= \case
-        Left err -> do
-            outputStrLn $ show err
-            repl state []
-        Right (object, state') -> do
-            outputStrLn $ show object
-            repl state' []
+
+doEval :: EvalState -> Text -> IO (EvalState, Either InterpretError Object)
+doEval s c = case (lex c >>= parse) of
+    Right ast -> evalWithState ast s >>= \case
+        Right (o, s') -> return (s', Right o)
+        Left  err     -> return (s, Left (E err))
+    Left err -> return (s, Left (P err))
+
+
+doPrint :: (Either InterpretError Object) -> InputT IO ()
+doPrint = \case
+    Left err -> do
+        outputStrLn "* 😱 *"
+        outputStrLn $ show err
+    Right o -> case o of
+        ONil -> return ()
+        _    -> do
+            outputStrLn $ show o
+
+
+doLoop :: EvalState -> IO ()
+doLoop s = (runInputT inputSettings $ doRead []) >>= \case
+    Nothing -> return () -- reached EOF (end-of-feed)
+    Just c  -> if c == ""
+        then doLoop s -- ignore empty code
+        else do -- got one piece of code
+            (s', r) <- doEval s c
+            runInputT inputSettings $ doPrint r
+            doLoop s'
+

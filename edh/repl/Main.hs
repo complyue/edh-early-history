@@ -2,23 +2,14 @@ module Main where
 
 import           RIO
 
-import           System.Console.Haskeline
-
+import           System.IO
 import           Language.Edh.Runtime.Evaluator.Types
                                                 ( createEmptyState )
 
-import           Repl                           ( repl )
+import           Repl                           ( doLoop )
 
 main :: IO ()
-main =
-    runInputT
-            (Settings { complete       = \(_left, _right) -> return ("", [])
-                      , historyFile    = Nothing
-                      , autoAddHistory = True
-                      }
-            )
-        $ do
-              outputStrLn "(EDHi)"
-              state   <- liftIO createEmptyState
-              _state' <- repl state []
-              return ()
+main = do
+    putStrLn "(EDHi)"
+
+    createEmptyState >>= doLoop
