@@ -22,13 +22,3 @@ import           Language.Edh.Parser.Details
 parseModule :: ModulePath -> Parser Module
 parseModule pth = Module pth <$> (sc >> many parseStmt)
 
-parseAssign :: Parser Stmt
-parseAssign = try do
-    ar <- parseAttrRef
-    symbol "="
-    expr <- parseExpr
-    case attrRef of
-        ThisRef -> parseError "can not assign to this"
-        _       -> return $ AssignStmt ar expr
-
-

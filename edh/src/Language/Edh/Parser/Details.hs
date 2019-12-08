@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 
@@ -5,14 +6,19 @@ module Language.Edh.Parser.Details where
 
 import           Prelude
 
-import           Control.Applicative     hiding ( many )
+import           Control.Applicative     hiding ( many
+                                                , some
+                                                )
 import           Control.Monad
+import           Control.Monad.State.Strict
+import           Control.Monad.State.Class
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Void
 import           Data.Scientific
+import qualified Data.Map.Strict               as Map
 
-import           Text.Megaparsec
+import           Text.Megaparsec         hiding ( State )
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
 
@@ -20,7 +26,14 @@ import           Data.Lossless.Decimal
 
 import           Language.Edh.AST
 
-type Parser = Parsec Void Text
+
+-- | the dict for operator precendences in parsing context
+-- no backtracking needed for this, so it can live in the
+-- inner monad of 'ParsecT'.
+type OpPrecDict = Map.Map OpSymbol (Int, Text)
+
+type Parser = ParsecT Void Text (State OpPrecDict)
+
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
@@ -31,8 +44,11 @@ symbol = L.symbol sc
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
-optSymbol :: Text -> Parser (Maybe Text)
-optSymbol = optional . (L.symbol sc)
+trailingComma :: Parser ()
+trailingComma = void $ optional $ symbol ","
+
+trailingColon :: Parser ()
+trailingColon = void $ optional $ symbol ";"
 
 
 isLetter :: Char -> Bool
@@ -100,13 +116,13 @@ parseArgsRecv = (symbol "*" >> return WildReceiver) <|> do
     restArgs   = do
         symbol "*"
         aname <- parseAttrName
-        optSymbol ","
+        trailingComma
         return $ RecvRestArgs aname
     nextKwArg = do
         aname   <- parseAttrName
         reName  <- optional parseRename
         defExpr <- optional parseDefaultExpr
-        optSymbol ","
+        trailingComma
         return $ RecvArg aname reName defExpr
 
 parseRename :: Parser AttrName
@@ -124,17 +140,27 @@ parseDefaultExpr = do
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do
     symbol "operator"
-    opSym <- takeWhile1P (Just "operator symbol") isOperatorChar
-    sc
+    opSym    <- parseOpLit
     precDecl <- optional $ L.decimal <* sc
     procDecl <- parseProcDecl
+    opPD     <- get
     case precDecl of
-        Nothing ->
-            -- TODO validate the operator is declared
-            OpOvrdStmt opSym <$> parseProcDecl
-        Just opPrec ->
-            -- TODO validate the operator is not declared yet,
-            --      add the op for parse
+        Nothing -> do
+            case Map.lookup opSym opPD of
+                Nothing -> fail $ "undeclared operator: " <> T.unpack opSym
+                _       -> return ()
+            return $ OpOvrdStmt opSym procDecl
+        Just opPrec -> do
+            case Map.lookup opSym opPD of
+                Nothing -> return ()
+                Just (_, odl) ->
+                    fail
+                        $  "redeclaring operator: "
+                        <> T.unpack opSym
+                        <> " which has been declared at: "
+                        <> T.unpack odl
+            srcLoc <- getSourcePos
+            put $ Map.insert opSym (opPrec, T.pack $ show srcLoc) opPD
             return $ OpDeclStmt opSym opPrec procDecl
 
 parseReturnStmt :: Parser Stmt
@@ -169,17 +195,19 @@ parseBlockStmt =
 
 
 parseStmt :: Parser Stmt
-parseStmt = choice
-    [ parseImportStmt
-    , parseClassStmt
-    , parseExtendsStmt
-    , parseMethodStmt
-    , parseReturnStmt
-    , parseTryStmt
-    , parseBlockStmt
-    , parseOpDeclOvrdStmt
-    , ExprStmt <$> parseExpr
-    ]
+parseStmt =
+    choice
+            [ parseImportStmt
+            , parseClassStmt
+            , parseExtendsStmt
+            , parseMethodStmt
+            , parseReturnStmt
+            , parseTryStmt
+            , parseBlockStmt
+            , parseOpDeclOvrdStmt
+            , ExprStmt <$> parseExpr
+            ]
+        <* trailingColon
 
 
 parsePrefixExpr :: Parser Expr
@@ -204,11 +232,8 @@ parseListExpr :: Parser Expr
 parseListExpr =
     ListExpr
         <$> ( between (symbol "[") (symbol "]")
-            $ many (parseExpr <* optTrailingComma)
+            $ many (parseExpr <* trailingComma)
             )
-
-optTrailingComma :: Parser ()
-optTrailingComma = void $ optional $ symbol ","
 
 parseDictExpr :: Parser Expr
 parseDictExpr =
@@ -218,7 +243,7 @@ parseDictExpr =
         keyExpr <- parseExpr
         symbol ":"
         valExpr <- parseExpr
-        optTrailingComma
+        trailingComma
         return (keyExpr, valExpr)
 
 parseStringLit :: Parser Text
@@ -252,9 +277,10 @@ parseAlphaName = lexeme do
     return $ anStart <> anRest
 
 parseOpName :: Parser Text
-parseOpName = between (symbol "(") (symbol ")") $ lexeme $ takeWhile1P
-    (Just "operator symbol")
-    isOperatorChar
+parseOpName = between (symbol "(") (symbol ")") parseOpLit
+
+parseOpLit :: Parser Text
+parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 
 
 parseExpr :: Parser Expr
