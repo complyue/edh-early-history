@@ -310,6 +310,9 @@ parseStmt = do
                 , parseExtendsStmt
                 , parseMethodStmt
                 , parseForStmt
+                  -- TODO validate break/continue must within for block
+                , BreakStmt <$ symbol "break"
+                , ContinueStmt <$ symbol "continue"
                 , parseOpDeclOvrdStmt
                 , parseTryStmt
                 , parseBlockStmt
