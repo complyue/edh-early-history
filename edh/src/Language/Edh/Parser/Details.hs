@@ -227,6 +227,14 @@ parseMethodStmt = do
     procDecl <- parseProcDecl
     return $ MethodStmt mname procDecl
 
+parseForStmt :: Parser Stmt
+parseForStmt = do
+    void $ symbol "for"
+    ar   <- parseArgsReceiver
+    coll <- parseExpr
+    stmt <- parseStmt
+    return $ ForStmt ar coll stmt
+
 parseProcDecl :: Parser ProcDecl
 parseProcDecl = do
     cr   <- parseArgsReceiver
@@ -262,35 +270,34 @@ parseOpDeclOvrdStmt = do
             put $ Map.insert opSym (opPrec, T.pack $ show srcLoc) opPD
             return $ OpDeclStmt opSym opPrec procDecl
 
+parseTryStmt :: Parser Stmt
+parseTryStmt = do
+    void $ symbol "try"
+    trunk   <- parseStmt
+    catches <- many parseCatch
+    final   <- optional do
+        void $ symbol "finally"
+        parseStmt
+    return $ TryStmt trunk catches final
+  where
+    parseCatch = do
+        void $ symbol "catch"
+        excClass <- parseExpr
+        an       <- optional do
+            void $ symbol "as"
+            parseAttrName
+        recov <- parseStmt
+        return (excClass, an, recov)
+
+parseBlockStmt :: Parser Stmt
+parseBlockStmt =
+    BlockStmt <$> (between (symbol "{") (symbol "}") $ many parseStmt)
+
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
     void $ symbol "return"
     expr <- parseExpr
     return $ ReturnStmt expr
-
-parseTryStmt :: Parser Stmt
-parseTryStmt = do
-    void $ symbol "try"
-    trunk <- parseStmt
-    let withOneCatch = try do
-            void $ symbol "catch"
-            excClass <- parseExpr
-            an       <-
-                withRecovery (const $ return Nothing)
-                $   Just
-                <$> (symbol "as" >> parseAttrName)
-            recov <- parseStmt
-            return $ (excClass, an, recov)
-    catches <- many withOneCatch
-    let withFinallyStmt = do
-            void $ symbol "finally"
-            final <- parseStmt
-            return $ TryStmt trunk catches $ Just final
-    withFinallyStmt <|> (return $ TryStmt trunk catches Nothing)
-
-parseBlockStmt :: Parser Stmt
-parseBlockStmt =
-    BlockStmt <$> (between (symbol "{") (symbol "}") $ many parseStmt)
 
 
 parseStmt :: Parser Stmt
@@ -300,10 +307,11 @@ parseStmt =
             , parseClassStmt
             , parseExtendsStmt
             , parseMethodStmt
-            , parseReturnStmt
+            , parseForStmt
+            , parseOpDeclOvrdStmt
             , parseTryStmt
             , parseBlockStmt
-            , parseOpDeclOvrdStmt
+            , parseReturnStmt
             , ExprStmt <$> parseExpr
             ]
         <* trailingColon
