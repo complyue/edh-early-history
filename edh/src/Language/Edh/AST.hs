@@ -29,9 +29,9 @@ data Stmt = ImportStmt ArgsReceiver Expr
         | OpDeclStmt OpSymbol Precedence ProcDecl
         | OpOvrdStmt OpSymbol ProcDecl
         | TryStmt {
-            try'trunk :: StmtSrc
-            , try'catches :: [(Expr, Maybe AttrName, StmtSrc)]
-            , try'finally :: Maybe StmtSrc
+            try'trunk :: !StmtSrc
+            , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]
+            , try'finally :: !(Maybe StmtSrc)
             }
         | BlockStmt SeqStmts
         | ReturnStmt Expr
@@ -61,8 +61,8 @@ data ArgSender = UnpackPosArgs Expr
         | SendKwArg AttrName Expr
     deriving (Show)
 
-data ProcDecl = ProcDecl { fn'args :: ArgsReceiver
-                        ,  fn'body :: StmtSrc
+data ProcDecl = ProcDecl { fn'args :: !ArgsReceiver
+                        ,  fn'body :: !StmtSrc
                         }
     deriving (Show)
 
@@ -70,17 +70,17 @@ data Prefix = PrefixPlus | PrefixMinus | Not
     deriving (Show)
 
 data Expr = PrefixExpr Prefix Expr
-            | IfExpr { if'condition :: Expr
-                    , if'consequence :: StmtSrc
-                    , if'alternative :: Maybe StmtSrc
+            | IfExpr { if'condition :: !Expr
+                    , if'consequence :: !StmtSrc
+                    , if'alternative :: !(Maybe StmtSrc)
                     }
             | ListExpr [Expr]
             | DictExpr [(Expr, Expr)]
             | LitExpr Literal
             | AttrExpr AttrRef
             | CallExpr Expr ArgsSender
-            | IndexExpr { index'value :: Expr
-                        , index'target :: Expr
+            | IndexExpr { index'value :: !Expr
+                        , index'target :: !Expr
                         }
             | InfixExpr OpSymbol Expr Expr
     deriving (Show)
