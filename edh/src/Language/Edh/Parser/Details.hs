@@ -90,23 +90,30 @@ parsePackReceiver = between
     (symbol "(")
     (symbol ")")
     do
-        argRs <- parseArgRecvs [] False
+        argRs <- parseArgRecvs [] False False
         return $ PackReceiver $ reverse argRs
 
-parseArgRecvs :: [ArgReceiver] -> Bool -> Parser [ArgReceiver]
-parseArgRecvs rs posConsumed = (lookAhead (symbol ")") >> return rs) <|> do
-    nextArg <-
-        (if posConsumed then parseKwRecv True else nextPosArg) <* trailingComma
-    case nextArg of
-        RecvRestArgs _ -> parseArgRecvs (nextArg : rs) True
-        _              -> parseArgRecvs (nextArg : rs) False
+parseArgRecvs :: [ArgReceiver] -> Bool -> Bool -> Parser [ArgReceiver]
+parseArgRecvs rs kwConsumed posConsumed =
+    (lookAhead (symbol ")") >> return rs) <|> do
+        nextArg <-
+            (if posConsumed then parseKwRecv True else nextPosArg)
+                <* trailingComma
+        case nextArg of
+            RecvRestPosArgs _ -> parseArgRecvs (nextArg : rs) kwConsumed True
+            RecvRestKwArgs _ -> parseArgRecvs (nextArg : rs) True posConsumed
+            _ -> parseArgRecvs (nextArg : rs) kwConsumed posConsumed
   where
-    nextPosArg, restArgs :: Parser ArgReceiver
-    nextPosArg = restArgs <|> parseKwRecv True
-    restArgs   = do
+    nextPosArg, restKwArgs, restPosArgs :: Parser ArgReceiver
+    nextPosArg = restKwArgs <|> restPosArgs <|> parseKwRecv True
+    restKwArgs = do
+        symbol "**"
+        aname <- parseAttrName
+        return $ RecvRestKwArgs aname
+    restPosArgs = do
         symbol "*"
         aname <- parseAttrName
-        return $ RecvRestArgs aname
+        return $ RecvRestPosArgs aname
 
 parseRetarget :: Parser AttrRef
 parseRetarget = do
@@ -360,7 +367,7 @@ parseParenExpr :: Parser Expr
 parseParenExpr = between (symbol "(") (symbol ")") parseExpr
 
 parseAttrName :: Parser Text
-parseAttrName = parseAlphaName <|> parseOpName
+parseAttrName = parseOpName <|> parseAlphaName
 
 parseAlphaName :: Parser Text
 parseAlphaName = lexeme do

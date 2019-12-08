@@ -40,17 +40,18 @@ data ArgsReceiver = PackReceiver [ArgReceiver]
         | SingleReceiver ArgReceiver
         | WildReceiver
     deriving (Show)
-data ArgReceiver = RecvRestArgs AttrName
-            | RecvArg AttrName (Maybe AttrRef) (Maybe Expr)
+data ArgReceiver = RecvRestPosArgs AttrName
+        | RecvRestKwArgs AttrName
+        | RecvArg AttrName (Maybe AttrRef) (Maybe Expr)
     deriving (Show)
 
 data ArgsSender = PackSender [ArgSender]
         | SingleSender ArgSender
     deriving (Show)
-data ArgSender = SendPosArg Expr
-            | UnpackPosArgs Expr
-            | SendKwArg AttrName Expr
-            | UnpackKwArgs Expr
+data ArgSender = UnpackPosArgs Expr
+        | UnpackKwArgs Expr
+        | SendPosArg Expr
+        | SendKwArg AttrName Expr
     deriving (Show)
 
 data ProcDecl = ProcDecl { fn'args :: ArgsReceiver
