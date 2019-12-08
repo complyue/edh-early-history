@@ -300,21 +300,23 @@ parseReturnStmt = do
     return $ ReturnStmt expr
 
 
-parseStmt :: Parser Stmt
-parseStmt =
-    choice
-            [ parseImportStmt
-            , parseClassStmt
-            , parseExtendsStmt
-            , parseMethodStmt
-            , parseForStmt
-            , parseOpDeclOvrdStmt
-            , parseTryStmt
-            , parseBlockStmt
-            , parseReturnStmt
-            , ExprStmt <$> parseExpr
-            ]
-        <* trailingColon
+parseStmt :: Parser StmtSrc
+parseStmt = do
+    srcPos <- getSourcePos
+    StmtSrc srcPos
+        <$> choice
+                [ parseImportStmt
+                , parseClassStmt
+                , parseExtendsStmt
+                , parseMethodStmt
+                , parseForStmt
+                , parseOpDeclOvrdStmt
+                , parseTryStmt
+                , parseBlockStmt
+                , parseReturnStmt
+                , ExprStmt <$> parseExpr
+                ]
+        <*  trailingColon
 
 
 parsePrefixExpr :: Parser Expr

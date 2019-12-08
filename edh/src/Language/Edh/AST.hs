@@ -6,6 +6,9 @@ import           Prelude
 import           Data.Text                     as T
 import           Data.Lossless.Decimal          ( Decimal )
 
+import           Text.Megaparsec
+
+
 type ModulePath = FilePath
 type AttrName = Text
 type OpSymbol = Text
@@ -13,23 +16,27 @@ type OpSymbol = Text
 data Module = Module ModulePath SeqStmts
     deriving (Show)
 
-type SeqStmts = [Stmt]
+type SeqStmts = [StmtSrc]
+
+data StmtSrc = StmtSrc SourcePos Stmt
+    deriving (Show)
 
 data Stmt = ImportStmt ArgsReceiver Expr
-            | AssignStmt ArgsReceiver ArgsSender
-            | ClassStmt AttrName ProcDecl
-            | ExtendsStmt Expr
-            | MethodStmt AttrName ProcDecl
-            | ForStmt ArgsReceiver Expr Stmt
-            | OpDeclStmt OpSymbol Precedence ProcDecl
-            | OpOvrdStmt OpSymbol ProcDecl
-            | TryStmt { try'trunk :: Stmt
-                        , try'catches :: [(Expr, Maybe AttrName, Stmt)]
-                        , try'finally :: Maybe Stmt
-                        }
-            | BlockStmt [Stmt]
-            | ReturnStmt Expr
-            | ExprStmt Expr
+        | AssignStmt ArgsReceiver ArgsSender
+        | ClassStmt AttrName ProcDecl
+        | ExtendsStmt Expr
+        | MethodStmt AttrName ProcDecl
+        | ForStmt ArgsReceiver Expr StmtSrc
+        | OpDeclStmt OpSymbol Precedence ProcDecl
+        | OpOvrdStmt OpSymbol ProcDecl
+        | TryStmt {
+            try'trunk :: StmtSrc
+            , try'catches :: [(Expr, Maybe AttrName, StmtSrc)]
+            , try'finally :: Maybe StmtSrc
+            }
+        | BlockStmt SeqStmts
+        | ReturnStmt Expr
+        | ExprStmt Expr
     deriving (Show)
 
 data AttrRef = ThisRef | SupersRef
@@ -56,7 +63,7 @@ data ArgSender = UnpackPosArgs Expr
     deriving (Show)
 
 data ProcDecl = ProcDecl { fn'args :: ArgsReceiver
-                        ,  fn'body :: Stmt
+                        ,  fn'body :: StmtSrc
                         }
     deriving (Show)
 
@@ -65,8 +72,8 @@ data Prefix = PrefixPlus | PrefixMinus | Not
 
 data Expr = PrefixExpr Prefix Expr
             | IfExpr { if'condition :: Expr
-                    , if'consequence :: Stmt
-                    , if'alternative :: Maybe Stmt
+                    , if'consequence :: StmtSrc
+                    , if'alternative :: Maybe StmtSrc
                     }
             | ListExpr [Expr]
             | DictExpr [(Expr, Expr)]
