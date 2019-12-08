@@ -18,8 +18,7 @@ data Module = Module ModulePath SeqStmts
 
 type SeqStmts = [StmtSrc]
 
-data StmtSrc = StmtSrc SourcePos Stmt
-    deriving (Show)
+type StmtSrc = (SourcePos, Stmt)
 
 data Stmt = ImportStmt ArgsReceiver Expr
         | AssignStmt ArgsReceiver ArgsSender

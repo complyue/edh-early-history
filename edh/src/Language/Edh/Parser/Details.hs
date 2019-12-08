@@ -303,7 +303,7 @@ parseReturnStmt = do
 parseStmt :: Parser StmtSrc
 parseStmt = do
     srcPos <- getSourcePos
-    StmtSrc srcPos
+    ((,) srcPos)
         <$> choice
                 [ parseImportStmt
                 , parseClassStmt
