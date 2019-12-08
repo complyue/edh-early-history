@@ -70,7 +70,9 @@ data Expr = PrefixExpr Prefix Expr
     deriving (Show)
 
 data ArgSender = SendPosArg Expr
+                | UnpackPosArgs Expr
                 | SendKwArg AttrName Expr
+                | UnpackKwArgs Expr
     deriving (Show)
 
 data Literal = DecLiteral Decimal

@@ -267,6 +267,9 @@ parseLitExpr = choice
     , DecLiteral <$> parseDecLit
     ]
 
+parseParenExpr :: Parser Expr
+parseParenExpr = between (symbol "(") (symbol ")") parseExpr
+
 parseAttrName :: Parser Text
 parseAttrName = parseAlphaName <|> parseOpName
 
@@ -285,7 +288,13 @@ parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 
 parseExpr :: Parser Expr
 parseExpr = choice
-    [parsePrefixExpr, parseIfExpr, parseListExpr, parseDictExpr, parseExprPrec]
+    [ parsePrefixExpr
+    , parseIfExpr
+    , parseListExpr
+    , parseDictExpr
+    , parseParenExpr
+    , parseExprPrec
+    ]
 
 
 parseExprPrec :: Parser Expr
