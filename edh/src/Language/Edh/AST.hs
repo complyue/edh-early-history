@@ -17,14 +17,14 @@ data Stmt = ImportStmt ArgsReceiver Expr
             | ClassStmt AttrName ProcDecl
             | ExtendsStmt Expr
             | MethodStmt AttrName ProcDecl
+            | OpDeclStmt OpSymbol Precedence ProcDecl
+            | OpOvrdStmt OpSymbol ProcDecl
             | ReturnStmt Expr
             | TryStmt { try'trunk :: Stmt
                     , try'catches :: [(Expr, Maybe AttrName, Stmt)]
                     , try'finally :: Maybe Stmt
                     }
             | BlockStmt [Stmt]
-            | OpDeclStmt OpSymbol Precedence ProcDecl
-            | OpOvrdStmt OpSymbol ProcDecl
             | ExprStmt Expr
             | AssignStmt AttrRef Expr
     deriving (Show)

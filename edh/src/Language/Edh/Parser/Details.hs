@@ -121,6 +121,22 @@ parseDefaultExpr = do
     defExpr <- parseExpr
     return defExpr
 
+parseOpDeclOvrdStmt :: Parser Stmt
+parseOpDeclOvrdStmt = do
+    symbol "operator"
+    opSym <- takeWhile1P (Just "operator symbol") isOperatorChar
+    sc
+    precDecl <- optional $ L.decimal <* sc
+    procDecl <- parseProcDecl
+    case precDecl of
+        Nothing ->
+            -- TODO validate the operator is declared
+            OpOvrdStmt opSym <$> parseProcDecl
+        Just opPrec ->
+            -- TODO validate the operator is not declared yet,
+            --      add the op for parse
+            return $ OpDeclStmt opSym opPrec procDecl
+
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
     symbol "return"
@@ -148,33 +164,22 @@ parseTryStmt = do
     withFinallyStmt <|> (return $ TryStmt trunk catches Nothing)
 
 parseBlockStmt :: Parser Stmt
-parseBlockStmt = do
-    symbol "{"
-    stmts <- many parseStmt
-    symbol "}"
-    return $ BlockStmt stmts
-
-parseOpDeclOvrdStmt :: Parser Stmt
-parseOpDeclOvrdStmt = do
-    symbol "("
-    opSym <- takeWhile1P (Just "operator symbol") isOperatorChar
-    sc
-    precDecl <- optional $ L.decimal <* sc
-    symbol ")"
-    symbol "="
-    procDecl <- parseProcDecl
-    case precDecl of
-        Nothing ->
-            -- TODO validate the operator is declared
-            OpOvrdStmt opSym <$> parseProcDecl
-        Just opPrec ->
-            -- TODO validate the operator is not declared yet,
-            --      add the op for parse
-            return $ OpDeclStmt opSym opPrec procDecl
+parseBlockStmt =
+    BlockStmt <$> (between (symbol "{") (symbol "}") $ many parseStmt)
 
 
-
-
+parseStmt :: Parser Stmt
+parseStmt = choice
+    [ parseImportStmt
+    , parseClassStmt
+    , parseExtendsStmt
+    , parseMethodStmt
+    , parseReturnStmt
+    , parseTryStmt
+    , parseBlockStmt
+    , parseOpDeclOvrdStmt
+    , ExprStmt <$> parseExpr
+    ]
 
 
 parsePrefixExpr :: Parser Expr
@@ -190,11 +195,31 @@ parseIfExpr = do
     cond <- parseExpr
     symbol "then"
     cseq <- parseStmt
-    let withElseClause = do
-            symbol "else"
-            alt <- parseStmt
-            return $ IfExpr cond cseq $ Just alt
-    withElseClause <|> (return $ IfExpr cond cseq Nothing)
+    alt  <- optional do
+        symbol "else"
+        parseStmt
+    return $ IfExpr cond cseq alt
+
+parseListExpr :: Parser Expr
+parseListExpr =
+    ListExpr
+        <$> ( between (symbol "[") (symbol "]")
+            $ many (parseExpr <* optTrailingComma)
+            )
+
+optTrailingComma :: Parser ()
+optTrailingComma = void $ optional $ symbol ","
+
+parseDictExpr :: Parser Expr
+parseDictExpr =
+    DictExpr <$> (between (symbol "{") (symbol "}") $ many parseDictPair)
+  where
+    parseDictPair = do
+        keyExpr <- parseExpr
+        symbol ":"
+        valExpr <- parseExpr
+        optTrailingComma
+        return (keyExpr, valExpr)
 
 parseStringLit :: Parser Text
 parseStringLit = do
@@ -206,34 +231,30 @@ parseBoolLit =
     (symbol "true" *> return True) <|> (symbol "false" *> return False)
 
 parseDecLit :: Parser Decimal
-parseDecLit = try $ lexeme do -- TODO support HEX/OCT ?
+parseDecLit = lexeme do -- TODO support HEX/OCT ?
     sn <- L.signed (return ()) L.scientific
     return $ Decimal 1 (fromIntegral $ base10Exponent sn) (coefficient sn)
 
 parseLitExpr :: Parser Literal
 parseLitExpr = choice
-    [ DecLiteral <$> parseDecLit
+    [ StringLiteral <$> parseStringLit
     , BoolLiteral <$> parseBoolLit
-    , StringLiteral <$> parseStringLit
+    , DecLiteral <$> parseDecLit
     ]
-
 
 parseAttrName :: Parser Text
 parseAttrName = parseAlphaName <|> parseOpName
 
 parseAlphaName :: Parser Text
 parseAlphaName = lexeme do
-    anStart <- takeWhile1P Nothing isLetter
+    anStart <- takeWhile1P (Just "attribute name") isLetter
     anRest  <- takeWhileP Nothing isIdentChar
     return $ anStart <> anRest
 
 parseOpName :: Parser Text
-parseOpName = try do
-    symbol "("
-    opSym <- takeWhile1P (Just "operator symbol") isOperatorChar
-    sc
-    symbol ")"
-    return $ opSym
+parseOpName = between (symbol "(") (symbol ")") $ lexeme $ takeWhile1P
+    (Just "operator symbol")
+    isOperatorChar
 
 
 parseAttrRef :: Parser AttrRef
@@ -269,19 +290,6 @@ parseExpr = choice
     -- TBD
     ]
 
-
-parseStmt :: Parser Stmt
-parseStmt = choice
-    [ parseImportStmt
-    , parseClassStmt
-    , parseExtendsStmt
-    , parseMethodStmt
-    , parseReturnStmt
-    , parseTryStmt
-    , parseBlockStmt
-    , parseOpDeclOvrdStmt
-    , ExprStmt <$> parseExpr
-    ]
 
 
 
