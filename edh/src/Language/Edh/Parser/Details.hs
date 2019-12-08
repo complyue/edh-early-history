@@ -230,7 +230,8 @@ parseMethodStmt = do
 parseForStmt :: Parser Stmt
 parseForStmt = do
     void $ symbol "for"
-    ar   <- parseArgsReceiver
+    ar <- parseArgsReceiver
+    void $ symbol "from"
     coll <- parseExpr
     stmt <- parseStmt
     return $ ForStmt ar coll stmt
@@ -340,6 +341,7 @@ parseIfExpr = do
         parseStmt
     return $ IfExpr cond cseq alt
 
+-- todo support list comprehension, e.g. [x for x from xs]
 parseListExpr :: Parser Expr
 parseListExpr =
     ListExpr
@@ -347,6 +349,7 @@ parseListExpr =
             $ many (parseExpr <* trailingComma)
             )
 
+-- todo support dict comprehension, e.g. {k: v for (k, v) from ps}
 parseDictExpr :: Parser Expr
 parseDictExpr =
     DictExpr <$> (between (symbol "{") (symbol "}") $ many parseDictPair)
