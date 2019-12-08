@@ -13,35 +13,35 @@ data Module = Module ModulePath SeqStmts
 
 type SeqStmts = [Stmt]
 
-data Stmt = ImportStmt CallReceiver Expr
-            | ClassStmt AttrName FnDecl
+data Stmt = ImportStmt ArgsReceiver Expr
+            | ClassStmt AttrName ProcDecl
             | ExtendsStmt Expr
-            | MethodStmt AttrName FnDecl
+            | MethodStmt AttrName ProcDecl
             | ReturnStmt Expr
             | TryStmt { try'trunk :: Stmt
                     , try'catches :: [(Expr, Maybe AttrName, Stmt)]
                     , try'finally :: Maybe Stmt
                     }
             | BlockStmt [Stmt]
-            | OpDeclStmt OpSymbol Precedence FnDecl
-            | OpOvrdStmt OpSymbol FnDecl
+            | OpDeclStmt OpSymbol Precedence ProcDecl
+            | OpOvrdStmt OpSymbol ProcDecl
             | ExprStmt Expr
             | AssignStmt AttrRef Expr
     deriving (Show)
 
-data FnDecl = FnDecl { fn'args :: CallReceiver
+data ProcDecl = ProcDecl { fn'args :: ArgsReceiver
                     ,  fn'body :: Stmt
                     }
     deriving (Show)
 
-data CallReceiver = WildReceiver | CallReceiver [ArgReceiver]
+data ArgsReceiver = WildReceiver | ArgsReceiver [ArgReceiver]
     deriving (Show)
 
-data ArgReceiver = RecvArg AttrName (Maybe Expr)
-                    | RecvRestArgs AttrName
+data ArgReceiver = RecvRestArgs AttrName
+            | RecvArg AttrName (Maybe AttrName) (Maybe Expr)
     deriving (Show)
 
-data AttrRef = ThisRef
+data AttrRef = ThisRef | SupersRef
             | DirectRef AttrName
             | IndirectRef Expr AttrName
     deriving (Show)
@@ -52,11 +52,11 @@ type OpSymbol = Text
 
 type Precedence = Int
 
-precCall :: Int
-precCall = 10
+prec'Call :: Int
+prec'Call = 10
 
-precIndex :: Int
-precIndex = 10
+prec'Index :: Int
+prec'Index = 10
 
 data Expr = PrefixExpr Prefix Expr
             | IfExpr { if'condition :: Expr

@@ -31,6 +31,9 @@ symbol = L.symbol sc
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
+optSymbol :: Text -> Parser (Maybe Text)
+optSymbol = optional . (L.symbol sc)
+
 
 isLetter :: Char -> Bool
 isLetter = flip elem $ '_' : ['a' .. 'z'] ++ ['A' .. 'Z']
@@ -48,16 +51,16 @@ isOperatorChar = flip elem ("~!@#$%^&|:<>?+-*/" :: [Char])
 parseImportStmt :: Parser Stmt
 parseImportStmt = do
     symbol "import"
-    ir     <- parseCallRecv
+    ir     <- parseArgsRecv
     impSrc <- parseExpr
     return $ ImportStmt ir impSrc
 
 parseClassStmt :: Parser Stmt
 parseClassStmt = do
     symbol "class"
-    cname  <- parseAttrName
-    fnDecl <- parseFnDecl
-    return $ ClassStmt cname fnDecl
+    cname    <- parseAttrName
+    procDecl <- parseProcDecl
+    return $ ClassStmt cname procDecl
 
 parseExtendsStmt :: Parser Stmt
 parseExtendsStmt = do
@@ -68,49 +71,55 @@ parseExtendsStmt = do
 parseMethodStmt :: Parser Stmt
 parseMethodStmt = do
     symbol "method"
-    mname  <- parseAttrName
-    fnDecl <- parseFnDecl
-    return $ MethodStmt mname fnDecl
+    mname    <- parseAttrName
+    procDecl <- parseProcDecl
+    return $ MethodStmt mname procDecl
 
-parseFnDecl :: Parser FnDecl
-parseFnDecl = do
-    cr   <- parseCallRecv
+parseProcDecl :: Parser ProcDecl
+parseProcDecl = do
+    cr   <- parseArgsRecv
     body <- parseStmt
-    return $ FnDecl cr body
+    return $ ProcDecl cr body
 
-parseCallRecv :: Parser CallReceiver
-parseCallRecv = (symbol "*" >> return WildReceiver) <|> try do
+parseArgsRecv :: Parser ArgsReceiver
+parseArgsRecv = (symbol "*" >> return WildReceiver) <|> do
     symbol "("
     argRs <- parseArgRecvs [] False
-    return $ CallReceiver $ reverse argRs
+    return $ ArgsReceiver $ reverse argRs
   where
     parseArgRecvs :: [ArgReceiver] -> Bool -> Parser [ArgReceiver]
-    parseArgRecvs rs posConsumed =
-        let noMoreArgs = do
-                symbol ")"
-                return rs
-        in  noMoreArgs <|> do
-                nextArg <- if posConsumed then nextKwArg else nextPosArg
-                case nextArg of
-                    RecvRestArgs _ -> parseArgRecvs (nextArg : rs) True
-                    _              -> parseArgRecvs (nextArg : rs) False
+    parseArgRecvs rs posConsumed = (optional $ symbol ")") >>= \case
+        Nothing -> do
+            nextArg <- if posConsumed then nextKwArg else nextPosArg
+            case nextArg of
+                RecvRestArgs _ -> parseArgRecvs (nextArg : rs) True
+                _              -> parseArgRecvs (nextArg : rs) False
+        _ -> return rs
     nextPosArg, restArgs, nextKwArg :: Parser ArgReceiver
     nextPosArg = restArgs <|> nextKwArg
     restArgs   = do
         symbol "*"
         aname <- parseAttrName
-        optional ","
+        optSymbol ","
         return $ RecvRestArgs aname
     nextKwArg = do
-        aname <- parseAttrName <|> parseOpRef
-        let withDefExpr = do
-                symbol "="
-                defExpr <- parseExpr
-                optional $ symbol ","
-                return $ RecvArg aname $ Just defExpr
-        withDefExpr <|> do
-            optional $ symbol ","
-            return $ RecvArg aname Nothing
+        aname   <- parseAttrName
+        reName  <- optional parseRename
+        defExpr <- optional parseDefaultExpr
+        optSymbol ","
+        return $ RecvArg aname reName defExpr
+
+parseRename :: Parser AttrName
+parseRename = do
+    symbol "as"
+    reName <- parseAttrName
+    return reName
+
+parseDefaultExpr :: Parser Expr
+parseDefaultExpr = do
+    symbol "="
+    defExpr <- parseExpr
+    return defExpr
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
@@ -150,19 +159,18 @@ parseOpDeclOvrdStmt = do
     symbol "("
     opSym <- takeWhile1P (Just "operator symbol") isOperatorChar
     sc
-    let withPrec = do
-            opPrec <- L.decimal
-            sc
-            symbol ")"
-            symbol "="
-            fnDecl <- parseFnDecl
-            -- TODO validate the operator is not declared yet
-            return $ OpDeclStmt opSym opPrec fnDecl
-    withPrec <|> do
-        symbol ")"
-        symbol "="
-        -- TODO validate the operator is declared
-        OpOvrdStmt opSym <$> parseFnDecl
+    precDecl <- optional $ L.decimal <* sc
+    symbol ")"
+    symbol "="
+    procDecl <- parseProcDecl
+    case precDecl of
+        Nothing ->
+            -- TODO validate the operator is declared
+            OpOvrdStmt opSym <$> parseProcDecl
+        Just opPrec ->
+            -- TODO validate the operator is not declared yet,
+            --      add the op for parse
+            return $ OpDeclStmt opSym opPrec procDecl
 
 
 
@@ -211,15 +219,17 @@ parseLitExpr = choice
 
 
 parseAttrName :: Parser Text
-parseAttrName = lexeme do
+parseAttrName = parseAlphaName <|> parseOpName
+
+parseAlphaName :: Parser Text
+parseAlphaName = lexeme do
     anStart <- takeWhile1P Nothing isLetter
     anRest  <- takeWhileP Nothing isIdentChar
     return $ anStart <> anRest
 
-parseOpRef :: Parser Text
-parseOpRef = try do
+parseOpName :: Parser Text
+parseOpName = try do
     symbol "("
-    sc
     opSym <- takeWhile1P (Just "operator symbol") isOperatorChar
     sc
     symbol ")"
