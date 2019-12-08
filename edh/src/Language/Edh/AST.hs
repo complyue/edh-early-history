@@ -36,15 +36,17 @@ data AttrRef = ThisRef | SupersRef
             | IndirectRef Expr AttrName
     deriving (Show)
 
-data ArgsReceiver = WildReceiver
+data ArgsReceiver = PackReceiver [ArgReceiver]
         | SingleReceiver ArgReceiver
-        | PackReceiver [ArgReceiver]
+        | WildReceiver
     deriving (Show)
 data ArgReceiver = RecvRestArgs AttrName
             | RecvArg AttrName (Maybe AttrRef) (Maybe Expr)
     deriving (Show)
 
-type ArgsSender = [ArgSender]
+data ArgsSender = PackSender [ArgSender]
+        | SingleSender ArgSender
+    deriving (Show)
 data ArgSender = SendPosArg Expr
             | UnpackPosArgs Expr
             | SendKwArg AttrName Expr

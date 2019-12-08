@@ -82,8 +82,8 @@ parseAssignStmt = do
 parseArgsReceiver :: Parser ArgsReceiver
 parseArgsReceiver =
     (symbol "*" >> return WildReceiver) <|> parsePackReceiver <|> do
-        kwArg <- parseKwRecv False
-        return $ SingleReceiver kwArg
+        singleArg <- parseKwRecv False
+        return $ SingleReceiver singleArg
 
 parsePackReceiver :: Parser ArgsReceiver
 parsePackReceiver = between
@@ -114,17 +114,17 @@ parseRetarget = do
     retgt <- parseAttrRef
     return retgt
 
-parseArgDefExpr :: Parser Expr
-parseArgDefExpr = do
+parseArgAssignExpr :: Parser Expr
+parseArgAssignExpr = do
     symbol "="
-    defExpr <- parseExpr
-    return defExpr
+    valExpr <- parseExpr
+    return valExpr
 
 parseKwRecv :: Bool -> Parser ArgReceiver
 parseKwRecv inPack = do
     aref    <- parseAttrRef
     retgt   <- optional parseRetarget
-    defExpr <- if inPack then optional parseArgDefExpr else return Nothing
+    defExpr <- if inPack then optional parseArgAssignExpr else return Nothing
     case aref of
         ThisRef                -> fail "can not assign to this"
         SupersRef              -> fail "can not assign to supers"
@@ -161,7 +161,43 @@ parseAttrRef = do
 
 
 parseArgsSender :: Parser ArgsSender
-parseArgsSender = undefined
+parseArgsSender = parsePackSender <|> do
+    expr <- parseExpr
+    return $ SingleSender $ SendPosArg expr
+
+parsePackSender :: Parser ArgsSender
+parsePackSender = between
+    (symbol "(")
+    (symbol ")")
+    do
+        argSs <- parseArgSends []
+        return $ PackSender $ reverse argSs
+
+parseArgSends :: [ArgSender] -> Parser [ArgSender]
+parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
+    arg <- nextArg <* trailingComma
+    parseArgSends $ arg : ss
+  where
+    nextArg, unpackKwArgs, unpackPosArgs :: Parser ArgSender
+    nextArg      = unpackKwArgs <|> unpackPosArgs <|> parseKwSend
+    unpackKwArgs = do
+        symbol "**"
+        expr <- parseExpr
+        return $ UnpackKwArgs expr
+    unpackPosArgs = do
+        symbol "*"
+        expr <- parseExpr
+        return $ UnpackPosArgs expr
+    parseKwSend :: Parser ArgSender
+    parseKwSend = do
+        p1 <- parseExpr
+        optional parseArgAssignExpr >>= \case
+            Nothing      -> return $ SendPosArg p1
+            Just valExpr -> case p1 of
+                AttrExpr aref -> case aref of
+                    DirectRef aname -> return $ SendKwArg aname valExpr
+                    _ -> fail $ "invalid argument name: " <> show aref
+                _ -> fail $ "invalid argument name: " <> show valExpr
 
 
 parseClassStmt :: Parser Stmt
