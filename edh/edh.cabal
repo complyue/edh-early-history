@@ -36,6 +36,9 @@ library
 
 library edh-internal
     exposed-modules:
+        Language.Edh.AST
+        Language.Edh.Parser
+        Language.Edh.Parser.Details
         Language.Edh.Runtime.Evaluator
         Language.Edh.Runtime.Evaluator.BuiltIns
         Language.Edh.Runtime.Evaluator.Object

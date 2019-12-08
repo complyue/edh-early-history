@@ -11,7 +11,6 @@ import           Control.Applicative     hiding ( many
                                                 )
 import           Control.Monad
 import           Control.Monad.State.Strict
-import           Control.Monad.State.Class
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Void
@@ -66,22 +65,22 @@ isOperatorChar = flip elem ("~!@#$%^&|:<>?+-*/" :: [Char])
 
 parseImportStmt :: Parser Stmt
 parseImportStmt = do
-    symbol "import"
+    void $ symbol "import"
     ir     <- parseArgsReceiver
     impSrc <- parseExpr
     return $ ImportStmt ir impSrc
 
 parseAssignStmt :: Parser Stmt
 parseAssignStmt = do
-    symbol "let"
+    void $ symbol "let"
     receiver <- parseArgsReceiver
-    symbol "="
+    void $ symbol "="
     sender <- parseArgsSender
     return $ AssignStmt receiver sender
 
 parseArgsReceiver :: Parser ArgsReceiver
 parseArgsReceiver =
-    (symbol "*" >> return WildReceiver) <|> parsePackReceiver <|> do
+    (symbol "*" *> return WildReceiver) <|> parsePackReceiver <|> do
         singleArg <- parseKwRecv False
         return $ SingleReceiver singleArg
 
@@ -107,23 +106,23 @@ parseArgRecvs rs kwConsumed posConsumed =
     nextPosArg, restKwArgs, restPosArgs :: Parser ArgReceiver
     nextPosArg = restKwArgs <|> restPosArgs <|> parseKwRecv True
     restKwArgs = do
-        symbol "**"
+        void $ symbol "**"
         aname <- parseAttrName
         return $ RecvRestKwArgs aname
     restPosArgs = do
-        symbol "*"
+        void $ symbol "*"
         aname <- parseAttrName
         return $ RecvRestPosArgs aname
 
 parseRetarget :: Parser AttrRef
 parseRetarget = do
-    symbol "as"
+    void $ symbol "as"
     retgt <- parseAttrRef
     return retgt
 
 parseArgAssignExpr :: Parser Expr
 parseArgAssignExpr = do
-    symbol "="
+    void $ symbol "="
     valExpr <- parseExpr
     return valExpr
 
@@ -133,10 +132,10 @@ parseKwRecv inPack = do
     retgt   <- optional parseRetarget
     defExpr <- if inPack then optional parseArgAssignExpr else return Nothing
     case aref of
-        ThisRef                -> fail "can not assign to this"
-        SupersRef              -> fail "can not assign to supers"
-        DirectRef aname        -> return $ RecvArg aname retgt defExpr
-        IndirectRef expr aname -> do
+        ThisRef                 -> fail "can not assign to this"
+        SupersRef               -> fail "can not assign to supers"
+        DirectRef aname         -> return $ RecvArg aname retgt defExpr
+        IndirectRef _expr aname -> do
             case retgt of
                 Nothing -> return $ RecvArg aname (Just aref) defExpr
                 Just tgt ->
@@ -163,7 +162,7 @@ parseAttrRef = parseSupersRef <|> try do
         ]
     nextRef :: Expr -> Parser AttrRef
     nextRef p1 = do
-        symbol "."
+        void $ symbol "."
         aname <- parseAttrName
         return $ IndirectRef p1 aname
 
@@ -189,11 +188,11 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
     nextArg, unpackKwArgs, unpackPosArgs :: Parser ArgSender
     nextArg      = unpackKwArgs <|> unpackPosArgs <|> parseKwSend
     unpackKwArgs = do
-        symbol "**"
+        void $ symbol "**"
         expr <- parseExpr
         return $ UnpackKwArgs expr
     unpackPosArgs = do
-        symbol "*"
+        void $ symbol "*"
         expr <- parseExpr
         return $ UnpackPosArgs expr
     parseKwSend :: Parser ArgSender
@@ -210,20 +209,20 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
 
 parseClassStmt :: Parser Stmt
 parseClassStmt = do
-    symbol "class"
+    void $ symbol "class"
     cname    <- parseAttrName
     procDecl <- parseProcDecl
     return $ ClassStmt cname procDecl
 
 parseExtendsStmt :: Parser Stmt
 parseExtendsStmt = do
-    symbol "extends"
+    void $ symbol "extends"
     superExpr <- parseExpr
     return $ ExtendsStmt superExpr
 
 parseMethodStmt :: Parser Stmt
 parseMethodStmt = do
-    symbol "method"
+    void $ symbol "method"
     mname    <- parseAttrName
     procDecl <- parseProcDecl
     return $ MethodStmt mname procDecl
@@ -236,7 +235,7 @@ parseProcDecl = do
 
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do
-    symbol "operator"
+    void $ symbol "operator"
     opSym    <- parseOpLit
     precDecl <- optional $ L.decimal <* sc
     procDecl <- parseProcDecl
@@ -265,16 +264,16 @@ parseOpDeclOvrdStmt = do
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
-    symbol "return"
+    void $ symbol "return"
     expr <- parseExpr
     return $ ReturnStmt expr
 
 parseTryStmt :: Parser Stmt
 parseTryStmt = do
-    symbol "try"
+    void $ symbol "try"
     trunk <- parseStmt
     let withOneCatch = try do
-            symbol "catch"
+            void $ symbol "catch"
             excClass <- parseExpr
             an       <-
                 withRecovery (const $ return Nothing)
@@ -284,7 +283,7 @@ parseTryStmt = do
             return $ (excClass, an, recov)
     catches <- many withOneCatch
     let withFinallyStmt = do
-            symbol "finally"
+            void $ symbol "finally"
             final <- parseStmt
             return $ TryStmt trunk catches $ Just final
     withFinallyStmt <|> (return $ TryStmt trunk catches Nothing)
@@ -312,19 +311,19 @@ parseStmt =
 
 parsePrefixExpr :: Parser Expr
 parsePrefixExpr = choice
-    [ PrefixExpr PrefixPlus <$> (symbol "+" >> parseExpr)
-    , PrefixExpr PrefixMinus <$> (symbol "-" >> parseExpr)
+    [ PrefixExpr PrefixPlus <$> (symbol "+" *> parseExpr)
+    , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
     ]
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do
-    symbol "if"
+    void $ symbol "if"
     cond <- parseExpr
-    symbol "then"
+    void $ symbol "then"
     cseq <- parseStmt
     alt  <- optional do
-        symbol "else"
+        void $ symbol "else"
         parseStmt
     return $ IfExpr cond cseq alt
 
@@ -341,7 +340,7 @@ parseDictExpr =
   where
     parseDictPair = do
         keyExpr <- parseExpr
-        symbol ":"
+        void $ symbol ":"
         valExpr <- parseExpr
         trailingComma
         return (keyExpr, valExpr)
@@ -396,9 +395,9 @@ parseExpr = parseExprPrec 0 id
 
 parseExprPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseExprPrec prec leftCtor = choice
-    [ parsNonIdxNonCallPrec 0 id
-    , parseIdxNonCallPrec 0 id
-    , parseIdxCallPrec 0 id
+    [ parsNonIdxNonCallPrec prec leftCtor
+    , parseIdxNonCallPrec prec leftCtor
+    , parseIdxCallPrec prec leftCtor
     ]
 
 parsNonIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
@@ -409,7 +408,6 @@ parsNonIdxNonCallPrec prec leftCtor = do
 parseIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxNonCallPrec prec leftCtor = do
     e1 <- choice [AttrExpr <$> parseSupersRef, parseListExpr, parseDictExpr]
-    parseNextOp e1 prec leftCtor
     optional parseIndexExpr >>= \case
         Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
         Nothing     -> parseNextOp e1 prec leftCtor
