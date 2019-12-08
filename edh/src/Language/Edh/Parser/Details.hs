@@ -383,16 +383,27 @@ parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 
 
 parseExpr :: Parser Expr
-parseExpr = choice
-    [ parsePrefixExpr
-    , parseIfExpr
-    , parseListExpr
-    , parseDictExpr
-    , parseParenExpr
-    , parseExprPrec
-    ]
+parseExpr = parseExprPrec 0 id
 
-
-parseExprPrec :: Parser Expr
-parseExprPrec = undefined
+parseExprPrec :: Int -> (Expr -> Expr) -> Parser Expr
+parseExprPrec prec leftCtor = do
+    e1 <- choice
+        [ parsePrefixExpr
+        , parseIfExpr
+        , parseListExpr
+        , parseDictExpr
+        , parseParenExpr
+        , LitExpr <$> parseLitExpr
+        , AttrExpr <$> parseAttrRef
+        ]
+    optional parseOpLit >>= \case
+        Nothing    -> return e1
+        Just opSym -> do
+            opPD <- get
+            case Map.lookup opSym opPD of
+                Nothing -> fail $ "undeclared operator: " <> T.unpack opSym
+                Just (opPrec, _opDeclPos) ->
+                    parseExprPrec opPrec $ \nextExpr -> if prec < opPrec
+                        then leftCtor $ InfixExpr opSym e1 nextExpr
+                        else InfixExpr opSym (leftCtor e1) nextExpr
 

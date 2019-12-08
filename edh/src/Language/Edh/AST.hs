@@ -75,7 +75,7 @@ data Expr = PrefixExpr Prefix Expr
             | IndexExpr { index'value :: Expr
                         , index'target :: Expr
                         }
-            | InfixExpr Infix Expr Expr
+            | InfixExpr OpSymbol Expr Expr
     deriving (Show)
 
 data Literal = DecLiteral Decimal
@@ -83,8 +83,6 @@ data Literal = DecLiteral Decimal
             | StringLiteral Text
     deriving (Show)
 
-data Infix = Infix OpSymbol Precedence
-    deriving (Show)
 
 type Precedence = Int
 
