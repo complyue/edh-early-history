@@ -257,39 +257,11 @@ parseOpName = between (symbol "(") (symbol ")") $ lexeme $ takeWhile1P
     isOperatorChar
 
 
-parseAttrRef :: Parser AttrRef
-parseAttrRef = try $ lexeme do
-    an1 <- oneRef
-    moreRef [an1] <|> (return $ thisOrOther an1)
-  where
-    oneRef :: Parser Text
-    oneRef = lexeme do
-        anStart <- takeWhile1P (Just "legal attribute name") isLetter
-        anRest  <- takeWhileP (Just "legal attribute name") isIdentChar
-        return $ anStart <> anRest
-    moreRef :: [Text] -> Parser AttrRef
-    moreRef ans = try do
-        void $ symbol "."
-        idMore <- oneRef
-        moreRef (idMore : ans)
-            <|> (return $ RefPath $ map thisOrOther $ reverse ans)
-    thisOrOther :: Text -> AttrRef
-    thisOrOther = \case
-        "this" -> ThisRef
-        an     -> NamedRef $ Attribute an
-
-
 parseExpr :: Parser Expr
 parseExpr = choice
-    [ parsePrefixExpr
-    , parseIfExpr
-    , parseListExpr
-    , parseDictExpr
-    , LitExpr <$> parseLitExpr
-    , AttrExpr <$> parseAttrRef
-    -- TBD
-    ]
+    [parsePrefixExpr, parseIfExpr, parseListExpr, parseDictExpr, parseExprPrec]
 
 
-
+parseExprPrec :: Parser Expr
+parseExprPrec = undefined
 

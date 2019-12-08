@@ -41,22 +41,17 @@ data ArgReceiver = RecvRestArgs AttrName
             | RecvArg AttrName (Maybe AttrName) (Maybe Expr)
     deriving (Show)
 
-data AttrRef = ThisRef | SupersRef
-            | DirectRef AttrName
-            | IndirectRef Expr AttrName
-    deriving (Show)
-
 type AttrName = Text
 
 type OpSymbol = Text
 
-type Precedence = Int
+data Prefix = PrefixPlus | PrefixMinus | Not
+    deriving (Show)
 
-prec'Call :: Int
-prec'Call = 10
-
-prec'Index :: Int
-prec'Index = 10
+data AttrRef = ThisRef | SupersRef
+            | DirectRef AttrName
+            | IndirectRef Expr AttrName
+    deriving (Show)
 
 data Expr = PrefixExpr Prefix Expr
             | IfExpr { if'condition :: Expr
@@ -75,7 +70,7 @@ data Expr = PrefixExpr Prefix Expr
     deriving (Show)
 
 data ArgSender = SendPosArg Expr
-                | SendNamedArg AttrName Expr
+                | SendKwArg AttrName Expr
     deriving (Show)
 
 data Literal = DecLiteral Decimal
@@ -83,8 +78,13 @@ data Literal = DecLiteral Decimal
             | StringLiteral Text
     deriving (Show)
 
-data Prefix = PrefixPlus | PrefixMinus | Not
-    deriving (Show)
-
 data Infix = Infix OpSymbol Precedence
     deriving (Show)
+
+type Precedence = Int
+
+prec'Call :: Int
+prec'Call = 10
+
+prec'Index :: Int
+prec'Index = 10
