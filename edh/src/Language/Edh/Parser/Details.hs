@@ -67,9 +67,102 @@ isOperatorChar = flip elem ("~!@#$%^&|:<>?+-*/" :: [Char])
 parseImportStmt :: Parser Stmt
 parseImportStmt = do
     symbol "import"
-    ir     <- parseArgsRecv
+    ir     <- parseArgsReceiver
     impSrc <- parseExpr
     return $ ImportStmt ir impSrc
+
+parseAssignStmt :: Parser Stmt
+parseAssignStmt = do
+    symbol "let"
+    receiver <- parseArgsReceiver
+    symbol "="
+    sender <- parseArgsSender
+    return $ AssignStmt receiver sender
+
+parseArgsReceiver :: Parser ArgsReceiver
+parseArgsReceiver =
+    (symbol "*" >> return WildReceiver) <|> parsePackReceiver <|> do
+        kwArg <- parseKwRecv False
+        return $ SingleReceiver kwArg
+
+parsePackReceiver :: Parser ArgsReceiver
+parsePackReceiver = between
+    (symbol "(")
+    (symbol ")")
+    do
+        argRs <- parseArgRecvs [] False
+        return $ PackReceiver $ reverse argRs
+
+parseArgRecvs :: [ArgReceiver] -> Bool -> Parser [ArgReceiver]
+parseArgRecvs rs posConsumed = (lookAhead (symbol ")") >> return rs) <|> do
+    nextArg <-
+        (if posConsumed then parseKwRecv True else nextPosArg) <* trailingComma
+    case nextArg of
+        RecvRestArgs _ -> parseArgRecvs (nextArg : rs) True
+        _              -> parseArgRecvs (nextArg : rs) False
+  where
+    nextPosArg, restArgs :: Parser ArgReceiver
+    nextPosArg = restArgs <|> parseKwRecv True
+    restArgs   = do
+        symbol "*"
+        aname <- parseAttrName
+        return $ RecvRestArgs aname
+
+parseRetarget :: Parser AttrRef
+parseRetarget = do
+    symbol "as"
+    retgt <- parseAttrRef
+    return retgt
+
+parseArgDefExpr :: Parser Expr
+parseArgDefExpr = do
+    symbol "="
+    defExpr <- parseExpr
+    return defExpr
+
+parseKwRecv :: Bool -> Parser ArgReceiver
+parseKwRecv inPack = do
+    aref    <- parseAttrRef
+    retgt   <- optional parseRetarget
+    defExpr <- if inPack then optional parseArgDefExpr else return Nothing
+    case aref of
+        ThisRef                -> fail "can not assign to this"
+        SupersRef              -> fail "can not assign to supers"
+        DirectRef aname        -> return $ RecvArg aname retgt defExpr
+        IndirectRef expr aname -> do
+            case retgt of
+                Nothing -> return $ RecvArg aname (Just aref) defExpr
+                Just tgt ->
+                    fail
+                        $  "can not retarget "
+                        <> show aref
+                        <> " to "
+                        <> show tgt
+
+parseAttrRef :: Parser AttrRef
+parseAttrRef = do
+    p1 <- firstPart
+    nextRef p1 <|> case p1 of
+        AttrExpr r1 -> return r1
+        expr        -> fail $ "invalid attribute reference: " <> show expr
+  where
+    firstPart :: Parser Expr
+    firstPart = choice
+        [ (AttrExpr ThisRef) <$ symbol "this"
+        , (AttrExpr SupersRef) <$ symbol "supers"
+        , parseParenExpr
+        , (AttrExpr . DirectRef) <$> parseAttrName
+        ]
+    nextRef :: Expr -> Parser AttrRef
+    nextRef p1 = do
+        symbol "."
+        aname <- parseAttrName
+        return $ IndirectRef p1 aname
+
+
+parseArgsSender :: Parser ArgsSender
+parseArgsSender = undefined
+
 
 parseClassStmt :: Parser Stmt
 parseClassStmt = do
@@ -93,49 +186,9 @@ parseMethodStmt = do
 
 parseProcDecl :: Parser ProcDecl
 parseProcDecl = do
-    cr   <- parseArgsRecv
+    cr   <- parseArgsReceiver
     body <- parseStmt
     return $ ProcDecl cr body
-
-parseArgsRecv :: Parser ArgsReceiver
-parseArgsRecv = (symbol "*" >> return WildReceiver) <|> do
-    symbol "("
-    argRs <- parseArgRecvs [] False
-    return $ ArgsReceiver $ reverse argRs
-  where
-    parseArgRecvs :: [ArgReceiver] -> Bool -> Parser [ArgReceiver]
-    parseArgRecvs rs posConsumed = (optional $ symbol ")") >>= \case
-        Nothing -> do
-            nextArg <- if posConsumed then nextKwArg else nextPosArg
-            case nextArg of
-                RecvRestArgs _ -> parseArgRecvs (nextArg : rs) True
-                _              -> parseArgRecvs (nextArg : rs) False
-        _ -> return rs
-    nextPosArg, restArgs, nextKwArg :: Parser ArgReceiver
-    nextPosArg = restArgs <|> nextKwArg
-    restArgs   = do
-        symbol "*"
-        aname <- parseAttrName
-        trailingComma
-        return $ RecvRestArgs aname
-    nextKwArg = do
-        aname   <- parseAttrName
-        reName  <- optional parseRename
-        defExpr <- optional parseDefaultExpr
-        trailingComma
-        return $ RecvArg aname reName defExpr
-
-parseRename :: Parser AttrName
-parseRename = do
-    symbol "as"
-    reName <- parseAttrName
-    return reName
-
-parseDefaultExpr :: Parser Expr
-parseDefaultExpr = do
-    symbol "="
-    defExpr <- parseExpr
-    return defExpr
 
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do

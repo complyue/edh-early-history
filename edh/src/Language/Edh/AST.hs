@@ -7,6 +7,8 @@ import           Data.Text                     as T
 import           Data.Lossless.Decimal          ( Decimal )
 
 type ModulePath = FilePath
+type AttrName = Text
+type OpSymbol = Text
 
 data Module = Module ModulePath SeqStmts
     deriving (Show)
@@ -14,6 +16,7 @@ data Module = Module ModulePath SeqStmts
 type SeqStmts = [Stmt]
 
 data Stmt = ImportStmt ArgsReceiver Expr
+            | AssignStmt ArgsReceiver ArgsSender
             | ClassStmt AttrName ProcDecl
             | ExtendsStmt Expr
             | MethodStmt AttrName ProcDecl
@@ -26,31 +29,34 @@ data Stmt = ImportStmt ArgsReceiver Expr
                     }
             | BlockStmt [Stmt]
             | ExprStmt Expr
-            | AssignStmt AttrRef Expr
-    deriving (Show)
-
-data ProcDecl = ProcDecl { fn'args :: ArgsReceiver
-                    ,  fn'body :: Stmt
-                    }
-    deriving (Show)
-
-data ArgsReceiver = WildReceiver | ArgsReceiver [ArgReceiver]
-    deriving (Show)
-
-data ArgReceiver = RecvRestArgs AttrName
-            | RecvArg AttrName (Maybe AttrName) (Maybe Expr)
-    deriving (Show)
-
-type AttrName = Text
-
-type OpSymbol = Text
-
-data Prefix = PrefixPlus | PrefixMinus | Not
     deriving (Show)
 
 data AttrRef = ThisRef | SupersRef
             | DirectRef AttrName
             | IndirectRef Expr AttrName
+    deriving (Show)
+
+data ArgsReceiver = WildReceiver
+        | SingleReceiver ArgReceiver
+        | PackReceiver [ArgReceiver]
+    deriving (Show)
+data ArgReceiver = RecvRestArgs AttrName
+            | RecvArg AttrName (Maybe AttrRef) (Maybe Expr)
+    deriving (Show)
+
+type ArgsSender = [ArgSender]
+data ArgSender = SendPosArg Expr
+            | UnpackPosArgs Expr
+            | SendKwArg AttrName Expr
+            | UnpackKwArgs Expr
+    deriving (Show)
+
+data ProcDecl = ProcDecl { fn'args :: ArgsReceiver
+                        ,  fn'body :: Stmt
+                        }
+    deriving (Show)
+
+data Prefix = PrefixPlus | PrefixMinus | Not
     deriving (Show)
 
 data Expr = PrefixExpr Prefix Expr
@@ -62,17 +68,11 @@ data Expr = PrefixExpr Prefix Expr
             | DictExpr [(Expr, Expr)]
             | LitExpr Literal
             | AttrExpr AttrRef
-            | CallExpr Expr [ArgSender]
+            | CallExpr Expr ArgsSender
             | IndexExpr { index'value :: Expr
                         , index'target :: Expr
                         }
             | InfixExpr Infix Expr Expr
-    deriving (Show)
-
-data ArgSender = SendPosArg Expr
-                | UnpackPosArgs Expr
-                | SendKwArg AttrName Expr
-                | UnpackKwArgs Expr
     deriving (Show)
 
 data Literal = DecLiteral Decimal
