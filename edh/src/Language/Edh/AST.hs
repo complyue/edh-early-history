@@ -85,9 +85,3 @@ data Literal = DecLiteral Decimal
 
 
 type Precedence = Int
-
-prec'Call :: Int
-prec'Call = 10
-
-prec'Index :: Int
-prec'Index = 10

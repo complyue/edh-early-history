@@ -146,18 +146,19 @@ parseKwRecv inPack = do
                         <> " to "
                         <> show tgt
 
+parseSupersRef :: Parser AttrRef
+parseSupersRef = SupersRef <$ symbol "supers"
+
 parseAttrRef :: Parser AttrRef
-parseAttrRef = do
+parseAttrRef = parseSupersRef <|> try do
     p1 <- firstPart
     nextRef p1 <|> case p1 of
         AttrExpr r1 -> return r1
-        expr        -> fail $ "invalid attribute reference: " <> show expr
+        _expr       -> error "bug"
   where
     firstPart :: Parser Expr
     firstPart = choice
         [ (AttrExpr ThisRef) <$ symbol "this"
-        , (AttrExpr SupersRef) <$ symbol "supers"
-        , parseParenExpr
         , (AttrExpr . DirectRef) <$> parseAttrName
         ]
     nextRef :: Expr -> Parser AttrRef
@@ -247,6 +248,9 @@ parseOpDeclOvrdStmt = do
                 _       -> return ()
             return $ OpOvrdStmt opSym procDecl
         Just opPrec -> do
+            if opPrec < 0 || opPrec >= 10
+                then (fail $ "invalid operator precedence: " <> show opPrec)
+                else return ()
             case Map.lookup opSym opPD of
                 Nothing -> return ()
                 Just (_, odl) ->
@@ -382,20 +386,46 @@ parseOpLit :: Parser Text
 parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 
 
+parseIndexExpr :: Parser Expr
+parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
+
+
 parseExpr :: Parser Expr
 parseExpr = parseExprPrec 0 id
 
-parseExprPrec :: Int -> (Expr -> Expr) -> Parser Expr
-parseExprPrec prec leftCtor = do
-    e1 <- choice
-        [ parsePrefixExpr
-        , parseIfExpr
-        , parseListExpr
-        , parseDictExpr
-        , parseParenExpr
-        , LitExpr <$> parseLitExpr
-        , AttrExpr <$> parseAttrRef
-        ]
+
+parseExprPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
+parseExprPrec prec leftCtor = choice
+    [ parsNonIdxNonCallPrec 0 id
+    , parseIdxNonCallPrec 0 id
+    , parseIdxCallPrec 0 id
+    ]
+
+parsNonIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
+parsNonIdxNonCallPrec prec leftCtor = do
+    e1 <- choice [parseIfExpr, parsePrefixExpr, LitExpr <$> parseLitExpr]
+    parseNextOp e1 prec leftCtor
+
+parseIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
+parseIdxNonCallPrec prec leftCtor = do
+    e1 <- choice [AttrExpr <$> parseSupersRef, parseListExpr, parseDictExpr]
+    parseNextOp e1 prec leftCtor
+    optional parseIndexExpr >>= \case
+        Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
+        Nothing     -> parseNextOp e1 prec leftCtor
+
+parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
+parseIdxCallPrec prec leftCtor = do
+    e1 <- choice [parseParenExpr, AttrExpr <$> parseAttrRef]
+    optional parseIndexExpr >>= \case
+        Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
+        Nothing     -> optional parsePackSender >>= \case
+            Just packSender ->
+                parseNextOp (CallExpr e1 packSender) prec leftCtor
+            Nothing -> parseNextOp e1 prec leftCtor
+
+parseNextOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
+parseNextOp e1 prec leftCtor = do
     optional parseOpLit >>= \case
         Nothing    -> return e1
         Just opSym -> do
