@@ -114,10 +114,10 @@ parseArgRecvs rs kwConsumed posConsumed =
         aname <- parseAttrName
         return $ RecvRestPosArgs aname
 
-parseRetarget :: Parser AttrRef
+parseRetarget :: Parser AttrAddr
 parseRetarget = do
     void $ symbol "as"
-    retgt <- parseAttrRef
+    retgt <- parseAttrAddr
     return retgt
 
 parseArgAssignExpr :: Parser Expr
@@ -128,43 +128,49 @@ parseArgAssignExpr = do
 
 parseKwRecv :: Bool -> Parser ArgReceiver
 parseKwRecv inPack = do
-    aref    <- parseAttrRef
+    aname   <- parseAttrName
     retgt   <- optional parseRetarget
     defExpr <- if inPack then optional parseArgAssignExpr else return Nothing
-    case aref of
-        ThisRef                 -> fail "can not assign to this"
-        SupersRef               -> fail "can not assign to supers"
-        DirectRef aname         -> return $ RecvArg aname retgt defExpr
-        IndirectRef _expr aname -> do
-            case retgt of
-                Nothing -> return $ RecvArg aname (Just aref) defExpr
-                Just tgt ->
-                    fail
-                        $  "can not retarget "
-                        <> show aref
-                        <> " to "
-                        <> show tgt
+    return $ RecvArg aname (validateTgt retgt) defExpr
+  where
+    validateTgt :: Maybe AttrAddr -> Maybe AttrAddr
+    validateTgt tgt = case tgt of
+        Nothing        -> Nothing
+        Just ThisRef   -> fail "can not overwrite this"
+        Just SupersRef -> fail "can not overwrite supers"
+        _              -> tgt
 
-parseSupersRef :: Parser AttrRef
+
+parseSupersRef :: Parser AttrAddr
 parseSupersRef = SupersRef <$ symbol "supers"
 
-parseAttrRef :: Parser AttrRef
-parseAttrRef = parseSupersRef <|> try do
+parseAttrAddr :: Parser AttrAddr
+parseAttrAddr =
+    -- `supers` is a list thus can not be further addressed
+    -- for attribute access, can stop at it on sight
+                parseSupersRef <|> try do
     p1 <- firstPart
-    nextRef p1 <|> case p1 of
+    nextAddr p1 <|> case p1 of
         AttrExpr r1 -> return r1
         _expr       -> error "bug"
   where
     firstPart :: Parser Expr
     firstPart = choice
         [ (AttrExpr ThisRef) <$ symbol "this"
-        , (AttrExpr . DirectRef) <$> parseAttrName
+        , (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
+        , (AttrExpr . DirectRef . NamedAttr) <$> parseAttrName
         ]
-    nextRef :: Expr -> Parser AttrRef
-    nextRef p1 = do
+    nextPart :: Parser Expr
+    nextPart = choice
+        [ (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
+        , (AttrExpr . DirectRef . NamedAttr) <$> parseAttrName
+        ]
+    nextAddr :: Expr -> Parser AttrAddr
+    nextAddr p1 = do
         void $ symbol "."
-        aname <- parseAttrName
-        return $ IndirectRef p1 aname
+        nextPart >>= \case
+            AttrExpr (DirectRef addr) -> return $ IndirectRef p1 addr
+            _                         -> error "bug"
 
 
 parseArgsSender :: Parser ArgsSender
@@ -201,16 +207,15 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
         optional parseArgAssignExpr >>= \case
             Nothing      -> return $ SendPosArg p1
             Just valExpr -> case p1 of
-                AttrExpr aref -> case aref of
-                    DirectRef aname -> return $ SendKwArg aname valExpr
-                    _ -> fail $ "invalid argument name: " <> show aref
-                _ -> fail $ "invalid argument name: " <> show valExpr
+                AttrExpr (DirectRef (NamedAttr aname)) ->
+                    return $ SendKwArg aname valExpr
+                _ -> fail $ "invalid argument name: " <> show p1
 
 
 parseClassStmt :: Parser Stmt
 parseClassStmt = do
     void $ symbol "class"
-    cname    <- parseAttrName
+    cname    <- parseAlphaName
     procDecl <- parseProcDecl
     return $ ClassStmt cname procDecl
 
@@ -223,7 +228,7 @@ parseExtendsStmt = do
 parseMethodStmt :: Parser Stmt
 parseMethodStmt = do
     void $ symbol "method"
-    mname    <- parseAttrName
+    mname    <- parseAlphaName
     procDecl <- parseProcDecl
     return $ MethodStmt mname procDecl
 
@@ -396,7 +401,10 @@ parseParenExpr = between (symbol "(") (symbol ")") parseExpr
 parseAttrName :: Parser Text
 parseAttrName = parseOpName <|> parseAlphaName
 
-parseAlphaName :: Parser Text
+parseAttrSym :: Parser AttrName
+parseAttrSym = char '@' *> parseAlphaName
+
+parseAlphaName :: Parser AttrName
 parseAlphaName = lexeme do
     anStart <- takeWhile1P (Just "attribute name") isLetter
     anRest  <- takeWhileP Nothing isIdentChar
@@ -442,7 +450,7 @@ parseIdxNonCallPrec prec leftCtor = do
 
 parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxCallPrec prec leftCtor = do
-    e1 <- choice [parseParenExpr, AttrExpr <$> parseAttrRef]
+    e1 <- choice [parseParenExpr, AttrExpr <$> parseAttrAddr]
     optional parseIndexExpr >>= \case
         Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
         Nothing     -> optional parsePackSender >>= \case

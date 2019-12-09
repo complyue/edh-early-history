@@ -3,18 +3,30 @@
 module Language.Edh.AST where
 
 import           Prelude
+
 import           Data.Text                     as T
 import           Data.Lossless.Decimal          ( Decimal )
 
-import           Text.Megaparsec
+import           Text.Megaparsec                ( SourcePos )
 
 
-type ModulePath = FilePath
-type AttrName = Text
 type OpSymbol = Text
-
-data Module = Module ModulePath SeqStmts
+type AttrName = Text
+data AttrAddressor =
+        -- | vanilla form in addressing attributes against
+        --   a left hand entity object
+        NamedAttr AttrName
+        -- | get the symbol value from current entity,
+        --   then use it to address attributes against
+        --   a left hand entity object
+        | SymbolicAttr AttrName
     deriving (Show)
+
+
+type ModuleId = FilePath
+type ClassName = AttrName
+type MethodName = AttrName
+
 
 type SeqStmts = [StmtSrc]
 
@@ -22,9 +34,9 @@ type StmtSrc = (SourcePos, Stmt)
 
 data Stmt = ImportStmt ArgsReceiver Expr
         | AssignStmt ArgsReceiver ArgsSender
-        | ClassStmt AttrName ProcDecl
+        | ClassStmt ClassName ProcDecl
         | ExtendsStmt Expr
-        | MethodStmt AttrName ProcDecl
+        | MethodStmt MethodName ProcDecl
         | ForStmt ArgsReceiver Expr StmtSrc
         | WhileStmt Expr StmtSrc
         | BreakStmt | ContinueStmt
@@ -40,9 +52,9 @@ data Stmt = ImportStmt ArgsReceiver Expr
         | ExprStmt Expr
     deriving (Show)
 
-data AttrRef = ThisRef | SupersRef
-            | DirectRef AttrName
-            | IndirectRef Expr AttrName
+data AttrAddr = ThisRef | SupersRef
+            | DirectRef AttrAddressor
+            | IndirectRef Expr AttrAddressor
     deriving (Show)
 
 data ArgsReceiver = PackReceiver [ArgReceiver]
@@ -51,7 +63,7 @@ data ArgsReceiver = PackReceiver [ArgReceiver]
     deriving (Show)
 data ArgReceiver = RecvRestPosArgs AttrName
         | RecvRestKwArgs AttrName
-        | RecvArg AttrName (Maybe AttrRef) (Maybe Expr)
+        | RecvArg AttrName (Maybe AttrAddr) (Maybe Expr)
     deriving (Show)
 
 data ArgsSender = PackSender [ArgSender]
@@ -79,7 +91,7 @@ data Expr = PrefixExpr Prefix Expr
             | ListExpr [Expr]
             | DictExpr [(Expr, Expr)]
             | LitExpr Literal
-            | AttrExpr AttrRef
+            | AttrExpr AttrAddr
             | CallExpr Expr ArgsSender
             | IndexExpr { index'value :: !Expr
                         , index'target :: !Expr
