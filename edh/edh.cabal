@@ -64,14 +64,15 @@ library edh-internal
     build-depends:
         ghc >=8.6.5,
         base >=4.12 && <5,
-        lossless-decimal -any,
         megaparsec >=8.0,
+        lossless-decimal -any,
         scientific >=0.3.6,
-        rio -any,
         text -any,
-        transformers -any,
+        vector -any,
+        containers -any,
         mtl -any,
-        containers -any
+        transformers -any,
+        rio -any
 
 executable edhi
     main-is: Main.hs
