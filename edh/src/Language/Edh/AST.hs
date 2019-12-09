@@ -37,6 +37,9 @@ data Stmt = ImportStmt ArgsReceiver Expr
         | ClassStmt ClassName ProcDecl
         | ExtendsStmt Expr
         | MethodStmt MethodName ProcDecl
+        -- TODO for loop should serve a callback mechanism from hosting
+        --      language/runtime, by allowing sophiscated implementions
+        --      as the expr. yet this idea is to be validated further.
         | ForStmt ArgsReceiver Expr StmtSrc
         | WhileStmt Expr StmtSrc
         | BreakStmt | ContinueStmt
