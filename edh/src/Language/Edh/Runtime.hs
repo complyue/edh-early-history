@@ -37,23 +37,21 @@ instance Show Symbol where
 data AttrKey = AttrByName AttrName | AttrBySym Symbol
     deriving (Eq, Ord)
 
-data ItemKey = ItemByStr Text
-        | ItemBySym Symbol
-        | ItemByNum Decimal
-        | ItemByBool Bool
+data ItemKey = ItemByStr Text | ItemBySym Symbol
+            | ItemByNum Decimal | ItemByBool Bool
     deriving (Eq, Ord)
 instance Show ItemKey where
-    show (ItemByStr k) = show k
-    show (ItemBySym    k) = show k
-    show (ItemByNum    k) = show k
-    show (ItemByBool   k) = show $ EdhBool k
+    show (ItemByStr  k) = show k
+    show (ItemBySym  k) = show k
+    show (ItemByNum  k) = showDecimal k
+    show (ItemByBool k) = show $ EdhBool k
 
 
 -- | An object is an in-memory mutable entity in Edh
 data Object = Object {
         -- | an object is identified by the pointer value to its
         -- attribute dict
-        objAttrs :: IORef (Map.Map AttrKey EdhValue)
+        objEntity :: IORef (Map.Map AttrKey EdhValue)
 
         -- | the constructor procedure (a.k.a) class of this object
         --
@@ -86,7 +84,23 @@ data Module = Module {
         , modulePath :: ModuleId
     }
 
-
+-- | Atop Haskell, most types in Edh, as to organize information,
+-- are immutable values, the only mutable data structure in Edh,
+-- is the *entity* viewed as *object* (see 'objEntity').
+--
+-- The concept of *entity* should be defined as a set of keyed
+-- attributes, where each one can be independently & freely rebound
+-- to other values at any time. Of course further constraints as
+-- business rules would apply on how the binding relationships
+-- can change, separately as well as mutually affecting.
+--
+-- Theoretically it is not necessary to have an `identity`
+-- attribute among others, while practically the memory address
+-- for physical storage of the attribute set of an entity, serves
+-- naturally as an `id` attribute in single-process + single-run
+-- scenario. Distributed programs, especially using a separate
+-- database for storage, will tend to define a generated UUID 
+-- attribute or the like.
 data EdhValue =
     -- * immutable values
           EdhNil
