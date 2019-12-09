@@ -26,6 +26,7 @@ data Stmt = ImportStmt ArgsReceiver Expr
         | ExtendsStmt Expr
         | MethodStmt AttrName ProcDecl
         | ForStmt ArgsReceiver Expr StmtSrc
+        | WhileStmt Expr StmtSrc
         | BreakStmt | ContinueStmt
         | OpDeclStmt OpSymbol Precedence ProcDecl
         | OpOvrdStmt OpSymbol ProcDecl

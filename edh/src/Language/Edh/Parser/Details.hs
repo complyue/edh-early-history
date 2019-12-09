@@ -236,6 +236,13 @@ parseForStmt = do
     stmt <- parseStmt
     return $ ForStmt ar coll stmt
 
+parseWhileStmt :: Parser Stmt
+parseWhileStmt = do
+    void $ symbol "while"
+    cond <- parseExpr
+    stmt <- parseStmt
+    return $ WhileStmt cond stmt
+
 parseProcDecl :: Parser ProcDecl
 parseProcDecl = do
     cr   <- parseArgsReceiver
@@ -311,7 +318,8 @@ parseStmt = do
                 , parseExtendsStmt
                 , parseMethodStmt
                 , parseForStmt
-                  -- TODO validate break/continue must within for block
+                , parseWhileStmt
+                  -- TODO validate break/continue must within a loop block
                 , BreakStmt <$ symbol "break"
                 , ContinueStmt <$ symbol "continue"
                 , parseOpDeclOvrdStmt
@@ -408,6 +416,10 @@ parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
 parseExpr :: Parser Expr
 parseExpr = parseExprPrec 0 id
 
+-- prefix operators are hardcoded, only three: + - not
+
+-- other operators must be infix binary operators, they can be declared
+-- and/or overridden everywhere, while they are left assosciative only
 
 parseExprPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseExprPrec prec leftCtor = choice
@@ -441,7 +453,7 @@ parseIdxCallPrec prec leftCtor = do
 parseNextOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
 parseNextOp e1 prec leftCtor = do
     optional parseOpLit >>= \case
-        Nothing    -> return e1
+        Nothing    -> return $ leftCtor e1
         Just opSym -> do
             opPD <- get
             case Map.lookup opSym opPD of
