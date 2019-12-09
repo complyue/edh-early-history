@@ -2,7 +2,7 @@
 module Language.Edh.Interpreter where
 
 
-import           Prelude
+import           Prelude                       as Prelude
 
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -25,10 +25,6 @@ import           Language.Edh.Runtime
 import           Language.Edh.Interpreter.Evaluate
 
 
--- | Create a self-contained object (its class appears defined within itself),
--- build the builtins and install to the object.
---
--- This is a starting point of an Edh world.
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
     e <- newIORef Map.empty
@@ -43,6 +39,37 @@ createEdhWorld = liftIO $ do
             }
     opPD <- newIORef Map.empty
     return $ EdhWorld { worldRoot = r, worldOperators = opPD }
+
+
+declareEdhOperators
+    :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
+declareEdhOperators world declLoc opd = liftIO
+    $ atomicModifyIORef' (worldOperators world) updatePrecedence
+  where
+    updatePrecedence :: OpPrecDict -> (OpPrecDict, ())
+    updatePrecedence opPD =
+        (flip (,) ())
+            $ Map.unionWithKey chkCompatible opPD
+            $ Map.fromList
+            $ flip Prelude.map opd
+            $ \(op, p) -> (op, (p, declLoc))
+
+    chkCompatible
+        :: OpSymbol
+        -> (Precedence, Text)
+        -> (Precedence, Text)
+        -> (Precedence, Text)
+    chkCompatible op (prevPrec, prevDeclLoc) (newPrec, _) =
+        if prevPrec /= newPrec
+            then error
+                (  "invalid precedence change from "
+                <> show prevPrec
+                <> " to "
+                <> show newPrec
+                <> " for operator: "
+                <> show op
+                )
+            else (prevPrec, prevDeclLoc)
 
 
 installEdhAttr :: MonadIO m => Object -> AttrKey -> EdhValue -> m ()
