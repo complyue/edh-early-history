@@ -34,9 +34,20 @@ instance Show Symbol where
     show (Symbol dp) = "[@" <> sd <> "]"
         where sd = unsafePerformIO $ peekCString dp
 
-data AttrKey = AttrByName AttrName | AttrBySym Symbol
-    deriving (Eq, Ord)
 
+type Entity = Map.Map AttrKey EdhValue
+data AttrKey = AttrByName AttrName | AttrBySym Symbol
+    deriving (Eq, Ord, Show)
+
+
+newtype Dict = Dict (Map.Map ItemKey EdhValue)
+    deriving (Eq)
+instance Show Dict where
+    show (Dict d) = "{" ++ go (Map.toList d) ++ "}"
+      where
+        go []       = ""
+        go (p : ps) = go' p ++ "," ++ go ps
+        go' (k, v) = show k ++ ":" ++ show v
 data ItemKey = ItemByStr Text | ItemBySym Symbol
             | ItemByNum Decimal | ItemByBool Bool
     deriving (Eq, Ord)
@@ -51,7 +62,7 @@ instance Show ItemKey where
 data Object = Object {
         -- | an object is identified by the pointer value to its
         -- attribute dict
-        objEntity :: IORef (Map.Map AttrKey EdhValue)
+        objEntity :: IORef Entity
 
         -- | the constructor procedure (a.k.a) class of this object
         --
@@ -65,6 +76,8 @@ data Object = Object {
 instance Eq Object where
     -- equality by pointer to entity
     Object x'attrs _ == Object y'attrs _ = x'attrs == y'attrs
+instance Show Object where
+    show (Object _ (Class _ cn _)) = "[object of: " ++ T.unpack cn ++ "]"
 
 data Class = Class {
         -- | the lexical context in which this class is defined
@@ -72,17 +85,31 @@ data Class = Class {
         , className :: AttrName
         , classSourcePos :: SourcePos
     }
+instance Eq Class where
+    Class x's x'cn _ == Class y's y'cn _ = x's == y's && x'cn == y'cn
+instance Show Class where
+    show (Class _ cn _) = "[class: " ++ T.unpack cn ++ "]"
 
 data Method = Method {
         methodOwnerObject :: Object
         , methodName :: AttrName
         , methodSourcePos :: SourcePos
     }
+instance Eq Method where
+    Method x'o x'mn _ == Method y'o y'mn _ = x'o == y'o && x'mn == y'mn
+instance Show Method where
+    show (Method (Object _ (Class _ cn _)) mn _) =
+        "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
 
 data Module = Module {
         moduleObject :: Object
         , modulePath :: ModuleId
     }
+instance Eq Module where
+    Module x'o _ == Module y'o _ = x'o == y'o
+instance Show Module where
+    show (Module _ mp) = "[module: " ++ mp ++ "]"
+
 
 -- | Atop Haskell, most types in Edh, as to organize information,
 -- are immutable values, the only mutable data structure in Edh,
@@ -113,7 +140,7 @@ data EdhValue =
         | EdhModule Module
     -- * immutable by self, but may contain pointer to entities
         | EdhList [EdhValue]
-        | EdhDict (Map.Map ItemKey EdhValue)
+        | EdhDict Dict
     -- * immutable by self, but have access to lexical entities
         | EdhClass Class
         | EdhMethod Method
@@ -127,42 +154,50 @@ instance Show EdhValue where
     show (EdhString  v) = show v
     show (EdhSymbol  v) = show v
 
-    show (EdhObject (Object _ (Class _ cn _))) =
-        "[object of: " ++ T.unpack cn ++ "]"
-    show (EdhModule (Module _ mp)) = "[module: " ++ mp ++ "]"
+    show (EdhObject  v) = show v
+    show (EdhModule  v) = show v
 
-    show (EdhList   v            ) = show v
-    show (EdhDict   v            ) = "{" ++ go (Map.toList v) ++ "}"
-      where
-        go []       = ""
-        go [(l, o)] = show l ++ ":" ++ show o
-        go (p : ps) = go [p] ++ "," ++ go ps
+    show (EdhList    v) = show v
+    show (EdhDict    v) = show v
 
-    show (EdhClass (Class _ cn _)) = "[class: " ++ T.unpack cn ++ "]"
-    show (EdhMethod (Method (Object _ (Class _ cn _)) mn _)) =
-        "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
-    show (EdhReturn v) = "[return: " ++ show v ++ "]"
+    show (EdhClass   v) = show v
+    show (EdhMethod  v) = show v
+
+    show (EdhReturn  v) = "[return: " ++ show v ++ "]"
 
 instance Eq EdhValue where
-    EdhNil                    == EdhNil                    = True
-    EdhDecimal x              == EdhDecimal y              = x == y
-    EdhBool    x              == EdhBool    y              = x == y
-    EdhString  x              == EdhString  y              = x == y
-    EdhSymbol  x              == EdhSymbol  y              = x == y
+    EdhNil         == EdhNil         = True
+    EdhDecimal x   == EdhDecimal y   = x == y
+    EdhBool    x   == EdhBool    y   = x == y
+    EdhString  x   == EdhString  y   = x == y
+    EdhSymbol  x   == EdhSymbol  y   = x == y
 
-    EdhObject  x              == EdhObject  y              = x == y
-    -- equality by identity of the module object
-    EdhModule  (Module x'o _) == EdhModule  (Module y'o _) = x'o == y'o
+    EdhObject  x   == EdhObject  y   = x == y
+    EdhModule  x   == EdhModule  y   = x == y
 
-    EdhList    x              == EdhList    y              = x == y
-    EdhDict    x              == EdhDict    y              = x == y
+    EdhList    x   == EdhList    y   = x == y
+    EdhDict    x   == EdhDict    y   = x == y
 
-    EdhClass (Class x'outer x'cn _) == EdhClass (Class y'outer y'cn _) =
-        x'outer == y'outer && x'cn == y'cn
-    EdhMethod (Method x'o x'mn _) == EdhMethod (Method y'o y'mn _) =
-        x'o == y'o && x'mn == y'mn
+    EdhClass   x   == EdhClass   y   = x == y
+    EdhMethod  x   == EdhMethod  y   = x == y
 
-    _ == _ = False
+    EdhReturn  x'v == EdhReturn  y'v = x'v == y'v
+    -- todo: regard a returned value equal to the value itself ?
+    _              == _              = False
 
 
+nil :: EdhValue
+nil = EdhNil
+
+nan :: EdhValue
+nan = EdhDecimal D.nan
+
+inf :: EdhValue
+inf = EdhDecimal D.inf
+
+true :: EdhValue
+true = EdhBool True
+
+false :: EdhValue
+false = EdhBool False
 

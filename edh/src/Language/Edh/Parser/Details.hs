@@ -26,11 +26,12 @@ import           Data.Lossless.Decimal
 import           Language.Edh.AST
 
 
--- | the dict for operator precendences in parsing context
--- no backtracking needed for this, so it can live in the
--- inner monad of 'ParsecT'.
-type OpPrecDict = Map.Map OpSymbol (Int, Text)
+-- use such a dict as the parsing state, to implement
+-- object-language-declarable operator precendence
+type OpPrecDict = Map.Map OpSymbol (Precedence, Text)
 
+-- no backtracking needed for precedence dict, so it
+-- can live in the inner monad of 'ParsecT'.
 type Parser = ParsecT Void Text (State OpPrecDict)
 
 
