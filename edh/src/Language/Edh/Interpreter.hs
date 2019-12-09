@@ -42,7 +42,7 @@ createEdhWorld = liftIO $ do
                                            }
             }
     opPD <- newIORef Map.empty
-    return $ EdhWorld { rootObject = r, operatorDeclarations = opPD }
+    return $ EdhWorld { worldRoot = r, worldOperators = opPD }
 
 
 installEdhAttr :: MonadIO m => Object -> AttrKey -> EdhValue -> m ()
@@ -60,20 +60,22 @@ installEdhAttrs o as =
 runEdhModule
     :: MonadIO m => EdhWorld -> ModuleId -> Text -> m (Either Text Module)
 runEdhModule world moduId moduCode = liftIO $ do
-    opPD <- readIORef $ operatorDeclarations world
-    let (pr, opPD') = runState (runParserT parseModule moduId moduCode) opPD
-    atomicModifyIORef' (operatorDeclarations world) $ \_ -> (opPD', ())
+    -- seralize parsing against 'worldOperators'
+    pr <- atomicModifyIORef' (worldOperators world) $ \opPD ->
+        let (pr, opPD') =
+                    runState (runParserT parseModule moduId moduCode) opPD
+        in  (opPD', pr)
     case pr of
         Left  pe    -> return $ Left $ T.pack (show pe)
         Right stmts -> do
             entity <- newIORef Map.empty
             let modu = Module
-                    { moduleObject = Object { objEntity = entity
-                                            , objCtor   = objCtor root
-                                            }
+                    { moduleObject = Object
+                                         { objEntity = entity
+                                         , objCtor   = objCtor (worldRoot world)
+                                         }
                     , modulePath   = moduId
                     }
             evalProgram modu stmts
             return $ Right modu
-    where root = rootObject world
 

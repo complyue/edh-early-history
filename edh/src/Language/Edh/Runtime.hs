@@ -114,8 +114,8 @@ instance Show Module where
 
 
 data EdhWorld = EdhWorld {
-        rootObject :: Object
-        , operatorDeclarations :: IORef OpPrecDict
+        worldRoot :: Object
+        , worldOperators :: IORef OpPrecDict
     }
 
 
