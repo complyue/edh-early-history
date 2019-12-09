@@ -60,7 +60,7 @@ isDigit :: Char -> Bool
 isDigit = flip elem ['0' .. '9']
 
 isOperatorChar :: Char -> Bool
-isOperatorChar = flip elem ("~!@#$%^&|:<>?+-*/" :: [Char])
+isOperatorChar = flip elem ("=~!@#$%^&|:<>?+-*/" :: [Char])
 
 
 parseImportStmt :: Parser Stmt
