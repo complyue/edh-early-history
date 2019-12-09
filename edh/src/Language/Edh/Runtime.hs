@@ -14,6 +14,8 @@ import           Text.Megaparsec                ( SourcePos )
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.AST
+import           Language.Edh.Parser
+import           Language.Edh.Parser.Details
 
 
 -- | A symbol can stand in place of an alphanumeric name, used to
@@ -111,6 +113,12 @@ instance Show Module where
     show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 
+data EdhWorld = EdhWorld {
+        rootObject :: Object
+        , operatorDeclarations :: IORef OpPrecDict
+    }
+
+
 -- | Atop Haskell, most types in Edh, as to organize information,
 -- are immutable values, the only mutable data structure in Edh,
 -- is the *entity* viewed as *object* (see 'objEntity').
@@ -182,7 +190,7 @@ instance Eq EdhValue where
     EdhMethod  x   == EdhMethod  y   = x == y
 
     EdhReturn  x'v == EdhReturn  y'v = x'v == y'v
-    -- todo: regard a returned value equal to the value itself ?
+-- todo: regard a returned value equal to the value itself ?
     _              == _              = False
 
 

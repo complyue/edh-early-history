@@ -15,8 +15,8 @@ import           Language.Edh.AST
 import           Language.Edh.Parser.Details
 
 
-declareOperators :: [(OpSymbol, Precedence)] -> Text -> Parser ()
-declareOperators opd srcLoc = do
+declareOperators :: Text -> [(OpSymbol, Precedence)] -> Parser ()
+declareOperators srcLoc opd = do
     opPD <- get
     put $ Map.unionWithKey chkCompatible opPD $ Map.fromList $ flip
         Prelude.map
