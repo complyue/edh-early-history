@@ -4,7 +4,7 @@
 module Language.Edh.Interpreter where
 
 
-import           Prelude                       as Prelude
+import           Prelude
 
 import           Control.Exception
 import           Control.Monad

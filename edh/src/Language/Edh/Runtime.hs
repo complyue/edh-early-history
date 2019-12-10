@@ -1,7 +1,7 @@
 
 module Language.Edh.Runtime where
 
-import           Prelude                       as Prelude
+import           Prelude
 
 import           Data.IORef
 import           Foreign.C.String
