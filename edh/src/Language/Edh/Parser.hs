@@ -20,7 +20,7 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
 
-import           Data.Lossless.Decimal
+import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -396,10 +396,14 @@ parseDecLit = lexeme do -- todo support HEX/OCT ?
 
 parseLitExpr :: Parser Literal
 parseLitExpr = choice
-    [ StringLiteral <$> parseStringLit
+    [ NilLiteral <$ symbol "nil"
     , BoolLiteral <$> parseBoolLit
+    , StringLiteral <$> parseStringLit
+    , DecLiteral D.nan <$ symbol "nan"
+    , DecLiteral D.inf <$ symbol "inf"
     , DecLiteral <$> parseDecLit
     ]
+
 
 parseAttrName :: Parser Text
 parseAttrName = parseOpName <|> parseAlphaName

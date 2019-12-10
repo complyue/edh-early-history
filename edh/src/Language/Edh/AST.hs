@@ -116,9 +116,11 @@ data Expr = LitExpr !Literal
         | PrefixExpr !Prefix !Expr
     deriving (Show)
 
-data Literal = DecLiteral !Decimal
-            | BoolLiteral !Bool
-            | StringLiteral !Text
+
+data Literal = NilLiteral
+        | DecLiteral !Decimal
+        | BoolLiteral !Bool
+        | StringLiteral !Text
     deriving (Show)
 
 
