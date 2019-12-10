@@ -40,6 +40,7 @@ library edh-internal
         Language.Edh.Interpreter
         Language.Edh.Interpreter.Evaluate
         Language.Edh.Runtime
+        Language.Edh.Batteries
         Language.Edh.AST
         Language.Edh.Parser
         Language.Edh.Runtime.Evaluator
