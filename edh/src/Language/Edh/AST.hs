@@ -33,14 +33,10 @@ type SeqStmts = [StmtSrc]
 type StmtSrc = (SourcePos, Stmt)
 
 data Stmt = ImportStmt ArgsReceiver Expr
-        | AssignStmt ArgsReceiver ArgsSender
+        | LetStmt ArgsReceiver ArgsSender
         | ClassStmt ClassName ProcDecl
         | ExtendsStmt Expr
         | MethodStmt MethodName ProcDecl
-        -- TODO for loop should serve a callback mechanism from hosting
-        --      language/runtime, by allowing sophiscated implementions
-        --      as the expr. yet this idea is to be validated further.
-        | ForStmt ArgsReceiver Expr StmtSrc
         | WhileStmt Expr StmtSrc
         | BreakStmt | ContinueStmt
         | OpDeclStmt OpSymbol Precedence ProcDecl
@@ -50,7 +46,7 @@ data Stmt = ImportStmt ArgsReceiver Expr
             , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]
             , try'finally :: !(Maybe StmtSrc)
             }
-        | BlockStmt SeqStmts
+        | YieldStmt Expr
         | ReturnStmt Expr
         | ExprStmt Expr
     deriving (Show)
@@ -87,19 +83,35 @@ data Prefix = PrefixPlus | PrefixMinus | Not
     deriving (Show)
 
 data Expr = PrefixExpr Prefix Expr
-            | IfExpr { if'condition :: !Expr
-                    , if'consequence :: !StmtSrc
-                    , if'alternative :: !(Maybe StmtSrc)
+        | IfExpr { if'condition :: !Expr
+                , if'consequence :: !Expr
+                , if'alternative :: !(Maybe Expr)
+                }
+        | ListExpr [Expr]
+        | DictExpr [(Expr, Expr)]
+        | TupleExpr [Expr]
+
+        -- a sequence of exprs in a pair of parentheses,
+        -- optionally separated by semcolon,
+        -- need this as curly braces have been used for
+        -- dict expr, this works like a block statement,
+        -- but should eval to last expr's value.
+        -- and further an AST inspector can tell if a single
+        -- expr is in parentheses from this.
+        | GroupExpr [Expr]
+
+        | LitExpr Literal
+
+        | ForExpr ArgsReceiver Expr Expr
+        | GeneratorExpr ProcDecl
+
+        | AttrExpr AttrAddr
+        | CallExpr Expr ArgsSender
+        | IndexExpr { index'value :: !Expr
+                    , index'target :: !Expr
                     }
-            | ListExpr [Expr]
-            | DictExpr [(Expr, Expr)]
-            | LitExpr Literal
-            | AttrExpr AttrAddr
-            | CallExpr Expr ArgsSender
-            | IndexExpr { index'value :: !Expr
-                        , index'target :: !Expr
-                        }
-            | InfixExpr OpSymbol Expr Expr
+
+        | InfixExpr OpSymbol Expr Expr
     deriving (Show)
 
 data Literal = DecLiteral Decimal

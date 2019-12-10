@@ -71,13 +71,13 @@ parseImportStmt = do
     impSrc <- parseExpr
     return $ ImportStmt ir impSrc
 
-parseAssignStmt :: Parser Stmt
-parseAssignStmt = do
+parseLetStmt :: Parser Stmt
+parseLetStmt = do
     void $ symbol "let"
     receiver <- parseArgsReceiver
     void $ symbol "="
     sender <- parseArgsSender
-    return $ AssignStmt receiver sender
+    return $ LetStmt receiver sender
 
 parseArgsReceiver :: Parser ArgsReceiver
 parseArgsReceiver =
@@ -121,8 +121,8 @@ parseRetarget = do
     retgt <- parseAttrAddr
     return retgt
 
-parseArgAssignExpr :: Parser Expr
-parseArgAssignExpr = do
+parseArgLetExpr :: Parser Expr
+parseArgLetExpr = do
     void $ symbol "="
     valExpr <- parseExpr
     return valExpr
@@ -131,7 +131,7 @@ parseKwRecv :: Bool -> Parser ArgReceiver
 parseKwRecv inPack = do
     aname   <- parseAttrName
     retgt   <- optional parseRetarget
-    defExpr <- if inPack then optional parseArgAssignExpr else return Nothing
+    defExpr <- if inPack then optional parseArgLetExpr else return Nothing
     return $ RecvArg aname (validateTgt retgt) defExpr
   where
     validateTgt :: Maybe AttrAddr -> Maybe AttrAddr
@@ -205,7 +205,7 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
     parseKwSend :: Parser ArgSender
     parseKwSend = do
         p1 <- parseExpr
-        optional parseArgAssignExpr >>= \case
+        optional parseArgLetExpr >>= \case
             Nothing      -> return $ SendPosArg p1
             Just valExpr -> case p1 of
                 AttrExpr (DirectRef (NamedAttr aname)) ->
@@ -232,15 +232,6 @@ parseMethodStmt = do
     mname    <- parseAlphaName
     procDecl <- parseProcDecl
     return $ MethodStmt mname procDecl
-
-parseForStmt :: Parser Stmt
-parseForStmt = do
-    void $ symbol "for"
-    ar <- parseArgsReceiver
-    void $ symbol "from"
-    coll <- parseExpr
-    stmt <- parseStmt
-    return $ ForStmt ar coll stmt
 
 parseWhileStmt :: Parser Stmt
 parseWhileStmt = do
@@ -303,9 +294,11 @@ parseTryStmt = do
         recov <- parseStmt
         return (excClass, an, recov)
 
-parseBlockStmt :: Parser Stmt
-parseBlockStmt =
-    BlockStmt <$> (between (symbol "{") (symbol "}") $ many parseStmt)
+parseYieldStmt :: Parser Stmt
+parseYieldStmt = do
+    void $ symbol "yield"
+    expr <- parseExpr
+    return $ YieldStmt expr
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
@@ -323,14 +316,14 @@ parseStmt = do
                 , parseClassStmt
                 , parseExtendsStmt
                 , parseMethodStmt
-                , parseForStmt
                 , parseWhileStmt
                   -- TODO validate break/continue must within a loop block
                 , BreakStmt <$ symbol "break"
                 , ContinueStmt <$ symbol "continue"
                 , parseOpDeclOvrdStmt
                 , parseTryStmt
-                , parseBlockStmt
+                -- TODO validate yield must within a generator function
+                , parseYieldStmt
                 , parseReturnStmt
                 , ExprStmt <$> parseExpr
                 ]
@@ -349,11 +342,27 @@ parseIfExpr = do
     void $ symbol "if"
     cond <- parseExpr
     void $ symbol "then"
-    cseq <- parseStmt
+    cseq <- parseExpr
     alt  <- optional do
         void $ symbol "else"
-        parseStmt
+        parseExpr
     return $ IfExpr cond cseq alt
+
+parseForExpr :: Parser Expr
+parseForExpr = do
+    void $ symbol "for"
+    ar <- parseArgsReceiver
+    void $ symbol "from"
+    iter <- parseExpr
+    void $ symbol "do"
+    expr <- parseExpr
+    return $ ForExpr ar iter expr
+
+parseGeneratorExpr :: Parser Expr
+parseGeneratorExpr = do
+    void $ symbol "generator"
+    procDecl <- parseProcDecl
+    return $ GeneratorExpr procDecl
 
 -- todo support list comprehension, e.g. [x for x from xs]
 parseListExpr :: Parser Expr
@@ -396,9 +405,6 @@ parseLitExpr = choice
     , DecLiteral <$> parseDecLit
     ]
 
-parseParenExpr :: Parser Expr
-parseParenExpr = between (symbol "(") (symbol ")") parseExpr
-
 parseAttrName :: Parser Text
 parseAttrName = parseOpName <|> parseAlphaName
 
@@ -421,6 +427,26 @@ parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 parseIndexExpr :: Parser Expr
 parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
 
+parseTupleOrGroup :: Parser Expr
+parseTupleOrGroup = do
+    void $ symbol "("
+    (parseEmptyTuple <|>) do
+        e <- parseExpr
+        choice [parseTuple [e], parseGroup [e]]
+  where
+    parseEmptyTuple :: Parser Expr
+    parseEmptyTuple = symbol "," *> symbol ")" *> (return $ TupleExpr [])
+    parseTuple :: [Expr] -> Parser Expr
+    parseTuple t = ((symbol ")") *> (return $ TupleExpr t)) <|> do
+        void $ symbol ","
+        e <- parseExpr
+        parseTuple $ e : t
+    parseGroup :: [Expr] -> Parser Expr
+    parseGroup t = ((symbol ")") *> (return $ GroupExpr t)) <|> do
+        e <- parseExpr
+        void $ optional $ symbol ";"
+        parseGroup $ e : t
+
 
 parseExpr :: Parser Expr
 parseExpr = parseExprPrec 0 id
@@ -439,25 +465,42 @@ parseExprPrec prec leftCtor = choice
 
 parsNonIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parsNonIdxNonCallPrec prec leftCtor = do
-    e1 <- choice [parseIfExpr, parsePrefixExpr, LitExpr <$> parseLitExpr]
+    e1 <- choice
+        [ -- non-idexable, non-callable exprs
+          parseIfExpr
+        , parseForExpr
+        , parsePrefixExpr -- can only be bool or decimal
+        , LitExpr <$> parseLitExpr
+        ]
     parseNextOp e1 prec leftCtor
 
 parseIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxNonCallPrec prec leftCtor = do
-    e1 <- choice [AttrExpr <$> parseSupersRef, parseListExpr, parseDictExpr]
+    e1 <- choice
+        [ -- possibly indexable, non-callable exprs
+          AttrExpr <$> parseSupersRef
+        , parseListExpr
+        , parseDictExpr
+        , parseTupleOrGroup
+        ]
     optional parseIndexExpr >>= \case
         Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
         Nothing     -> parseNextOp e1 prec leftCtor
 
 parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxCallPrec prec leftCtor = do
-    e1 <- choice [parseParenExpr, AttrExpr <$> parseAttrAddr]
-    optional parseIndexExpr >>= \case
-        Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
-        Nothing     -> optional parsePackSender >>= \case
-            Just packSender ->
-                parseNextOp (CallExpr e1 packSender) prec leftCtor
-            Nothing -> parseNextOp e1 prec leftCtor
+    addrExpr <- -- the only callable expr is attribute addressing
+                AttrExpr <$> parseAttrAddr
+    (optional $ lookAhead $ (symbol ",") <|> (symbol ";")) >>= \case
+        Just _  -> return $ leftCtor addrExpr
+        Nothing -> do
+            optional parseIndexExpr >>= \case
+                Just idxVal ->
+                    parseNextOp (IndexExpr idxVal addrExpr) prec leftCtor
+                Nothing -> optional parsePackSender >>= \case
+                    Just packSender ->
+                        parseNextOp (CallExpr addrExpr packSender) prec leftCtor
+                    Nothing -> parseNextOp addrExpr prec leftCtor
 
 parseNextOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
 parseNextOp e1 prec leftCtor = do
