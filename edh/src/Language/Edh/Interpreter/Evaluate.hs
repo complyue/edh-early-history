@@ -3,10 +3,12 @@ module Language.Edh.Interpreter.Evaluate where
 
 import           Prelude
 
-import           Control.Monad
+import           Control.Exception
+import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import           Control.Monad.State.Strict
 
+import           Data.Typeable
 import           Data.IORef
 import           Foreign.C.String
 import           System.IO.Unsafe
@@ -17,13 +19,13 @@ import           Text.Megaparsec
 
 import           Data.Lossless.Decimal         as D
 
+import           Language.Edh.Control
 import           Language.Edh.AST
-import           Language.Edh.Parser
-import           Language.Edh.Parser.Details
 import           Language.Edh.Runtime
+import           Language.Edh.Parser
 
 
-evalProgram :: MonadIO m => Module -> SeqStmts -> m ()
-evalProgram modu stmts = liftIO $ do
-    return ()
+runEdhProgram :: MonadIO m => Module -> SeqStmts -> m (Either EvalError ())
+runEdhProgram modu stmts = liftIO $ do
+    return $ Left $ EvalError "not impl."
 

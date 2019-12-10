@@ -13,9 +13,8 @@ import           Text.Megaparsec                ( SourcePos )
 
 import           Data.Lossless.Decimal         as D
 
+import           Language.Edh.Control
 import           Language.Edh.AST
-import           Language.Edh.Parser
-import           Language.Edh.Parser.Details
 
 
 -- | A symbol can stand in place of an alphanumeric name, used to

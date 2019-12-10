@@ -1,26 +1,25 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Edh.Interpreter where
 
 
 import           Prelude                       as Prelude
 
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.State.Strict
 
 import           Data.IORef
-import           Foreign.C.String
-import           System.IO.Unsafe
 import           Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
 import           Text.Megaparsec
 
-import           Data.Lossless.Decimal         as D
-
+import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Parser
-import           Language.Edh.Parser.Details
 import           Language.Edh.Runtime
 import           Language.Edh.Interpreter.Evaluate
 
@@ -38,7 +37,7 @@ createEdhWorld = liftIO $ do
             , className        = "<root>"
             , classSourcePos   = srcPos
             , classProcedure   = ProcDecl { procedure'args = WildReceiver
-                                          , procedure'body = (srcPos, NopStmt)
+                                          , procedure'body = (srcPos, VoidStmt)
                                           }
             }
     opPD  <- newIORef Map.empty
@@ -68,17 +67,17 @@ declareEdhOperators world declLoc opd = liftIO
         -> (Precedence, Text)
     chkCompatible op (prevPrec, prevDeclLoc) (newPrec, newDeclLoc) =
         if prevPrec /= newPrec
-            then error
+            then throw $ EvalError
                 (  "precedence change from "
-                <> show prevPrec
+                <> T.pack (show prevPrec)
                 <> " (declared "
-                <> T.unpack prevDeclLoc
+                <> prevDeclLoc
                 <> ") to "
-                <> show newPrec
+                <> T.pack (show newPrec)
                 <> " (declared "
-                <> T.unpack newDeclLoc
+                <> T.pack (show newDeclLoc)
                 <> ") for operator: "
-                <> show op
+                <> op
                 )
             else (prevPrec, prevDeclLoc)
 
@@ -94,7 +93,11 @@ putEdhAttrs o as = liftIO $ void $ atomicModifyIORef' (objEntity o) $ \e0 ->
 
 
 runEdhModule
-    :: MonadIO m => EdhWorld -> ModuleId -> Text -> m (Either Text Module)
+    :: MonadIO m
+    => EdhWorld
+    -> ModuleId
+    -> Text
+    -> m (Either InterpretError Module)
 runEdhModule world moduId moduSource = liftIO $ do
     -- serialize parsing against 'worldOperators'
     pr <- atomicModifyIORef' (worldOperators world) $ \opPD ->
@@ -102,7 +105,7 @@ runEdhModule world moduId moduSource = liftIO $ do
                     runState (runParserT parseModule moduId moduSource) opPD
         in  (opPD', pr)
     case pr of
-        Left  pe    -> return $ Left $ T.pack (show pe)
+        Left  pe    -> return $ Left $ EdhParseError pe
         Right stmts -> do
             entity <- newIORef Map.empty
             let modu = Module
@@ -113,6 +116,7 @@ runEdhModule world moduId moduSource = liftIO $ do
                                          }
                     , modulePath   = moduId
                     }
-            evalProgram modu stmts
-            return $ Right modu
+            runEdhProgram modu stmts >>= \case
+                Left  err -> return $ Left $ EdhEvalError err
+                Right ()  -> return $ Right modu
 
