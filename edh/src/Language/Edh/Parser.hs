@@ -433,12 +433,13 @@ parseTupleOrGroup = do
     parseEmptyTuple :: Parser Expr
     parseEmptyTuple = symbol "," *> symbol ")" *> (return $ TupleExpr [])
     parseTuple :: [Expr] -> Parser Expr
-    parseTuple t = ((symbol ")") *> (return $ TupleExpr t)) <|> do
+    parseTuple t = ((symbol ")") *> (return $ TupleExpr (reverse t))) <|> do
         void $ symbol ","
         e <- parseExpr
         parseTuple $ e : t
     parseGroup :: [Expr] -> Parser Expr
-    parseGroup t = ((symbol ")") *> (return $ GroupExpr t)) <|> do
+    parseGroup t = ((symbol ")") *> (return $ GroupExpr (reverse t))) <|> do
+        void $ optional $ symbol ";"
         e <- parseExpr
         void $ optional $ symbol ";"
         parseGroup $ e : t
