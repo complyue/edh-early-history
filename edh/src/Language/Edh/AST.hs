@@ -74,8 +74,8 @@ data ArgSender = UnpackPosArgs Expr
         | SendKwArg AttrName Expr
     deriving (Show)
 
-data ProcDecl = ProcDecl { fn'args :: !ArgsReceiver
-                        ,  fn'body :: !StmtSrc
+data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
+                        ,  procedure'body :: !StmtSrc
                         }
     deriving (Show)
 
