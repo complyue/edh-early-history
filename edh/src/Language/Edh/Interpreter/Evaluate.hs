@@ -32,14 +32,10 @@ runEdhProgram
     -> Module
     -> SeqStmts
     -> m (Either EvalError EdhValue)
-runEdhProgram _     _    []          = return $ Right EdhNil
-runEdhProgram world modu (stmt : rs) = liftIO $ do
-
-    Prelude.putStrLn $ show stmt
-
-    evalEdhStmt world modu stmt >>= \case
-        Left  err -> return $ Left err
-        Right _   -> runEdhProgram world modu rs
+runEdhProgram _     _    []  = return $ Right EdhNil
+runEdhProgram world modu [s] = evalEdhStmt world modu s
+runEdhProgram world modu (s : rs) =
+    evalEdhStmt world modu s *> runEdhProgram world modu rs
 
 
 evalEdhStmt
@@ -48,10 +44,14 @@ evalEdhStmt
     -> Module
     -> StmtSrc
     -> m (Either EvalError EdhValue)
-evalEdhStmt world modu (_srcPos, stmt) = case stmt of
+evalEdhStmt world modu (_srcPos, stmt) = liftIO $ do
 
-    VoidStmt -> return $ Right nil
+    Prelude.putStrLn $ show stmt
 
-    _        -> return $ Left $ EvalError "not impl."
+    case stmt of
+
+        VoidStmt -> return $ Right nil
+
+        _        -> return $ Left $ EvalError "not impl."
 
 
