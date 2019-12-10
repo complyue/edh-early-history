@@ -1,11 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
+
 module Repl where
 
-import           RIO                     hiding ( evaluate )
+import           Prelude
+import           Debug.Trace
 
-import qualified Data.Text                     as T
+import           Data.Text                     as T
 
 import           System.Console.Haskeline
 
@@ -48,7 +50,7 @@ doRead pendingLines =
                                 "}" -> -- an unindented `}` marks end of multi-line input
                                     return
                                         $ Just
-                                        $ (T.unlines . reverse)
+                                        $ (T.unlines . Prelude.reverse)
                                         $ code
                                         : pendingLines
                                 _ -> -- got a line in multi-line input mode

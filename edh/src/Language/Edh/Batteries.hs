@@ -2,6 +2,7 @@
 module Language.Edh.Batteries where
 
 import           Prelude
+import           Debug.Trace
 
 import           Control.Exception
 import           Control.Monad

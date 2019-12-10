@@ -3,6 +3,7 @@
 module Main where
 
 import           Prelude
+import           Debug.Trace
 
 import           Language.Edh.Control
 import           Language.Edh.Runtime
@@ -16,6 +17,8 @@ main = do
     putStrLn "(EDHi)"
 
     world <- createEdhWorldWithBatteries
+
+    trace "got world" $ return ()
 
     runEdhModule world "<interactive>" "pass" >>= \case
         Left  err  -> error $ show err

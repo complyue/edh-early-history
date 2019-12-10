@@ -50,15 +50,15 @@ createEdhWorld = liftIO $ do
 
 declareEdhOperators
     :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
-declareEdhOperators world declLoc opd = liftIO
-    $ atomicModifyIORef' (worldOperators world) updatePrecedence
+declareEdhOperators world declLoc opps = liftIO
+    $ atomicModifyIORef' (worldOperators world) declarePrecedence
   where
-    updatePrecedence :: OpPrecDict -> (OpPrecDict, ())
-    updatePrecedence opPD =
+    declarePrecedence :: OpPrecDict -> (OpPrecDict, ())
+    declarePrecedence opPD =
         flip (,) ()
             $ Map.unionWithKey chkCompatible opPD
             $ Map.fromList
-            $ flip Prelude.map opd
+            $ flip Prelude.map opps
             $ \(op, p) -> (op, (p, declLoc))
     chkCompatible
         :: OpSymbol
