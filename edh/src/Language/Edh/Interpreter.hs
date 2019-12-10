@@ -28,7 +28,7 @@ import           Language.Edh.Interpreter.Evaluate
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
     e <- newIORef Map.empty
-    let r = Object { objEntity = e, objCtor = c }
+    let r = Object { objEntity = e, objClass = c, objSupers = [] }
         c = Class
             { classOuterEntity = r
             , className        = "<root>"
@@ -36,9 +36,14 @@ createEdhWorld = liftIO $ do
                                            , sourceLine   = mkPos 0
                                            , sourceColumn = mkPos 0
                                            }
+            , classProcedure   = []
             }
-    opPD <- newIORef Map.empty
-    return $ EdhWorld { worldRoot = r, worldOperators = opPD }
+    opPD  <- newIORef Map.empty
+    modus <- newIORef Map.empty
+    return $ EdhWorld { worldRoot      = r
+                      , worldOperators = opPD
+                      , worldModules   = modus
+                      }
 
 
 declareEdhOperators
@@ -53,44 +58,45 @@ declareEdhOperators world declLoc opd = liftIO
             $ Map.fromList
             $ flip Prelude.map opd
             $ \(op, p) -> (op, (p, declLoc))
-
     chkCompatible
         :: OpSymbol
         -> (Precedence, Text)
         -> (Precedence, Text)
         -> (Precedence, Text)
-    chkCompatible op (prevPrec, prevDeclLoc) (newPrec, _) =
+    chkCompatible op (prevPrec, prevDeclLoc) (newPrec, newDeclLoc) =
         if prevPrec /= newPrec
             then error
-                (  "invalid precedence change from "
+                (  "precedence change from "
                 <> show prevPrec
-                <> " to "
+                <> " (declared "
+                <> T.unpack prevDeclLoc
+                <> ") to "
                 <> show newPrec
-                <> " for operator: "
+                <> " (declared "
+                <> T.unpack newDeclLoc
+                <> ") for operator: "
                 <> show op
                 )
             else (prevPrec, prevDeclLoc)
 
 
-installEdhAttr :: MonadIO m => Object -> AttrKey -> EdhValue -> m ()
-installEdhAttr o k v =
-    liftIO $ void $ atomicModifyIORef' (objEntity o) $ \e0 ->
-        return (Map.insert k v e0, ())
+putEdhAttr :: MonadIO m => Object -> AttrKey -> EdhValue -> m ()
+putEdhAttr o k v = liftIO $ void $ atomicModifyIORef' (objEntity o) $ \e0 ->
+    return (Map.insert k v e0, ())
 
-installEdhAttrs :: MonadIO m => Object -> [(AttrKey, EdhValue)] -> m ()
-installEdhAttrs o as =
-    liftIO $ void $ atomicModifyIORef' (objEntity o) $ \e0 ->
-        return (Map.union ad e0, ())
+putEdhAttrs :: MonadIO m => Object -> [(AttrKey, EdhValue)] -> m ()
+putEdhAttrs o as = liftIO $ void $ atomicModifyIORef' (objEntity o) $ \e0 ->
+    return (Map.union ad e0, ())
     where ad = Map.fromList as
 
 
 runEdhModule
     :: MonadIO m => EdhWorld -> ModuleId -> Text -> m (Either Text Module)
-runEdhModule world moduId moduCode = liftIO $ do
-    -- seralize parsing against 'worldOperators'
+runEdhModule world moduId moduSource = liftIO $ do
+    -- serialize parsing against 'worldOperators'
     pr <- atomicModifyIORef' (worldOperators world) $ \opPD ->
         let (pr, opPD') =
-                    runState (runParserT parseModule moduId moduCode) opPD
+                    runState (runParserT parseModule moduId moduSource) opPD
         in  (opPD', pr)
     case pr of
         Left  pe    -> return $ Left $ T.pack (show pe)
@@ -99,7 +105,8 @@ runEdhModule world moduId moduCode = liftIO $ do
             let modu = Module
                     { moduleObject = Object
                                          { objEntity = entity
-                                         , objCtor   = objCtor (worldRoot world)
+                                         , objClass = objClass (worldRoot world)
+                                         , objSupers = []
                                          }
                     , modulePath   = moduId
                     }

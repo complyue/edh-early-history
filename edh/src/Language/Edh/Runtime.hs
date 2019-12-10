@@ -157,6 +157,7 @@ instance Show Iterator where
 data EdhWorld = EdhWorld {
         worldRoot :: !Object
         , worldOperators :: !(IORef OpPrecDict)
+        , worldModules :: !(IORef (Map.Map ModuleId Module))
     }
 
 
