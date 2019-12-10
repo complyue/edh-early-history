@@ -102,10 +102,10 @@ runEdhModule world moduId moduSource = liftIO $ do
     -- serialize parsing against 'worldOperators'
     pr <- atomicModifyIORef' (worldOperators world) $ \opPD ->
         let (pr, opPD') =
-                    runState (runParserT parseModule moduId moduSource) opPD
+                    runState (runParserT parseProgram moduId moduSource) opPD
         in  (opPD', pr)
     case pr of
-        Left  pe    -> return $ Left $ EdhParseError pe
+        Left  err   -> return $ Left $ EdhParseError err
         Right stmts -> do
             entity <- newIORef Map.empty
             let modu = Module
@@ -118,5 +118,25 @@ runEdhModule world moduId moduSource = liftIO $ do
                     }
             runEdhProgram modu stmts >>= \case
                 Left  err -> return $ Left $ EdhEvalError err
-                Right ()  -> return $ Right modu
+                Right _   -> return $ Right modu
+
+
+evalEdhSource
+    :: MonadIO m
+    => EdhWorld
+    -> Module
+    -> Text
+    -> m (Either InterpretError EdhValue)
+evalEdhSource world modu code = liftIO $ do
+    -- serialize parsing against 'worldOperators'
+    pr <- atomicModifyIORef' (worldOperators world) $ \opPD ->
+        let (pr, opPD') = runState
+                (runParserT parseProgram (modulePath modu) code)
+                opPD
+        in  (opPD', pr)
+    case pr of
+        Left  err   -> return $ Left $ EdhParseError err
+        Right stmts -> runEdhProgram modu stmts >>= \case
+            Left  err -> return $ Left $ EdhEvalError err
+            Right val -> return $ Right val
 

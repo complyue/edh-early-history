@@ -25,7 +25,14 @@ import           Language.Edh.Runtime
 import           Language.Edh.Parser
 
 
-runEdhProgram :: MonadIO m => Module -> SeqStmts -> m (Either EvalError ())
+runEdhProgram
+    :: MonadIO m => Module -> SeqStmts -> m (Either EvalError EdhValue)
 runEdhProgram modu stmts = liftIO $ do
-    return $ Left $ EvalError "not impl."
+
+    void $ mapM_ (Prelude.putStrLn . show) stmts
+
+    if Prelude.null stmts
+        then return $ Right nil
+        else return $ Right $ EdhString $ T.pack $ show $ Prelude.tail stmts
+    -- return $ Left $ EvalError "not impl."
 

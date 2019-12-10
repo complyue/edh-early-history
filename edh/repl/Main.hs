@@ -1,10 +1,13 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Main where
 
-import           RIO
+import           Prelude
 
-import           System.IO
-import           Language.Edh.Runtime.Evaluator.Types
-                                                ( createEmptyState )
+import           Language.Edh.Control
+import           Language.Edh.Runtime
+import           Language.Edh.Interpreter
+import           Language.Edh.Batteries
 
 import           Repl                           ( doLoop )
 
@@ -12,4 +15,9 @@ main :: IO ()
 main = do
     putStrLn "(EDHi)"
 
-    createEmptyState >>= doLoop
+    world <- createEdhWorldWithBatteries
+
+    runEdhModule world "<interactive>" "pass" >>= \case
+        Left  err  -> error $ show err
+        Right modu -> doLoop world modu
+

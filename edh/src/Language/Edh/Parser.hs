@@ -55,8 +55,8 @@ isOperatorChar :: Char -> Bool
 isOperatorChar = flip elem ("=~!@#$%^&|:<>?+-*/" :: [Char])
 
 
-parseModule :: Parser SeqStmts
-parseModule = sc *> many parseStmt
+parseProgram :: Parser SeqStmts
+parseProgram = sc *> many parseStmt
 
 parseVoidStmt :: Parser Stmt
 parseVoidStmt = VoidStmt <$ symbol "pass" -- same as Python

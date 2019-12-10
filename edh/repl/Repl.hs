@@ -9,16 +9,10 @@ import qualified Data.Text                     as T
 
 import           System.Console.Haskeline
 
-import           Language.Edh.Compiler.Lexer    ( lex )
-import           Language.Edh.Compiler.Parser   ( parse )
-import           Language.Edh.Runtime.Evaluator ( evalWithState )
-import           Language.Edh.Runtime.Evaluator.Types
-                                                ( EvalError
-                                                , EvalState
-                                                )
-import           Language.Edh.Runtime.Evaluator.Object
-                                                ( Object(ONil) )
-import           Language.Edh.Compiler.ParserT  ( ParserError )
+import           Language.Edh.Control
+import           Language.Edh.Runtime
+import           Language.Edh.Interpreter
+import           Language.Edh.Batteries
 
 
 inputSettings :: Settings IO
@@ -61,39 +55,31 @@ doRead pendingLines =
                                     doRead $ code : pendingLines
 
 
-data InterpretError = P ParserError | E EvalError
+doEval :: EdhWorld -> Module -> Text -> IO (Either InterpretError EdhValue)
+doEval world modu code = evalEdhSource world modu code
 
 
-doEval :: EvalState -> Text -> IO (EvalState, Either InterpretError Object)
-doEval s c = case (lex c >>= parse) of
-    Right ast -> evalWithState ast s >>= \case
-        Right (o, s') -> return (s', Right o)
-        Left  err     -> return (s, Left (E err))
-    Left err -> return (s, Left (P err))
-
-
-doPrint :: (Either InterpretError Object) -> InputT IO ()
+doPrint :: (Either InterpretError EdhValue) -> InputT IO ()
 doPrint = \case
     Left err -> case err of
-        P parseErr -> do
+        EdhParseError err -> do
             outputStrLn "* 😓 *"
-            outputStrLn $ show parseErr
-        E evalErr -> do
+            outputStrLn $ show err
+        EdhEvalError err -> do
             outputStrLn "* 😱 *"
-            outputStrLn $ show evalErr
+            outputStrLn $ show err
     Right o -> case o of
-        ONil -> return ()
-        _    -> do
-            outputStrLn $ show o
+        EdhNil -> return ()
+        _      -> outputStrLn $ show o
 
 
-doLoop :: EvalState -> IO ()
-doLoop s = (runInputT inputSettings $ doRead []) >>= \case
-    Nothing -> return () -- reached EOF (end-of-feed)
-    Just c  -> if c == ""
-        then doLoop s -- ignore empty code
+doLoop :: EdhWorld -> Module -> IO ()
+doLoop world modu = (runInputT inputSettings $ doRead []) >>= \case
+    Nothing   -> return () -- reached EOF (end-of-feed)
+    Just code -> if code == ""
+        then doLoop world modu  -- ignore empty code
         else do -- got one piece of code
-            (s', r) <- doEval s c
+            r <- doEval world modu code
             runInputT inputSettings $ doPrint r
-            doLoop s'
+            doLoop world modu
 
