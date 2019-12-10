@@ -489,8 +489,11 @@ parseIdxNonCallPrec prec leftCtor = do
 
 parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxCallPrec prec leftCtor = do
-    addrExpr <- -- the only callable expr is attribute addressing
-                AttrExpr <$> parseAttrAddr
+    addrExpr <- choice
+        [ -- possibly callable exprs
+          parseGeneratorExpr
+        , AttrExpr <$> parseAttrAddr
+        ]
     (optional $ lookAhead $ (symbol ",") <|> (symbol ";")) >>= \case
         Just _  -> return $ leftCtor addrExpr
         Nothing -> do
