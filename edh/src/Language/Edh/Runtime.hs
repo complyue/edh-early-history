@@ -73,6 +73,13 @@ data Object = Object {
         -- similar to obj.(__proto__.)constructor in JavaScript, 
         -- can be used to fake up an object, not going through
         -- the typical construction procedure.
+        --
+        -- TODO not sure whether referential transparency (GHC)
+        -- works to reduce ram overhead of this field to cost a
+        -- single pointer, and if that's not the case, may worth
+        -- doing an optimisation, as every object created induce
+        -- this overhead and there'll be many objects to create
+        -- for the run.
         , objClass :: !Class
 
         -- | up-links for object inheritance hierarchy
@@ -110,7 +117,7 @@ instance Show Object where
 
 data Class = Class {
         -- | the lexical context in which this class is defined
-        classOuterEntity :: !Object
+        classOuterEntity :: !Entity
         , className :: !AttrName
         , classSourcePos :: !SourcePos
         , classProcedure :: !ProcDecl
@@ -133,8 +140,8 @@ instance Show Method where
         "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
 
 data Module = Module {
-        moduleObject :: !Object
-        , modulePath :: !ModuleId
+        moduleEntity :: !Entity
+        , moduleId :: !ModuleId
     }
 instance Eq Module where
     Module x'o _ == Module y'o _ = x'o == y'o
@@ -154,7 +161,7 @@ instance Show Iterator where
 
 
 data EdhWorld = EdhWorld {
-        worldRoot :: !Object
+        worldRoot :: !Entity
         , worldOperators :: !(IORef OpPrecDict)
         , worldModules :: !(IORef (Map.Map ModuleId Module))
     }

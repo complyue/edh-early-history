@@ -66,14 +66,14 @@ library edh-internal
     build-depends:
         ghc >=8.6.5,
         base >=4.12 && <5,
-        megaparsec >=8.0,
-        lossless-decimal -any,
-        scientific >=0.3.6,
         text -any,
+        scientific >=0.3.6,
         vector -any,
         containers -any,
         mtl -any,
         transformers -any,
+        megaparsec >=8.0,
+        lossless-decimal -any,
         rio -any
 
 executable edhi
@@ -86,6 +86,6 @@ executable edhi
     build-depends:
         edh-internal -any,
         base >=4.12 && <5,
-        rio -any,
         text -any,
+        megaparsec >=8.0,
         haskeline -any

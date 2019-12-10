@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Edh.Interpreter.Evaluate where
 
@@ -26,13 +27,31 @@ import           Language.Edh.Parser
 
 
 runEdhProgram
-    :: MonadIO m => Module -> SeqStmts -> m (Either EvalError EdhValue)
-runEdhProgram modu stmts = liftIO $ do
+    :: MonadIO m
+    => EdhWorld
+    -> Module
+    -> SeqStmts
+    -> m (Either EvalError EdhValue)
+runEdhProgram _     _    []          = return $ Right EdhNil
+runEdhProgram world modu (stmt : rs) = liftIO $ do
 
-    void $ mapM_ (Prelude.putStrLn . show) stmts
+    Prelude.putStrLn $ show stmt
 
-    if Prelude.null stmts
-        then return $ Right nil
-        else return $ Right $ EdhString $ T.pack $ show $ Prelude.tail stmts
-    -- return $ Left $ EvalError "not impl."
+    evalEdhStmt world modu stmt >>= \case
+        Left  err -> return $ Left err
+        Right _   -> runEdhProgram world modu rs
+
+
+evalEdhStmt
+    :: MonadIO m
+    => EdhWorld
+    -> Module
+    -> StmtSrc
+    -> m (Either EvalError EdhValue)
+evalEdhStmt world modu (_srcPos, stmt) = case stmt of
+
+    VoidStmt -> return $ Right nil
+
+    _        -> return $ Left $ EvalError "not impl."
+
 

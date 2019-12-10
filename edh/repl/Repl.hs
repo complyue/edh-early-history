@@ -11,17 +11,13 @@ import           Data.Text                     as T
 
 import           System.Console.Haskeline
 
+import           Text.Megaparsec
+
 import           Language.Edh.Control
 import           Language.Edh.Runtime
 import           Language.Edh.Interpreter
 import           Language.Edh.Batteries
 
-
-inputSettings :: Settings IO
-inputSettings = Settings { complete       = \(_left, _right) -> return ("", [])
-                         , historyFile    = Nothing
-                         , autoAddHistory = True
-                         }
 
 doRead :: [Text] -> InputT IO (Maybe Text)
 doRead pendingLines =
@@ -57,7 +53,8 @@ doRead pendingLines =
                                     doRead $ code : pendingLines
 
 
-doEval :: EdhWorld -> Module -> Text -> IO (Either InterpretError EdhValue)
+doEval
+    :: EdhWorld -> Module -> Text -> InputT IO (Either InterpretError EdhValue)
 doEval world modu code = evalEdhSource world modu code
 
 
@@ -66,7 +63,7 @@ doPrint = \case
     Left err -> case err of
         EdhParseError err -> do
             outputStrLn "* 😓 *"
-            outputStrLn $ show err
+            outputStrLn $ errorBundlePretty err
         EdhEvalError err -> do
             outputStrLn "* 😱 *"
             outputStrLn $ show err
@@ -75,13 +72,13 @@ doPrint = \case
         _      -> outputStrLn $ show o
 
 
-doLoop :: EdhWorld -> Module -> IO ()
-doLoop world modu = (runInputT inputSettings $ doRead []) >>= \case
+doLoop :: EdhWorld -> Module -> InputT IO ()
+doLoop world modu = (doRead []) >>= \case
     Nothing   -> return () -- reached EOF (end-of-feed)
     Just code -> if code == ""
         then doLoop world modu  -- ignore empty code
         else do -- got one piece of code
             r <- doEval world modu code
-            runInputT inputSettings $ doPrint r
+            doPrint r
             doLoop world modu
 
