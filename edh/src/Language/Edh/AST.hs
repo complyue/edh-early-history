@@ -32,7 +32,8 @@ type SeqStmts = [StmtSrc]
 
 type StmtSrc = (SourcePos, Stmt)
 
-data Stmt = ImportStmt ArgsReceiver Expr
+data Stmt = NopStmt
+        | ImportStmt ArgsReceiver Expr
         | LetStmt ArgsReceiver ArgsSender
         | ClassStmt ClassName ProcDecl
         | ExtendsStmt Expr

@@ -28,15 +28,18 @@ import           Language.Edh.Interpreter.Evaluate
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
     e <- newIORef Map.empty
-    let r = Object { objEntity = e, objClass = c, objSupers = [] }
+    let srcPos = SourcePos { sourceName   = "<Genesis>"
+                           , sourceLine   = mkPos 0
+                           , sourceColumn = mkPos 0
+                           }
+        r = Object { objEntity = e, objClass = c, objSupers = [] }
         c = Class
             { classOuterEntity = r
             , className        = "<root>"
-            , classSourcePos   = SourcePos { sourceName   = "<Genesis>"
-                                           , sourceLine   = mkPos 0
-                                           , sourceColumn = mkPos 0
-                                           }
-            , classProcedure   = []
+            , classSourcePos   = srcPos
+            , classProcedure   = ProcDecl { procedure'args = WildReceiver
+                                          , procedure'body = (srcPos, NopStmt)
+                                          }
             }
     opPD  <- newIORef Map.empty
     modus <- newIORef Map.empty
@@ -53,7 +56,7 @@ declareEdhOperators world declLoc opd = liftIO
   where
     updatePrecedence :: OpPrecDict -> (OpPrecDict, ())
     updatePrecedence opPD =
-        (flip (,) ())
+        flip (,) ()
             $ Map.unionWithKey chkCompatible opPD
             $ Map.fromList
             $ flip Prelude.map opd
