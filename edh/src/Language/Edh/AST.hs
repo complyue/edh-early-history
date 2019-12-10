@@ -15,11 +15,11 @@ type AttrName = Text
 data AttrAddressor =
         -- | vanilla form in addressing attributes against
         --   a left hand entity object
-        NamedAttr AttrName
+        NamedAttr !AttrName
         -- | get the symbol value from current entity,
         --   then use it to address attributes against
         --   a left hand entity object
-        | SymbolicAttr AttrName
+        | SymbolicAttr !AttrName
     deriving (Show)
 
 
@@ -33,46 +33,46 @@ type SeqStmts = [StmtSrc]
 type StmtSrc = (SourcePos, Stmt)
 
 data Stmt = VoidStmt
-        | ImportStmt ArgsReceiver Expr
-        | LetStmt ArgsReceiver ArgsSender
-        | ClassStmt ClassName ProcDecl
-        | ExtendsStmt Expr
-        | MethodStmt MethodName ProcDecl
-        | WhileStmt Expr StmtSrc
+        | ImportStmt !ArgsReceiver !Expr
+        | LetStmt !ArgsReceiver !ArgsSender
+        | ClassStmt !ClassName !ProcDecl
+        | ExtendsStmt !Expr
+        | MethodStmt !MethodName !ProcDecl
+        | WhileStmt !Expr !StmtSrc
         | BreakStmt | ContinueStmt
-        | OpDeclStmt OpSymbol Precedence ProcDecl
-        | OpOvrdStmt OpSymbol ProcDecl
+        | OpDeclStmt !OpSymbol !Precedence !ProcDecl
+        | OpOvrdStmt !OpSymbol !ProcDecl
         | TryStmt {
             try'trunk :: !StmtSrc
             , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]
             , try'finally :: !(Maybe StmtSrc)
             }
-        | YieldStmt Expr
-        | ReturnStmt Expr
-        | ExprStmt Expr
+        | YieldStmt !Expr
+        | ReturnStmt !Expr
+        | ExprStmt !Expr
     deriving (Show)
 
 data AttrAddr = ThisRef | SupersRef
-            | DirectRef AttrAddressor
-            | IndirectRef Expr AttrAddressor
+            | DirectRef !AttrAddressor
+            | IndirectRef !Expr !AttrAddressor
     deriving (Show)
 
-data ArgsReceiver = PackReceiver [ArgReceiver]
-        | SingleReceiver ArgReceiver
+data ArgsReceiver = PackReceiver ![ArgReceiver]
+        | SingleReceiver !ArgReceiver
         | WildReceiver
     deriving (Show)
-data ArgReceiver = RecvRestPosArgs AttrName
-        | RecvRestKwArgs AttrName
-        | RecvArg AttrName (Maybe AttrAddr) (Maybe Expr)
+data ArgReceiver = RecvRestPosArgs !AttrName
+        | RecvRestKwArgs !AttrName
+        | RecvArg !AttrName !(Maybe AttrAddr) !(Maybe Expr)
     deriving (Show)
 
-data ArgsSender = PackSender [ArgSender]
-        | SingleSender ArgSender
+data ArgsSender = PackSender ![ArgSender]
+        | SingleSender !ArgSender
     deriving (Show)
-data ArgSender = UnpackPosArgs Expr
-        | UnpackKwArgs Expr
-        | SendPosArg Expr
-        | SendKwArg AttrName Expr
+data ArgSender = UnpackPosArgs !Expr
+        | UnpackKwArgs !Expr
+        | SendPosArg !Expr
+        | SendKwArg !AttrName !Expr
     deriving (Show)
 
 data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
@@ -83,15 +83,15 @@ data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
 data Prefix = PrefixPlus | PrefixMinus | Not
     deriving (Show)
 
-data Expr = LitExpr Literal
+data Expr = LitExpr !Literal
         | IfExpr { if'condition :: !Expr
                 , if'consequence :: !StmtSrc
                 , if'alternative :: !(Maybe StmtSrc)
                 }
 
-        | DictExpr [(Expr, Expr)]
-        | ListExpr [Expr]
-        | TupleExpr [Expr]
+        | DictExpr ![(Expr, Expr)]
+        | ListExpr ![Expr]
+        | TupleExpr ![Expr]
 
         -- a sequence of exprs in a pair of parentheses,
         -- optionally separated by semcolon,
@@ -100,25 +100,25 @@ data Expr = LitExpr Literal
         -- but should eval to last expr's value.
         -- and further an AST inspector can tell if a single
         -- expr is in parentheses from this.
-        | GroupExpr [Expr]
+        | GroupExpr ![Expr]
 
-        | ForExpr ArgsReceiver Expr Expr
-        | GeneratorExpr ProcDecl
+        | ForExpr !ArgsReceiver !Expr !Expr
+        | GeneratorExpr !ProcDecl
 
-        | AttrExpr AttrAddr
+        | AttrExpr !AttrAddr
         | IndexExpr { index'value :: !Expr
                     , index'target :: !Expr
                     }
-        | CallExpr Expr ArgsSender
+        | CallExpr !Expr !ArgsSender
 
-        | InfixExpr OpSymbol Expr Expr
+        | InfixExpr !OpSymbol !Expr !Expr
 
-        | PrefixExpr Prefix Expr
+        | PrefixExpr !Prefix !Expr
     deriving (Show)
 
-data Literal = DecLiteral Decimal
-            | BoolLiteral Bool
-            | StringLiteral Text
+data Literal = DecLiteral !Decimal
+            | BoolLiteral !Bool
+            | StringLiteral !Text
     deriving (Show)
 
 
