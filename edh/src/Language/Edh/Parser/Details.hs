@@ -55,7 +55,7 @@ isLetter :: Char -> Bool
 isLetter = flip elem $ '_' : ['a' .. 'z'] ++ ['A' .. 'Z']
 
 isIdentChar :: Char -> Bool
-isIdentChar c = isLetter c || isDigit c || elem c ("'$" :: [Char])
+isIdentChar c = isLetter c || isDigit c || c == '\''
 
 isDigit :: Char -> Bool
 isDigit = flip elem ['0' .. '9']
