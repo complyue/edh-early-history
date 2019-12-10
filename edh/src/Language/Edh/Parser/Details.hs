@@ -342,10 +342,10 @@ parseIfExpr = do
     void $ symbol "if"
     cond <- parseExpr
     void $ symbol "then"
-    cseq <- parseExpr
+    cseq <- parseStmt
     alt  <- optional do
         void $ symbol "else"
-        parseExpr
+        parseStmt
     return $ IfExpr cond cseq alt
 
 parseForExpr :: Parser Expr
@@ -364,7 +364,6 @@ parseGeneratorExpr = do
     procDecl <- parseProcDecl
     return $ GeneratorExpr procDecl
 
--- todo support list comprehension, e.g. [x for x from xs]
 parseListExpr :: Parser Expr
 parseListExpr =
     ListExpr
@@ -372,7 +371,6 @@ parseListExpr =
             $ many (parseExpr <* trailingComma)
             )
 
--- todo support dict comprehension, e.g. {k: v for (k, v) from ps}
 parseDictExpr :: Parser Expr
 parseDictExpr =
     DictExpr <$> (between (symbol "{") (symbol "}") $ many parseDictPair)
@@ -394,7 +392,7 @@ parseBoolLit =
     (symbol "true" *> return True) <|> (symbol "false" *> return False)
 
 parseDecLit :: Parser Decimal
-parseDecLit = lexeme do -- TODO support HEX/OCT ?
+parseDecLit = lexeme do -- todo support HEX/OCT ?
     sn <- L.signed (return ()) L.scientific
     return $ Decimal 1 (fromIntegral $ base10Exponent sn) (coefficient sn)
 

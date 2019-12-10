@@ -82,13 +82,14 @@ data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
 data Prefix = PrefixPlus | PrefixMinus | Not
     deriving (Show)
 
-data Expr = PrefixExpr Prefix Expr
+data Expr = LitExpr Literal
         | IfExpr { if'condition :: !Expr
-                , if'consequence :: !Expr
-                , if'alternative :: !(Maybe Expr)
+                , if'consequence :: !StmtSrc
+                , if'alternative :: !(Maybe StmtSrc)
                 }
-        | ListExpr [Expr]
+
         | DictExpr [(Expr, Expr)]
+        | ListExpr [Expr]
         | TupleExpr [Expr]
 
         -- a sequence of exprs in a pair of parentheses,
@@ -100,18 +101,18 @@ data Expr = PrefixExpr Prefix Expr
         -- expr is in parentheses from this.
         | GroupExpr [Expr]
 
-        | LitExpr Literal
-
         | ForExpr ArgsReceiver Expr Expr
         | GeneratorExpr ProcDecl
 
         | AttrExpr AttrAddr
-        | CallExpr Expr ArgsSender
         | IndexExpr { index'value :: !Expr
                     , index'target :: !Expr
                     }
+        | CallExpr Expr ArgsSender
 
         | InfixExpr OpSymbol Expr Expr
+
+        | PrefixExpr Prefix Expr
     deriving (Show)
 
 data Literal = DecLiteral Decimal
