@@ -25,7 +25,7 @@ doRead pendingLines =
         $   withInterrupt
         $   getInputLine case pendingLines of
                 [] -> "Đ: "
-                _  -> "Đ| "
+                _  -> "Đ| " <> show (Prelude.length pendingLines) <> " : "
         >>= \case
                 Nothing -> case pendingLines of
                     [] -> return Nothing
@@ -33,10 +33,11 @@ doRead pendingLines =
                         return Nothing
                 Just text ->
                     let code = T.pack text
-                    in  case pendingLines of
+                    in
+                        case pendingLines of
                             [] -> case T.stripEnd code of
                                 "{" -> -- an unindented `{` marks start of multi-line input
-                                    doRead [code]
+                                    doRead [""]
                                 _ -> case T.strip code of
                                     "" -> -- got an empty line in single-line input mode
                                         doRead [] -- start over in single-line input mode
@@ -47,8 +48,7 @@ doRead pendingLines =
                                     return
                                         $ Just
                                         $ (T.unlines . Prelude.reverse)
-                                        $ code
-                                        : pendingLines
+                                        $ Prelude.init pendingLines
                                 _ -> -- got a line in multi-line input mode
                                     doRead $ code : pendingLines
 
