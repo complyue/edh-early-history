@@ -355,14 +355,15 @@ parseForExpr = do
     void $ symbol "from"
     iter <- parseExpr
     void $ symbol "do"
-    expr <- parseExpr
-    return $ ForExpr ar iter expr
+    act <- parseExpr
+    return $ ForExpr ar iter act
 
 parseGeneratorExpr :: Parser Expr
 parseGeneratorExpr = do
     void $ symbol "generator"
+    srcPos   <- getSourcePos
     procDecl <- parseProcDecl
-    return $ GeneratorExpr procDecl
+    return $ GeneratorExpr srcPos procDecl
 
 parseListExpr :: Parser Expr
 parseListExpr =

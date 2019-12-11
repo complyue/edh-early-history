@@ -38,7 +38,11 @@ runEdhModule world moduId moduSource = liftIO $ do
         Left  err   -> return $ Left $ EdhParseError err
         Right stmts -> do
             entity <- newIORef Map.empty
-            let modu = Module { moduleEntity = entity, moduleId = moduId }
+            let moduObj = Object { objEntity = entity
+                                 , objClass  = moduleClass world
+                                 , objSupers = []
+                                 }
+                modu = Module { moduleObject = moduObj, moduleId = moduId }
             runEdhProgram world modu stmts >>= \case
                 Left  err -> return $ Left $ EdhEvalError err
                 Right _   -> return $ Right modu

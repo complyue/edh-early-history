@@ -7,10 +7,7 @@ import           Prelude
 
 import           Control.Exception
 import           Control.Monad.Except
-import           Control.Monad.IO.Class
-import           Control.Monad.State.Strict
 
-import           Data.Typeable
 import           Data.IORef
 import           Foreign.C.String
 import           System.IO.Unsafe
@@ -18,8 +15,6 @@ import           Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
 import           Text.Megaparsec
-
-import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -120,9 +115,17 @@ evalExpr' world modu expr = liftIO $ case expr of
         in
             mapM evalPair ps >>= (return . EdhDict . Dict . Map.fromList)
 
-    ListExpr  vs -> EdhList <$> mapM eval' vs
-    TupleExpr vs -> EdhTuple <$> mapM eval' vs
-    GroupExpr vs -> EdhGroup <$> mapM evalSS vs
+    ListExpr  vs        -> EdhList <$> mapM eval' vs
+    TupleExpr vs        -> EdhTuple <$> mapM eval' vs
+    GroupExpr vs        -> EdhGroup <$> mapM evalSS vs
+
+    ForExpr ar iter act -> undefined
+
+    GeneratorExpr sp pd -> return $ EdhGenrDef $ GenrDef
+        { generatorOwnerObject = undefined
+        , generatorSourcePos   = sp
+        , generatorProcedure   = pd
+        }
 
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
   where

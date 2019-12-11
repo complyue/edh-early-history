@@ -13,12 +13,33 @@ import           System.IO.Unsafe
 import           Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
-import           Text.Megaparsec                ( SourcePos )
+import           Text.Megaparsec
 
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
 import           Language.Edh.AST
+
+
+-- | A dict in Edh is not an object, a dict has items associated
+-- by 'ItemKey'.
+newtype Dict = Dict (Map.Map ItemKey EdhValue)
+    deriving (Eq)
+instance Show Dict where
+    -- advocate trailing comma here
+    show (Dict d) =
+        "{"
+            ++ Prelude.concat
+                   [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList d ]
+            ++ "}"
+data ItemKey = ItemByStr Text | ItemBySym Symbol
+            | ItemByNum Decimal | ItemByBool Bool
+    deriving (Eq, Ord)
+instance Show ItemKey where
+    show (ItemByStr  k) = show k
+    show (ItemBySym  k) = show k
+    show (ItemByNum  k) = showDecimal k
+    show (ItemByBool k) = show $ EdhBool k
 
 
 -- | A symbol can stand in place of an alphanumeric name, used to
@@ -40,31 +61,35 @@ instance Show Symbol where
         where sd = unsafePerformIO $ peekCString dp
 
 
+-- | An entity in Edh is the backing storage for both a scope
+-- and an object, an entity has attributes associated by 'AttrKey'.
 type Entity = IORef (Map.Map AttrKey EdhValue)
 data AttrKey = AttrByName AttrName | AttrBySym Symbol
     deriving (Eq, Ord, Show)
 
 
-newtype Dict = Dict (Map.Map ItemKey EdhValue)
-    deriving (Eq)
-instance Show Dict where
-    -- advocate trailing comma here
-    show (Dict d) =
-        "{"
-            ++ Prelude.concat
-                   [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList d ]
-            ++ "}"
-data ItemKey = ItemByStr Text | ItemBySym Symbol
-            | ItemByNum Decimal | ItemByBool Bool
-    deriving (Eq, Ord)
-instance Show ItemKey where
-    show (ItemByStr  k) = show k
-    show (ItemBySym  k) = show k
-    show (ItemByNum  k) = showDecimal k
-    show (ItemByBool k) = show $ EdhBool k
+-- | There are only 2 types of scope in Edh: `module scope` and
+-- `procedure scope`, and there are only 2 types of procedures:
+-- `class procedure` and `method procedure` (where
+-- `generator procedure`) is a special type of `method procedure`.
+--
+-- for a class procedure call, 'thisObject' views 'scopeEntity',
+-- which is the case of object construction; and for a method 
+-- procedure call, 'thisObject' views the direct or indirect
+-- 'scopeOuterScope' which is the class procedure's scope used
+-- to construct that object.
+data Scope = Scope {
+        scopeEntity :: !Entity -- current procedure scope
+        , scopeOuterScope :: !Scope -- lexical outer scope
+        , thisObject :: !Object -- `this` object in scope
+    }
+instance Eq Scope where
+    Scope x'e _ _ == Scope y'e _ _ = x'e == y'e
 
 
--- | An object is an in-memory mutable entity in Edh
+-- | An object views an entity, with inheritance relationship 
+-- to any number of super objects. Objects reference eachothers
+-- to form a networked data structure.
 data Object = Object {
         -- | pointer to the stored attribute set of an entity
         objEntity :: !Entity
@@ -102,10 +127,10 @@ data Object = Object {
     }
 instance Eq Object where
     -- equality by pointer to entity
-    Object x'attrs _ _ == Object y'attrs _ _ = x'attrs == y'attrs
+    Object x'e _ _ == Object y'e _ _ = x'e == y'e
 instance Show Object where
     show (Object _ (Class _ cn _ _) supers) =
-        "[object of: "
+        "[object: "
             ++ T.unpack cn
             ++ (if Prelude.null supers
                    then ""
@@ -120,14 +145,13 @@ instance Show Object where
             ++ "]"
 
 data Class = Class {
-        -- | the lexical context in which this class is defined
-        classOuterEntity :: !Entity
+        classOuterScope :: !Scope
         , className :: !AttrName
         , classSourcePos :: !SourcePos
         , classProcedure :: !ProcDecl
     }
 instance Eq Class where
-    Class x's x'cn _ _ == Class y's y'cn _ _ = x's == y's && x'cn == y'cn
+    Class x's _ x'sp _ == Class y's _ y'sp _ = x's == y's && x'sp == y'sp
 instance Show Class where
     show (Class _ cn _ _) = "[class: " ++ T.unpack cn ++ "]"
 
@@ -138,13 +162,23 @@ data Method = Method {
         , methodProcedure :: !ProcDecl
     }
 instance Eq Method where
-    Method x'o x'mn _ _ == Method y'o y'mn _ _ = x'o == y'o && x'mn == y'mn
+    Method x'o _ x'sp _ == Method y'o _ y'sp _ = x'o == y'o && x'sp == y'sp
 instance Show Method where
     show (Method (Object _ (Class _ cn _ _) _) mn _ _) =
         "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
 
+data GenrDef = GenrDef {
+        generatorOwnerObject :: !Object
+        , generatorSourcePos :: !SourcePos
+        , generatorProcedure :: !ProcDecl
+    }
+instance Eq GenrDef where
+    GenrDef x'o x'sp _ == GenrDef y'o y'sp _ = x'o == y'o && x'sp == y'sp
+instance Show GenrDef where
+    show (GenrDef _ _ _) = "[generator]"
+
 data Module = Module {
-        moduleEntity :: !Entity
+        moduleObject :: !Object
         , moduleId :: !ModuleId
     }
 instance Eq Module where
@@ -153,8 +187,8 @@ instance Show Module where
     show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 data Iterator = Iterator {
-        iterEntity :: !Entity
-        , iterRestProc :: !StmtSrc
+        iterScope :: !Scope
+        , iterRestStmts :: ![StmtSrc]
     }
 instance Eq Iterator where
     -- TODO prove there won't be concurrent executable iterators
@@ -166,6 +200,8 @@ instance Show Iterator where
 
 data EdhWorld = EdhWorld {
         worldRoot :: !Entity
+    -- all module objects in this world belong to this class
+        , moduleClass :: Class
         , worldOperators :: !(IORef OpPrecDict)
         , worldModules :: !(IORef (Map.Map ModuleId Module))
     }
@@ -189,32 +225,33 @@ data EdhWorld = EdhWorld {
 data EdhValue =
     -- * immutable values
           EdhNil
-        | EdhDecimal Decimal
-        | EdhBool Bool
-        | EdhString Text
-        | EdhSymbol Symbol
+        | EdhDecimal !Decimal
+        | EdhBool !Bool
+        | EdhString !Text
+        | EdhSymbol !Symbol
 
     -- * direct pointer (to entities) values
-        | EdhObject Object
-        | EdhModule Module
+        | EdhObject !Object
+        | EdhModule !Module
 
     -- * immutable by self, but may contain pointer to entities
-        | EdhDict Dict
-        | EdhList [EdhValue]
-        | EdhTuple [EdhValue]
-        | EdhGroup [EdhValue]
+        | EdhDict !Dict
+        | EdhList ![EdhValue]
+        | EdhTuple ![EdhValue]
+        | EdhGroup ![EdhValue]
 
     -- * immutable by self, but have access to lexical entities
-        | EdhClass Class
-        | EdhMethod Method
+        | EdhClass !Class
+        | EdhMethod !Method
+        | EdhGenrDef !GenrDef
 
     -- * special harness
-        | EdhIterator Iterator
-        | EdhYield EdhValue
-        | EdhReturn EdhValue
+        | EdhIterator !Iterator
+        | EdhYield !EdhValue
+        | EdhReturn !EdhValue
 
     -- * reflection
-        | EdhProxy EdhValue
+        | EdhProxy !EdhValue
 
 
 instance Show EdhValue where
@@ -241,6 +278,7 @@ instance Show EdhValue where
 
     show (EdhClass    v) = show v
     show (EdhMethod   v) = show v
+    show (EdhGenrDef  v) = show v
 
     show (EdhIterator i) = show i
     show (EdhYield    v) = "[yield: " ++ show v ++ "]"
@@ -265,6 +303,7 @@ instance Eq EdhValue where
 
     EdhClass    x   == EdhClass    y   = x == y
     EdhMethod   x   == EdhMethod   y   = x == y
+    EdhGenrDef  x   == EdhGenrDef  y   = x == y
 
     EdhIterator x   == EdhIterator y   = x == y
     -- todo: regard a yielded/returned value equal to the value itself ?
@@ -297,26 +336,38 @@ false = EdhBool False
 
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
-    e     <- newIORef Map.empty
-    -- let srcPos = SourcePos { sourceName   = "<Genesis>"
-    --                        , sourceLine   = mkPos 0
-    --                        , sourceColumn = mkPos 0
-    --                        }
-    --     r = Object { objEntity = e, objClass = c, objSupers = [] }
-    --     c = Class
-    --         { classOuterEntity = e
-    --         , className        = "<root>"
-    --         , classSourcePos   = srcPos
-    --         , classProcedure   = ProcDecl { procedure'args = WildReceiver
-    --                                       , procedure'body = (srcPos, VoidStmt)
-    --                                       }
-    --         }
+    e <- newIORef Map.empty
+    let srcPos = SourcePos { sourceName   = "<Genesis>"
+                           , sourceLine   = mkPos 0
+                           , sourceColumn = mkPos 0
+                           }
+        root = Scope { scopeEntity     = e
+-- create using undefined, update to itself immediately
+                     , scopeOuterScope = undefined
+-- should never reach this this, as all Edh code are
+-- defined within some module context.
+                     , thisObject      = undefined
+                     }
+        root' = root { scopeOuterScope = root }
     opPD  <- newIORef Map.empty
     modus <- newIORef Map.empty
-    return $ EdhWorld { worldRoot      = e
-                      , worldOperators = opPD
-                      , worldModules   = modus
-                      }
+    return $ EdhWorld
+        { worldRoot      = e
+        , moduleClass    = Class
+                               { classOuterScope = root'
+                               , className       = "<module>"
+                               , classSourcePos  = srcPos
+                               , classProcedure  = ProcDecl
+                                                       { procedure'args =
+                                                           WildReceiver
+                                                       , procedure'body = ( srcPos
+                                                                          , VoidStmt
+                                                                          )
+                                                       }
+                               }
+        , worldOperators = opPD
+        , worldModules   = modus
+        }
 
 
 declareEdhOperators

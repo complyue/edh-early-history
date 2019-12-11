@@ -106,7 +106,7 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
         | GroupExpr ![StmtSrc]
 
         | ForExpr !ArgsReceiver !Expr !Expr
-        | GeneratorExpr !ProcDecl
+        | GeneratorExpr !SourcePos !ProcDecl
 
         | AttrExpr !AttrAddr
         | IndexExpr { index'value :: !Expr
