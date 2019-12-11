@@ -28,7 +28,7 @@ import           Language.Edh.Parser
 
 installEdhBatteries :: MonadIO m => EdhWorld -> m ()
 installEdhBatteries world = liftIO $ do
-    let root = worldRoot world
+    let rootEntity = (objEntity . worldRoot) world
 
     declareEdhOperators
         world
@@ -58,7 +58,7 @@ installEdhBatteries world = liftIO $ do
         ]
 
     putEdhAttrs
-        root
+        rootEntity
         [
     -- builtin operators
     -- TODO these should really be host functions

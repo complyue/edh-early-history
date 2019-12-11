@@ -21,8 +21,14 @@ import           Language.Edh.AST
 import           Language.Edh.Runtime
 
 
-evalStmt :: MonadIO m => EdhWorld -> Module -> StmtSrc -> m EdhValue
-evalStmt world modu (srcPos, stmt) =
+data Context = Context {
+        contextWorld :: EdhWorld
+        , contextModu :: Module
+        , contextScope :: !Scope
+    }
+
+evalStmt :: MonadIO m => Context -> StmtSrc -> m EdhValue
+evalStmt ctx (srcPos, stmt) =
     liftIO
         $ handleJust
               Just
@@ -30,16 +36,16 @@ evalStmt world modu (srcPos, stmt) =
                   throwIO $ EvalError $ msg <> "\nℹ️ " <> T.pack
                       (sourcePosPretty srcPos)
               )
-        $ evalStmt' world modu stmt
+        $ evalStmt' ctx stmt
 
-evalExpr :: MonadIO m => EdhWorld -> Module -> Expr -> m EdhValue
-evalExpr world modu expr = liftIO $ evalExpr' world modu expr
+evalExpr :: MonadIO m => Context -> Expr -> m EdhValue
+evalExpr ctx expr = liftIO $ evalExpr' ctx expr
 
 
-evalStmt' :: EdhWorld -> Module -> Stmt -> IO EdhValue
-evalStmt' world modu stmt = case stmt of
+evalStmt' :: Context -> Stmt -> IO EdhValue
+evalStmt' ctx stmt = case stmt of
 
-    ExprStmt expr         -> evalExpr world modu expr
+    ExprStmt expr         -> evalExpr ctx expr
 
     ImportStmt ar srcExpr -> case srcExpr of
         LitExpr (StringLiteral moduPath) ->
@@ -53,8 +59,8 @@ evalStmt' world modu stmt = case stmt of
         throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
 
 
-evalExpr' :: EdhWorld -> Module -> Expr -> IO EdhValue
-evalExpr' world modu expr = liftIO $ case expr of
+evalExpr' :: Context -> Expr -> IO EdhValue
+evalExpr' ctx expr = liftIO $ case expr of
     LitExpr lit -> case lit of
         DecLiteral    v -> return $ EdhDecimal v
         StringLiteral v -> return $ EdhString v
@@ -85,9 +91,9 @@ evalExpr' world modu expr = liftIO $ case expr of
         Defer -> throwIO $ EvalError "defer scheduler not impl. yet"
 
     IfExpr cond cseq alt -> eval' cond >>= \case
-        EdhBool True  -> evalStmt world modu cseq
+        EdhBool True  -> evalSS cseq
         EdhBool False -> case alt of
-            Just elseClause -> evalStmt world modu elseClause
+            Just elseClause -> evalSS elseClause
             _               -> return nil
         v ->
             throwIO
@@ -129,8 +135,8 @@ evalExpr' world modu expr = liftIO $ case expr of
 
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
   where
-    eval'  = evalExpr' world modu
-    evalSS = evalStmt world modu
+    eval'  = evalExpr' ctx
+    evalSS = evalStmt ctx
 
 
 

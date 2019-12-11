@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 
 module Language.Edh.Runtime where
 
@@ -68,23 +69,29 @@ data AttrKey = AttrByName AttrName | AttrBySym Symbol
     deriving (Eq, Ord, Show)
 
 
--- | There are only 2 types of scope in Edh: `module scope` and
+-- Especially note that Edh has no block scope as in C
+-- family languages, JavaScript neither does before ES6.
+--
+-- So there're only 2 types of scope in Edh: `module scope` and
 -- `procedure scope`, and there are only 2 types of procedures:
 -- `class procedure` and `method procedure` (where
 -- `generator procedure`) is a special type of `method procedure`.
 --
--- for a class procedure call, 'thisObject' views 'scopeEntity',
--- which is the case of object construction; and for a method 
--- procedure call, 'thisObject' views the direct or indirect
--- 'scopeOuterScope' which is the class procedure's scope used
--- to construct that object.
+-- Every procedure call will have an entity created, which is
+-- pushed to top of scope stack as well, and:
+--
+--  * if it is a class procedure call, a new object of this class
+--    is allocated viewing the same entity as for the scope, and
+--    `thisObject` on the stack top is updated to it;
+--
+--  * if it is a methd procedure call, `thisObject` remains the
+--    same as previous stack frame.
 data Scope = Scope {
-        scopeEntity :: !Entity -- current procedure scope
-        , scopeOuterScope :: !Scope -- lexical outer scope
-        , thisObject :: !Object -- `this` object in scope
+        scopeStack :: ![Entity] -- a reversed stack for lexical scopes
+        , thisObject :: Object -- `this` object of current scope
     }
 instance Eq Scope where
-    Scope x'e _ _ == Scope y'e _ _ = x'e == y'e
+    Scope x's _ == Scope y's _ = x's == y's
 
 
 -- | An object views an entity, with inheritance relationship 
@@ -145,7 +152,7 @@ instance Show Object where
             ++ "]"
 
 data Class = Class {
-        classOuterScope :: !Scope
+        classScope :: ![Entity]
         , className :: !AttrName
         , classSourcePos :: !SourcePos
         , classProcedure :: !ProcDecl
@@ -199,9 +206,9 @@ instance Show Iterator where
 
 
 data EdhWorld = EdhWorld {
-        worldRoot :: !Entity
+        worldRoot :: !Object
     -- all module objects in this world belong to this class
-        , moduleClass :: Class
+        , moduleClass :: !Class
         , worldOperators :: !(IORef OpPrecDict)
         , worldModules :: !(IORef (Map.Map ModuleId Module))
     }
@@ -336,39 +343,39 @@ false = EdhBool False
 
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
-    e <- newIORef Map.empty
-    let srcPos = SourcePos { sourceName   = "<Genesis>"
-                           , sourceLine   = mkPos 0
-                           , sourceColumn = mkPos 0
-                           }
-        root = Scope { scopeEntity     = e
--- create using undefined, update to itself immediately
-                     , scopeOuterScope = undefined
--- should never reach this this, as all Edh code are
--- defined within some module context.
-                     , thisObject      = undefined
-                     }
-        root' = root { scopeOuterScope = root }
+    worldEntity <- newIORef Map.empty
+    let !srcPos = SourcePos { sourceName   = "<Genesis>"
+                            , sourceLine   = mkPos 1
+                            , sourceColumn = mkPos 1
+                            }
+        !worldClass = Class
+            { classScope     = []
+            , className      = "<world>"
+            , classSourcePos = srcPos
+            , classProcedure = ProcDecl { procedure'args = WildReceiver
+                                        , procedure'body = (srcPos, VoidStmt)
+                                        }
+            }
     opPD  <- newIORef Map.empty
     modus <- newIORef Map.empty
     return $ EdhWorld
-        { worldRoot      = e
-        , moduleClass    = Class
-                               { classOuterScope = root'
-                               , className       = "<module>"
-                               , classSourcePos  = srcPos
-                               , classProcedure  = ProcDecl
-                                                       { procedure'args =
-                                                           WildReceiver
-                                                       , procedure'body = ( srcPos
-                                                                          , VoidStmt
-                                                                          )
-                                                       }
-                               }
+        { worldRoot      = Object { objEntity = worldEntity
+                                  , objClass  = worldClass
+                                  , objSupers = []
+                                  }
+        , moduleClass    =
+            Class
+                { classScope     = [worldEntity]
+                , className      = "<module>"
+                , classSourcePos = srcPos
+                , classProcedure = ProcDecl
+                                       { procedure'args = WildReceiver
+                                       , procedure'body = (srcPos, VoidStmt)
+                                       }
+                }
         , worldOperators = opPD
         , worldModules   = modus
         }
-
 
 declareEdhOperators
     :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
