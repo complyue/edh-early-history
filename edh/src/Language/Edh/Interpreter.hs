@@ -6,8 +6,6 @@ module Language.Edh.Interpreter where
 
 import           Prelude
 
-import           Control.Exception
-import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.State.Strict
 
@@ -18,10 +16,10 @@ import qualified Data.Map.Strict               as Map
 import           Text.Megaparsec
 
 import           Language.Edh.Control
+import           Language.Edh.Interpreter.Evaluate
+import           Language.Edh.Runtime
 import           Language.Edh.AST
 import           Language.Edh.Parser
-import           Language.Edh.Runtime
-import           Language.Edh.Interpreter.Evaluate
 
 
 runEdhModule
