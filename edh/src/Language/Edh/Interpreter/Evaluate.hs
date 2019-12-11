@@ -1,29 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BlockArguments #-}
 
-module Language.Edh.Interpreter.Evaluate where
+module Language.Edh.Interpreter.Evaluate
+    ( runEdhProgram
+    , evalEdhStmt
+    )
+where
 
 import           Prelude
 
 import           Control.Exception
 import           Control.Monad.Except
-import           Control.Monad.IO.Class
-import           Control.Monad.State.Strict
-
-import           Data.Typeable
-import           Data.IORef
-import           Foreign.C.String
-import           System.IO.Unsafe
-import           Data.Text                     as T
-import qualified Data.Map.Strict               as Map
-
-import           Text.Megaparsec
-
-import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Runtime
-import           Language.Edh.Parser
+
+import           Language.Edh.Interpreter.Details
 
 
 runEdhProgram
@@ -44,14 +37,5 @@ evalEdhStmt
     -> Module
     -> StmtSrc
     -> m (Either EvalError EdhValue)
-evalEdhStmt world modu (_srcPos, stmt) = liftIO $ do
-
-    Prelude.putStrLn $ show stmt
-
-    case stmt of
-
-        VoidStmt -> return $ Right nil
-
-        _        -> return $ Left $ EvalError "not impl."
-
+evalEdhStmt w m s = liftIO $ tryJust Just $ evalStmt w m s
 
