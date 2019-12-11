@@ -81,6 +81,7 @@ data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
     deriving (Show)
 
 data Prefix = PrefixPlus | PrefixMinus | Not
+        | Go | Defer -- goroutine stuff
     deriving (Show)
 
 data Expr = LitExpr !Literal
@@ -98,8 +99,8 @@ data Expr = LitExpr !Literal
         -- need this as curly braces have been used for
         -- dict expr, this works like a block statement,
         -- but should eval to last expr's value.
-        -- and further an AST inspector can tell if a single
-        -- expr is in parentheses from this.
+        -- and further an AST inspector can tell whether a
+        -- single expr is in parentheses from this.
         | GroupExpr ![Expr]
 
         | ForExpr !ArgsReceiver !Expr !Expr
@@ -121,6 +122,7 @@ data Literal = NilLiteral
         | DecLiteral !Decimal
         | BoolLiteral !Bool
         | StringLiteral !Text
+        | ChanCtor -- channel constructor
     deriving (Show)
 
 

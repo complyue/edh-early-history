@@ -61,6 +61,7 @@ evalExpr world modu expr = liftIO $ case expr of
         StringLiteral v -> return $ EdhString v
         BoolLiteral   v -> return $ EdhBool v
         NilLiteral      -> return nil
+        ChanCtor        -> throwIO $ EvalError "channel ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
         PrefixPlus  -> evalExpr world modu expr'
@@ -70,7 +71,7 @@ evalExpr world modu expr = liftIO $ case expr of
                 throwIO
                     $  EvalError
                     $  "Can not negate: "
-                    <> (T.pack $ show v)
+                    <> T.pack (show v)
                     <> " ❌"
         Not -> evalExpr world modu expr' >>= \case
             EdhBool v -> return $ EdhBool $ not v
@@ -78,9 +79,11 @@ evalExpr world modu expr = liftIO $ case expr of
                 throwIO
                     $  EvalError
                     $  "Expect bool but got: "
-                    <> (T.pack $ show v)
+                    <> T.pack (show v)
                     <> " ❌"
 
-    _ ->
-        throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show expr)
+        Go    -> throwIO $ EvalError "goroutine starter not impl. yet"
+        Defer -> throwIO $ EvalError "defer scheduler not impl. yet"
+
+    _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
 

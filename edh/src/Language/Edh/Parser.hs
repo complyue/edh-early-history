@@ -333,6 +333,8 @@ parsePrefixExpr = choice
     [ PrefixExpr PrefixPlus <$> (symbol "+" *> parseExpr)
     , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
+    , PrefixExpr Go <$> (symbol "go" >> parseExpr)
+    , PrefixExpr Defer <$> (symbol "defer" >> parseExpr)
     ]
 
 parseIfExpr :: Parser Expr
@@ -399,6 +401,7 @@ parseLitExpr = choice
     [ NilLiteral <$ symbol "nil"
     , BoolLiteral <$> parseBoolLit
     , StringLiteral <$> parseStringLit
+    , ChanCtor <$ symbol "chan"
     , DecLiteral D.nan <$ symbol "nan"
     , DecLiteral D.inf <$ symbol "inf"
     , DecLiteral <$> parseDecLit

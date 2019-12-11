@@ -26,24 +26,31 @@ import           Language.Edh.AST
 import           Language.Edh.Parser
 
 
-createEdhWorldWithBatteries :: MonadIO m => m EdhWorld
-createEdhWorldWithBatteries = liftIO $ do
-    world <- createEdhWorld
+installEdhBatteries :: MonadIO m => EdhWorld -> m ()
+installEdhBatteries world = liftIO $ do
     let root = worldRoot world
 
     declareEdhOperators
         world
         "<batteries>"
         [ -- format: (symbol, precedence)
-    -- simple assignment operator
+
+    -- simple assignment
           ( "="
           , 1
           ) -- ^ why brittany insists on formatting it like this ?.?
-    -- comprehension operator
-        , ( "<-"
+
+    -- comprehension
+        , ( "<="
           , 3
           ) -- ^ why brittany insists on formatting it like this ?.?
-    -- basic arithmetic operators
+
+    -- channel read/write
+        , ( "<-"
+          , 5
+          )
+
+    -- basic arithmetic
         , ("+", 6)
         , ("-", 6)
         , ("*", 7)
@@ -76,5 +83,5 @@ createEdhWorldWithBatteries = liftIO $ do
         , (AttrByName "fff", EdhDecimal $ fromRational $ 3 % 14)
         ]
 
-    return world
+    return ()
 

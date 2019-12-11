@@ -27,7 +27,8 @@ main = runInputT inputSettings $ do
 
     outputStrLn "(EDHi)"
 
-    world <- createEdhWorldWithBatteries
+    world <- createEdhWorld
+    installEdhBatteries world
 
     runEdhModule world "<interactive>" "pass" >>= \case
         Left  err  -> error $ show err

@@ -212,6 +212,10 @@ data EdhValue =
         | EdhYield EdhValue
         | EdhReturn EdhValue
 
+    -- * reflection
+        | EdhProxy EdhValue
+
+
 instance Show EdhValue where
     show EdhNil         = "nil"
     show (EdhDecimal v) = showDecimal v
@@ -238,6 +242,8 @@ instance Show EdhValue where
     show (EdhYield    v) = "[yield: " ++ show v ++ "]"
     show (EdhReturn   v) = "[return: " ++ show v ++ "]"
 
+    show (EdhProxy    v) = "[proxy: " ++ show v ++ "]"
+
 instance Eq EdhValue where
     EdhNil          == EdhNil          = True
     EdhDecimal  x   == EdhDecimal  y   = x == y
@@ -256,9 +262,15 @@ instance Eq EdhValue where
     EdhMethod   x   == EdhMethod   y   = x == y
 
     EdhIterator x   == EdhIterator y   = x == y
+    -- todo: regard a yielded/returned value equal to the value itself ?
     EdhYield    x'v == EdhYield    y'v = x'v == y'v
     EdhReturn   x'v == EdhReturn   y'v = x'v == y'v
--- todo: regard a yielded/returned value equal to the value itself ?
+
+    EdhProxy    x'v == EdhProxy    y'v = x'v == y'v
+
+    -- todo: support coercing equality ?
+    --       * without this, we are a strongly typed dynamic language
+    --       * with this, we'll be a weakly typed dynamic language
     _               == _               = False
 
 
