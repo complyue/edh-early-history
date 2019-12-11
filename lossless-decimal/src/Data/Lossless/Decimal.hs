@@ -145,13 +145,28 @@ showDecimal (Decimal d e n)
             (0, _) -> "0"
             (l, s@(d1 : ds)) ->
                 let
-                    cmpcForm = s
+                    ee       = e_ + fromIntegral l - 1
+                    cmpcForm = if e_ >= 0
+                        then -- append trailing zeros as necessary
+                             s ++ replicate (fromInteger e_) '0'
+                        else -- do left shifting of decimal point
+                            let mid = fromIntegral l + e_
+                            in
+                                (if mid > 0
+                                    then -- place decimal point in middle
+                                        let (p1, p2) =
+                                                splitAt (fromInteger mid) s
+                                        in  p1 ++ "." ++ p2
+                                    else -- prepend leading zeros
+                                        "0."
+                                        ++ replicate (-fromInteger mid) '0'
+                                        ++ s
+                                )
                     normForm = d1 : fractPart ds ++ if ee == 0
                         then ""
                         else "e" ++ straightInt ee
-                    ee = e_ + fromIntegral l - 1
                 in
-                    if l < 5 && e_ == 0 then cmpcForm else normForm
+                    if abs ee < 5 then cmpcForm else normForm
             _ -> error "impossible case"
         | otherwise = error "bug"
     straightInt :: Integer -> String
@@ -162,11 +177,11 @@ showDecimal (Decimal d e n)
         = if n_ == 0
             then (l, buf)
             else if n_ < 0
-                then (l + 2, '-' : digitChar n_ : buf)
+                then (l + 2, '-' : digitChar (-n_) : buf)
                 else (l + 1, digitChar n_ : buf)
         | otherwise
         = let (n', r) = n_ `quotRem` 10
-          in  encodeInt n' (l + 1) $ digitChar r : buf
+          in  encodeInt n' (l + 1) $ digitChar (abs r) : buf
     digitChar :: Integer -> Char
     digitChar n_
         | 0 <= n_ && n_ < 10 = chr $ ord '0' + (fromIntegral n_ :: Int)
