@@ -2,7 +2,7 @@
 
 Missing Python/JavaScript or even Go in shifting to
 Haskell? Now you can have Edh, with many goodies from
-those languages but running in Haskell.
+those languages but running embedded in Haskell.
 
 # Acknowledgement
 
