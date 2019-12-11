@@ -376,11 +376,16 @@ parseDictExpr =
     DictExpr <$> (between (symbol "{") (symbol "}") $ many parseDictPair)
   where
     parseDictPair = do
-        keyExpr <- parseExpr
+        keyExpr <- parseDictKey
         void $ symbol ":"
         valExpr <- parseExpr
         trailingComma
         return (keyExpr, valExpr)
+    -- colon is ambiguous in here, for now:
+    -- simply only allow literal and attribute addressor for dict key
+    -- todo improve this by a operator accepting parser, which treats
+    -- colon specially ?
+    parseDictKey = (LitExpr <$> parseLitExpr) <|> (AttrExpr <$> parseAttrAddr)
 
 parseStringLit :: Parser Text
 parseStringLit = do

@@ -37,8 +37,12 @@ evalStmt world modu (srcPos, stmt) =
               )
         $ evalStmt' world modu stmt
 
-evalStmt' :: MonadIO m => EdhWorld -> Module -> Stmt -> m EdhValue
-evalStmt' world modu stmt = liftIO $ case stmt of
+evalExpr :: MonadIO m => EdhWorld -> Module -> Expr -> m EdhValue
+evalExpr world modu expr = liftIO $ evalExpr' world modu expr
+
+
+evalStmt' :: EdhWorld -> Module -> Stmt -> IO EdhValue
+evalStmt' world modu stmt = case stmt of
 
     ExprStmt expr         -> evalExpr world modu expr
 
@@ -54,8 +58,8 @@ evalStmt' world modu stmt = liftIO $ case stmt of
         throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
 
 
-evalExpr :: MonadIO m => EdhWorld -> Module -> Expr -> m EdhValue
-evalExpr world modu expr = liftIO $ case expr of
+evalExpr' :: EdhWorld -> Module -> Expr -> IO EdhValue
+evalExpr' world modu expr = liftIO $ case expr of
     LitExpr lit -> case lit of
         DecLiteral    v -> return $ EdhDecimal v
         StringLiteral v -> return $ EdhString v
@@ -64,8 +68,8 @@ evalExpr world modu expr = liftIO $ case expr of
         ChanCtor        -> throwIO $ EvalError "channel ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
-        PrefixPlus  -> evalExpr world modu expr'
-        PrefixMinus -> evalExpr world modu expr' >>= \case
+        PrefixPlus  -> eval' expr'
+        PrefixMinus -> eval' expr' >>= \case
             EdhDecimal v -> return $ EdhDecimal (-v)
             v ->
                 throwIO
@@ -73,7 +77,7 @@ evalExpr world modu expr = liftIO $ case expr of
                     $  "Can not negate: "
                     <> T.pack (show v)
                     <> " ❌"
-        Not -> evalExpr world modu expr' >>= \case
+        Not -> eval' expr' >>= \case
             EdhBool v -> return $ EdhBool $ not v
             v ->
                 throwIO
@@ -85,7 +89,7 @@ evalExpr world modu expr = liftIO $ case expr of
         Go    -> throwIO $ EvalError "goroutine starter not impl. yet"
         Defer -> throwIO $ EvalError "defer scheduler not impl. yet"
 
-    IfExpr cond cseq alt -> evalExpr world modu cond >>= \case
+    IfExpr cond cseq alt -> eval' cond >>= \case
         EdhBool True  -> evalStmt world modu cseq
         EdhBool False -> case alt of
             Just elseClause -> evalStmt world modu elseClause
@@ -97,6 +101,28 @@ evalExpr world modu expr = liftIO $ case expr of
                 <> T.pack (show v)
                 <> " ❌"
 
+    DictExpr ps ->
+        let
+            evalPair :: (Expr, Expr) -> IO (ItemKey, EdhValue)
+            evalPair (kExpr, vExpr) = do
+                v <- eval' vExpr
+                eval' kExpr >>= \case
+                    EdhString  k -> return (ItemByStr k, v)
+                    EdhSymbol  k -> return (ItemBySym k, v)
+                    EdhDecimal k -> return (ItemByNum k, v)
+                    EdhBool    k -> return (ItemByBool k, v)
+                    k ->
+                        throwIO
+                            $  EvalError
+                            $  "Invalid key: "
+                            <> T.pack (show k)
+                            <> " ❌"
+        in
+            mapM evalPair ps >>= (return . EdhDict . Dict . Map.fromList)
+
 
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+    where eval' = evalExpr' world modu
+
+
 
