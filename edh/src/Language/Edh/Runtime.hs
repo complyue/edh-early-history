@@ -202,6 +202,7 @@ data EdhValue =
         | EdhDict Dict
         | EdhList [EdhValue]
         | EdhTuple [EdhValue]
+        | EdhGroup [EdhValue]
 
     -- * immutable by self, but have access to lexical entities
         | EdhClass Class
@@ -234,6 +235,9 @@ instance Show EdhValue where
     show (EdhTuple v) = if Prelude.null v
         then "(,)" -- the denotation of empty tuple is same as Python
         else "(" ++ Prelude.concat [ show i ++ ", " | i <- v ] ++ ")"
+    show (EdhGroup v) = if Prelude.null v
+        then "(;)" -- make it obvious this is an empty group
+        else "(" ++ Prelude.concat [ show i ++ "; " | i <- v ] ++ ")"
 
     show (EdhClass    v) = show v
     show (EdhMethod   v) = show v
@@ -257,6 +261,7 @@ instance Eq EdhValue where
     EdhDict     x   == EdhDict     y   = x == y
     EdhList     x   == EdhList     y   = x == y
     EdhTuple    x   == EdhTuple    y   = x == y
+    EdhGroup    x   == EdhGroup    y   = x == y
 
     EdhClass    x   == EdhClass    y   = x == y
     EdhMethod   x   == EdhMethod   y   = x == y

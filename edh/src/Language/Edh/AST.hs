@@ -101,7 +101,9 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
         -- but should eval to last expr's value.
         -- and further an AST inspector can tell whether a
         -- single expr is in parentheses from this.
-        | GroupExpr ![Expr]
+        -- store as 'StmtSrc' so source location is attached
+        -- to each expression, the group may span many lines.
+        | GroupExpr ![StmtSrc]
 
         | ForExpr !ArgsReceiver !Expr !Expr
         | GeneratorExpr !ProcDecl

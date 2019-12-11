@@ -246,6 +246,7 @@ parseProcDecl = do
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do
     void $ symbol "operator"
+    srcLoc   <- getSourcePos
     opSym    <- parseOpLit
     precDecl <- optional $ L.decimal <* sc
     procDecl <- parseProcDecl
@@ -268,7 +269,6 @@ parseOpDeclOvrdStmt = do
                         <> T.unpack opSym
                         <> " which has been declared at: "
                         <> T.unpack odl
-            srcLoc <- getSourcePos
             put $ Map.insert opSym (opPrec, T.pack $ show srcLoc) opPD
             return $ OpDeclStmt opSym opPrec procDecl
 
@@ -436,25 +436,24 @@ parseIndexExpr :: Parser Expr
 parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
 
 parseTupleOrGroup :: Parser Expr
-parseTupleOrGroup = do
-    void $ symbol "("
-    (parseEmptyTuple <|>) do
-        e <- parseExpr
-        choice [parseTuple [e], parseGroup [e]]
+parseTupleOrGroup = (symbol "(")
+    *> choice [(try $ parseGroup []), parseTuple []]
   where
-    parseEmptyTuple :: Parser Expr
-    parseEmptyTuple = symbol "," *> symbol ")" *> (return $ TupleExpr [])
+    parseGroup :: [StmtSrc] -> Parser Expr
+    parseGroup t =
+        (notFollowedBy $ symbol ",") *> (optional $ symbol ";") *> choice
+            [ ((symbol ")") *> (return $ GroupExpr (reverse t)))
+            , (do
+                  srcPos <- getSourcePos
+                  e      <- parseExpr
+                  parseGroup $ (srcPos, ExprStmt e) : t
+              )
+            ]
     parseTuple :: [Expr] -> Parser Expr
-    parseTuple t = ((symbol ")") *> (return $ TupleExpr (reverse t))) <|> do
-        void $ symbol ","
-        e <- parseExpr
-        parseTuple $ e : t
-    parseGroup :: [Expr] -> Parser Expr
-    parseGroup t = ((symbol ")") *> (return $ GroupExpr (reverse t))) <|> do
-        void $ optional $ symbol ";"
-        e <- parseExpr
-        void $ optional $ symbol ";"
-        parseGroup $ e : t
+    parseTuple t = (optional $ symbol ",") *> choice
+        [ (symbol ")") *> (return $ TupleExpr (reverse t))
+        , parseExpr >>= \e -> parseTuple $ e : t
+        ]
 
 
 parseExpr :: Parser Expr

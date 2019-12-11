@@ -120,9 +120,14 @@ evalExpr' world modu expr = liftIO $ case expr of
         in
             mapM evalPair ps >>= (return . EdhDict . Dict . Map.fromList)
 
+    ListExpr  vs -> EdhList <$> mapM eval' vs
+    TupleExpr vs -> EdhTuple <$> mapM eval' vs
+    GroupExpr vs -> EdhGroup <$> mapM evalSS vs
 
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
-    where eval' = evalExpr' world modu
+  where
+    eval'  = evalExpr' world modu
+    evalSS = evalStmt world modu
 
 
 
