@@ -85,5 +85,18 @@ evalExpr world modu expr = liftIO $ case expr of
         Go    -> throwIO $ EvalError "goroutine starter not impl. yet"
         Defer -> throwIO $ EvalError "defer scheduler not impl. yet"
 
+    IfExpr cond cseq alt -> evalExpr world modu cond >>= \case
+        EdhBool True  -> evalStmt world modu cseq
+        EdhBool False -> case alt of
+            Just elseClause -> evalStmt world modu elseClause
+            _               -> return nil
+        v ->
+            throwIO
+                $  EvalError
+                $  "Not a boolean value: "
+                <> T.pack (show v)
+                <> " ❌"
+
+
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
 

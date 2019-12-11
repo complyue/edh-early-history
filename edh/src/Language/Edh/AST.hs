@@ -84,7 +84,7 @@ data Prefix = PrefixPlus | PrefixMinus | Not
         | Go | Defer -- goroutine stuff
     deriving (Show)
 
-data Expr = LitExpr !Literal
+data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
         | IfExpr { if'condition :: !Expr
                 , if'consequence :: !StmtSrc
                 , if'alternative :: !(Maybe StmtSrc)
@@ -113,8 +113,6 @@ data Expr = LitExpr !Literal
         | CallExpr !Expr !ArgsSender
 
         | InfixExpr !OpSymbol !Expr !Expr
-
-        | PrefixExpr !Prefix !Expr
     deriving (Show)
 
 
