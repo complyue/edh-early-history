@@ -38,21 +38,49 @@ evalStmt world modu (srcPos, stmt) =
         $ evalStmt' world modu stmt
 
 evalStmt' :: MonadIO m => EdhWorld -> Module -> Stmt -> m EdhValue
-evalStmt' world modu stmt = liftIO $ do
+evalStmt' world modu stmt = liftIO $ case stmt of
 
-    Prelude.putStrLn $ show stmt
+    ExprStmt expr         -> evalExpr world modu expr
 
-    case stmt of
-
-        VoidStmt              -> return $ nil
-
-        ImportStmt ar srcExpr -> case srcExpr of
-            LitExpr (StringLiteral moduPath) ->
-                return $ EdhString $ "wana import " <> moduPath <> ".edh huh?"
-            expr -> throwIO $ EvalError $ "don't know how to import " <> T.pack
-                (show expr)
+    ImportStmt ar srcExpr -> case srcExpr of
+        LitExpr (StringLiteral moduPath) ->
+            return $ EdhString $ "wana import " <> moduPath <> ".edh huh?"
+        expr -> throwIO $ EvalError $ "don't know how to import " <> T.pack
+            (show expr)
 
 
-        _ -> throwIO $ EvalError "not impl."
+    VoidStmt -> return nil
+    _ ->
+        throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
 
+
+evalExpr :: MonadIO m => EdhWorld -> Module -> Expr -> m EdhValue
+evalExpr world modu expr = liftIO $ case expr of
+    LitExpr lit -> case lit of
+        DecLiteral    v -> return $ EdhDecimal v
+        StringLiteral v -> return $ EdhString v
+        BoolLiteral   v -> return $ EdhBool v
+        NilLiteral      -> return nil
+
+    PrefixExpr prefix expr' -> case prefix of
+        PrefixPlus  -> evalExpr world modu expr'
+        PrefixMinus -> evalExpr world modu expr' >>= \case
+            EdhDecimal v -> return $ EdhDecimal (-v)
+            v ->
+                throwIO
+                    $  EvalError
+                    $  "Can not negate: "
+                    <> (T.pack $ show v)
+                    <> " ❌"
+        Not -> evalExpr world modu expr' >>= \case
+            EdhBool v -> return $ EdhBool $ not v
+            v ->
+                throwIO
+                    $  EvalError
+                    $  "Expect bool but got: "
+                    <> (T.pack $ show v)
+                    <> " ❌"
+
+    _ ->
+        throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show expr)
 
