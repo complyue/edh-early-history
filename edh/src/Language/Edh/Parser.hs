@@ -314,12 +314,14 @@ parseStmt = do
                 , parseExtendsStmt
                 , parseMethodStmt
                 , parseWhileStmt
-                  -- TODO validate break/continue must within a loop block
+                -- TODO validate break/continue must within a loop seque
                 , BreakStmt <$ symbol "break"
                 , ContinueStmt <$ symbol "continue"
+                -- TODO validate fallthrough must within a case-of seque
+                , FallthroughStmt <$ symbol "fallthrough"
                 , parseOpDeclOvrdStmt
                 , parseTryStmt
-                -- TODO validate yield must within a generator function
+                -- TODO validate yield must within a generator procedure
                 , parseYieldStmt
                 , parseReturnStmt
                 , parseVoidStmt
@@ -334,16 +336,17 @@ parsePrefixExpr = choice
     , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
     , PrefixExpr Guard <$> (symbol "|" >> parseExpr)
-    , PrefixExpr Go <$> (symbol "go" >> requireCall)
-    , PrefixExpr Defer <$> (symbol "defer" >> requireCall)
+    , PrefixExpr Go <$> (symbol "go" >> requireCallOrSeque)
+    , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrSeque)
     ]
   where
-    requireCall = do
+    requireCallOrSeque = do
         o <- getOffset
         e <- parseExpr
         case e of
             ce@(CallExpr _ _) -> return ce
-            _                 -> setOffset o >> fail "a call required here"
+            se@(SequeExpr _) -> return se
+            _ -> setOffset o >> fail "a call/seque required here"
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do
@@ -444,11 +447,8 @@ parseLitExpr = choice
     , TypeLiteral ClassType <$ symbol "ClassType"
     , TypeLiteral MethodType <$ symbol "MethodType"
     , TypeLiteral GeneratorType <$ symbol "GeneratorType"
-    , TypeLiteral BreakType <$ symbol "BreakType"
-    , TypeLiteral ContinueType <$ symbol "ContinueType"
+    , TypeLiteral FlowCtrlType <$ symbol "FlowCtrlType"
     , TypeLiteral IteratorType <$ symbol "IteratorType"
-    , TypeLiteral YieldType <$ symbol "YieldType"
-    , TypeLiteral ReturnType <$ symbol "ReturnType"
     , TypeLiteral ChannelType <$ symbol "ChannelType"
     , TypeLiteral ProxyType <$ symbol "ProxyType"
     , TypeLiteral TypeType <$ symbol "TypeType"

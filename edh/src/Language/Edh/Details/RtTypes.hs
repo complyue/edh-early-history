@@ -332,6 +332,7 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
 
     -- * flow control
         | EdhBreak | EdhContinue
+        | EdhFallthrough
         | EdhIterator !Iterator
         | EdhYield !EdhValue
         | EdhReturn !EdhValue
@@ -376,6 +377,7 @@ instance Show EdhValue where
 
     show EdhBreak        = "[break]"
     show EdhContinue     = "[continue]"
+    show EdhFallthrough  = "[fallthrough]"
     show (EdhIterator i) = show i
     show (EdhYield    v) = "[yield: " ++ show v ++ "]"
     show (EdhReturn   v) = "[return: " ++ show v ++ "]"
@@ -410,6 +412,7 @@ instance Eq EdhValue where
 
     EdhBreak        == EdhBreak        = True
     EdhContinue     == EdhContinue     = True
+    EdhFallthrough  == EdhFallthrough  = True
     EdhIterator x   == EdhIterator y   = x == y
     -- todo: regard a yielded/returned value equal to the value itself ?
     EdhYield    x'v == EdhYield    y'v = x'v == y'v

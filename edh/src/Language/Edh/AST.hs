@@ -40,6 +40,7 @@ data Stmt = VoidStmt
         | MethodStmt !MethodName !ProcDecl
         | WhileStmt !Expr !StmtSrc
         | BreakStmt | ContinueStmt
+        | FallthroughStmt
         | OpDeclStmt !OpSymbol !Precedence !ProcDecl
         | OpOvrdStmt !OpSymbol !ProcDecl
         | TryStmt {
@@ -148,10 +149,8 @@ data EdhTypeValue = TypeType
         | ClassType
         | MethodType
         | GeneratorType
-        | BreakType | ContinueType
+        | FlowCtrlType -- for break/continue/fallthrough/yield/return
         | IteratorType
-        | YieldType
-        | ReturnType
         | ChannelType
         | ProxyType
     deriving (Eq, Ord, Show)

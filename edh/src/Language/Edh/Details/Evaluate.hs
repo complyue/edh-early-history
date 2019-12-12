@@ -38,6 +38,13 @@ evalStmt' ctx stmt = case stmt of
 
     ExprStmt expr         -> evalExpr ctx expr
 
+    BreakStmt             -> return EdhBreak
+    ContinueStmt          -> return EdhContinue
+    FallthroughStmt       -> return EdhFallthrough
+    YieldStmt  expr       -> EdhYield <$> evalExpr ctx expr
+    ReturnStmt expr       -> EdhReturn <$> evalExpr ctx expr
+
+
     ImportStmt ar srcExpr -> case srcExpr of
         LitExpr (StringLiteral moduPath) ->
             return $ EdhString $ "wana import " <> moduPath <> ".edh huh?"
