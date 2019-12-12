@@ -6,7 +6,7 @@ those languages but running embedded in Haskell.
 
 ## Teasers
 
-### Python style argument passing, and more
+### Python style argument passing
 
 ```javascript
 // the Pythonic way of argument receiving
@@ -15,21 +15,40 @@ method f (x, y=10, *ns, **kwargs) {
 }
 // the Pythonic way of argument sending
 f (3, 7, 21, *[9, 11], name='doer', **{'msg': "you've got it", 'keynum': 2})
+```
 
+### and more of argument receiving
+
+```javascript
 // wild argument receiver
 method g * {
-    return "I guess you passed me a name '" ++ name ++ "', or I'll crash!"
+    return "I guess you passed me a name '" ++ name ++ "', or I should've crashed!"
 }
-// but this is not really a good idea for api signatures
+// but this is not really a good idea for api signature
 g (name="Yesman")
-// while it's acceptable for imports
-import * from './lib.edh'
-// compared to the more explicit forms
-import (doA, doB, **newGoodiesToKnow) from './lib'
 
 // argument retargetting
 method setName (name=this.name) pass
 ```
+
+### import by argument receiving
+
+```javascript
+// while the wild argument receiver is bad for procedures, it's fairly
+// acceptable for project local imports:
+import * from './lib.edh'
+
+// surely there'are more explicit forms for general imports,
+// also see argument renaming here:
+import (doA, doB as thatB, **newGoodiesToKnow) from 'awsomelib'
+if len(newGoodiesToKnow) > 0 then
+    console.debug(
+        "there're more functions from awsomelib, check that out:\n\t"
+        ++ newGoodiesToKnow.keys())
+```
+
+> TODO demostrate `edh_modules` directory structure for dependency management
+> akin to npm's `node_modules` structure.
 
 ### Go embedding style multiple "inheritance"
 
@@ -76,6 +95,10 @@ class E () {
 [] =< for x from range(100) do x*x
 {} =< for x from range(100) do ("square of " ++ x, x*x)
 ```
+
+You can even comprehend into list/dict with existing data,
+this may be good or bad depending on your opinion. But you
+know what, you can override the `(=<)` operator!
 
 ### goroutine, defer, and channels
 
@@ -209,7 +232,7 @@ With some additional tricks in the language, including parsing Python style
 index keys, i.e. slice syntax with (:) and (,) to create tuple key within
 the indexing bracket ([]) pair, then finally redirecting indexing against
 an object to method ([]), it'll be much similar as implementing
-`__getitem__(self, ix)` in Python.
+`__getitem__(self, ix)` as in Python.
 
 ### lossless decimal for numbers
 
