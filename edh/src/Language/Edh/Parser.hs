@@ -408,7 +408,7 @@ parseDictExpr =
     parseDictKey = (LitExpr <$> parseLitExpr) <|> (AttrExpr <$> parseAttrAddr)
 
 parseStringLit :: Parser Text
-parseStringLit = do
+parseStringLit = lexeme do
     delim <- char '\"' <|> char '\'' <|> char '`'
     T.pack <$> manyTill L.charLiteral (char delim)
 
