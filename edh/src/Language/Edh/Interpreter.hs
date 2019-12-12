@@ -18,8 +18,7 @@ import           Text.Megaparsec
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Parser
-import           Language.Edh.Details.RtTypes
-import           Language.Edh.Details.Evaluate
+import           Language.Edh.Runtime
 
 
 runEdhModule
