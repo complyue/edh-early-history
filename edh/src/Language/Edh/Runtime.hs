@@ -33,10 +33,12 @@ instance Show Dict where
             ++ Prelude.concat
                    [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList d ]
             ++ "}"
-data ItemKey = ItemByStr Text | ItemBySym Symbol
-            | ItemByNum Decimal | ItemByBool Bool
+data ItemKey = ItemByType EdhTypeValue
+        | ItemByStr Text | ItemBySym Symbol
+        | ItemByNum Decimal | ItemByBool Bool
     deriving (Eq, Ord)
 instance Show ItemKey where
+    show (ItemByType k) = show k
     show (ItemByStr  k) = show k
     show (ItemBySym  k) = show k
     show (ItemByNum  k) = showDecimal k
@@ -229,9 +231,32 @@ data EdhWorld = EdhWorld {
 -- database for storage, will tend to define a generated UUID 
 -- attribute or the like.
 
-data EdhValue =
+-- | the value of type of a value
+data EdhTypeValue = TypeType
+        -- nil has no type, its type if you really ask, is nil
+        | DecimalType
+        | BoolType
+        | StringType
+        | SymbolType
+        | ObjectType
+        | ModuleType
+        | DictType
+        | ListType
+        | Tupletype
+        | GroupType
+        | ClassType
+        | MethodType
+        | GeneratorType
+        | IteratorType
+        | YieldType
+        | ReturnType
+        | ProxyType
+    deriving (Eq, Ord, Show)
+
+-- | the type of a value
+data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
     -- * immutable values
-          EdhNil
+        | EdhNil
         | EdhDecimal !Decimal
         | EdhBool !Bool
         | EdhString !Text
@@ -262,6 +287,7 @@ data EdhValue =
 
 
 instance Show EdhValue where
+    show (EdhType t)    = show t
     show EdhNil         = "nil"
     show (EdhDecimal v) = showDecimal v
     show (EdhBool    v) = if v then "true" else "false"
@@ -294,6 +320,7 @@ instance Show EdhValue where
     show (EdhProxy    v) = "[proxy: " ++ show v ++ "]"
 
 instance Eq EdhValue where
+    EdhType x       == EdhType y       = x == y
     EdhNil          == EdhNil          = True
     EdhDecimal  x   == EdhDecimal  y   = x == y
     EdhBool     x   == EdhBool     y   = x == y
