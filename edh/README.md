@@ -190,7 +190,7 @@ You should be supprised that the following language constructs are all
 implemented as overridable operators:
 
 - assignment
-  - (`=`), (`+=`), (`-=`), (`\*=`), (`/=`)
+  - (`=`), (`+=`), (`-=`), (`*=`), (`/=`)
 - logical arithmetic
   - (`&&`), (`||`)
 - ternary
