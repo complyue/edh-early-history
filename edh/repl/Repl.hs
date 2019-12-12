@@ -25,7 +25,7 @@ doRead pendingLines =
         $   withInterrupt
         $   getInputLine case pendingLines of
                 [] -> "Đ: "
-                _  -> "Đ| " <> show (Prelude.length pendingLines) <> " : "
+                _  -> "Đ| " <> show (Prelude.length pendingLines) <> ": "
         >>= \case
                 Nothing -> case pendingLines of
                     [] -> return Nothing

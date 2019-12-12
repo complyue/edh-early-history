@@ -146,29 +146,34 @@ parseAttrAddr :: Parser AttrAddr
 parseAttrAddr =
     -- `supers` is a list thus can not be further addressed
     -- for attribute access, can stop at it on sight
-                parseSupersRef <|> try do
-    p1 <- firstPart
-    nextAddr p1 <|> case p1 of
-        AttrExpr r1 -> return r1
-        _expr       -> error "bug"
+                parseSupersRef <|> do
+    p1 <- leadingPart
+    moreAddr p1
   where
-    firstPart :: Parser Expr
-    firstPart = choice
+    leadingPart :: Parser Expr
+    leadingPart = choice
         [ (AttrExpr ThisRef) <$ symbol "this"
         , (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
         , (AttrExpr . DirectRef . NamedAttr) <$> parseAttrName
         ]
-    nextPart :: Parser Expr
-    nextPart = choice
-        [ (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
+    followingPart :: Parser Expr
+    followingPart = choice
+        [ (symbol "this") *> fail "invalid this reference"
+        , (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
         , (AttrExpr . DirectRef . NamedAttr) <$> parseAttrName
         ]
-    nextAddr :: Expr -> Parser AttrAddr
-    nextAddr p1 = do
-        void $ symbol "."
-        nextPart >>= \case
-            AttrExpr (DirectRef addr) -> return $ IndirectRef p1 addr
-            _                         -> error "bug"
+    moreAddr :: Expr -> Parser AttrAddr
+    moreAddr p1 =
+        (symbol "." *> followingPart >>= \case
+                AttrExpr (DirectRef addr) ->
+                    let r1 = IndirectRef p1 addr
+                    in  moreAddr (AttrExpr r1) <|> return r1
+                _ -> error "bug"
+            )
+            <|> case p1 of
+                    AttrExpr ThisRef -> return ThisRef
+                    AttrExpr r1      -> return r1
+                    _expr            -> error "bug"
 
 
 parseArgsSender :: Parser ArgsSender
@@ -423,36 +428,37 @@ parseDecLit = lexeme do -- todo support HEX/OCT ?
 
 parseLitExpr :: Parser Literal
 parseLitExpr = choice
-    [ NilLiteral <$ symbol "nil"
+    [ NilLiteral <$ litSym "nil"
     , BoolLiteral <$> parseBoolLit
     , StringLiteral <$> parseStringLit
-    , ChanCtor <$ symbol "chan"
-    , DecLiteral D.nan <$ symbol "nan"
-    , DecLiteral D.inf <$ symbol "inf"
+    , ChanCtor <$ litSym "chan"
+    , DecLiteral D.nan <$ litSym "nan"
+    , DecLiteral D.inf <$ litSym "inf"
     , DecLiteral <$> parseDecLit
 
     -- todo use template-haskell here to avoid manual sync with 'EdhTypeValue'
-    , TypeLiteral DecimalType <$ symbol "DecimalType"
-    , TypeLiteral BoolType <$ symbol "BoolType"
-    , TypeLiteral StringType <$ symbol "StringType"
-    , TypeLiteral SymbolType <$ symbol "SymbolType"
-    , TypeLiteral ObjectType <$ symbol "ObjectType"
-    , TypeLiteral ModuleType <$ symbol "ModuleType"
-    , TypeLiteral DictType <$ symbol "DictType"
-    , TypeLiteral ListType <$ symbol "ListType"
-    , TypeLiteral TupleType <$ symbol "TupleType"
-    , TypeLiteral SequeType <$ symbol "SequeType"
-    , TypeLiteral ThunkType <$ symbol "ThunkType"
-    , TypeLiteral HostProcType <$ symbol "HostProcType"
-    , TypeLiteral ClassType <$ symbol "ClassType"
-    , TypeLiteral MethodType <$ symbol "MethodType"
-    , TypeLiteral GeneratorType <$ symbol "GeneratorType"
-    , TypeLiteral FlowCtrlType <$ symbol "FlowCtrlType"
-    , TypeLiteral IteratorType <$ symbol "IteratorType"
-    , TypeLiteral ChannelType <$ symbol "ChannelType"
-    , TypeLiteral ProxyType <$ symbol "ProxyType"
-    , TypeLiteral TypeType <$ symbol "TypeType"
+    , TypeLiteral DecimalType <$ litSym "DecimalType"
+    , TypeLiteral BoolType <$ litSym "BoolType"
+    , TypeLiteral StringType <$ litSym "StringType"
+    , TypeLiteral SymbolType <$ litSym "SymbolType"
+    , TypeLiteral ObjectType <$ litSym "ObjectType"
+    , TypeLiteral ModuleType <$ litSym "ModuleType"
+    , TypeLiteral DictType <$ litSym "DictType"
+    , TypeLiteral ListType <$ litSym "ListType"
+    , TypeLiteral TupleType <$ litSym "TupleType"
+    , TypeLiteral SequeType <$ litSym "SequeType"
+    , TypeLiteral ThunkType <$ litSym "ThunkType"
+    , TypeLiteral HostProcType <$ litSym "HostProcType"
+    , TypeLiteral ClassType <$ litSym "ClassType"
+    , TypeLiteral MethodType <$ litSym "MethodType"
+    , TypeLiteral GeneratorType <$ litSym "GeneratorType"
+    , TypeLiteral FlowCtrlType <$ litSym "FlowCtrlType"
+    , TypeLiteral IteratorType <$ litSym "IteratorType"
+    , TypeLiteral ChannelType <$ litSym "ChannelType"
+    , TypeLiteral ProxyType <$ litSym "ProxyType"
+    , TypeLiteral TypeType <$ litSym "TypeType"
     ]
+    where litSym = hidden . symbol
 
 
 parseAttrName :: Parser Text
