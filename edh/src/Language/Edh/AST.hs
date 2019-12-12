@@ -150,6 +150,7 @@ data EdhTypeValue = TypeType
         | IteratorType
         | YieldType
         | ReturnType
+        | ChannelType
         | ProxyType
     deriving (Eq, Ord, Show)
 

@@ -7,6 +7,7 @@ import           Prelude
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Control.Concurrent.MVar
 
 import           Data.IORef
 import           Foreign.C.String
@@ -260,6 +261,9 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhYield !EdhValue
         | EdhReturn !EdhValue
 
+    -- * goroutine style channel
+        | EdhChannel !(MVar EdhValue)
+
     -- * reflection
         | EdhProxy !EdhValue
 
@@ -294,6 +298,8 @@ instance Show EdhValue where
     show (EdhIterator i) = show i
     show (EdhYield    v) = "[yield: " ++ show v ++ "]"
     show (EdhReturn   v) = "[return: " ++ show v ++ "]"
+
+    show (EdhChannel  _) = "[channel]"
 
     show (EdhProxy    v) = "[proxy: " ++ show v ++ "]"
 

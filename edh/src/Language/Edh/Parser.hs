@@ -434,8 +434,10 @@ parseLitExpr = choice
     , TypeLiteral MethodType <$ symbol "MethodType"
     , TypeLiteral GeneratorType <$ symbol "GeneratorType"
     , TypeLiteral IteratorType <$ symbol "IteratorType"
-    , TypeLiteral YieldType <$ symbol "YieldType"
-    , TypeLiteral ReturnType <$ symbol "ReturnType"
+    -- yield/return seems not useful to value type tests
+    -- , TypeLiteral YieldType <$ symbol "YieldType"
+    -- , TypeLiteral ReturnType <$ symbol "ReturnType"
+    , TypeLiteral ChannelType <$ symbol "ChannelType"
     , TypeLiteral ProxyType <$ symbol "ProxyType"
     , TypeLiteral TypeType <$ symbol "TypeType"
     ]
