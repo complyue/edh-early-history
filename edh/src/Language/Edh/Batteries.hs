@@ -24,8 +24,12 @@ installEdhBatteries world = liftIO $ do
         "<batteries>"
         [ -- format: (symbol, precedence)
 
-    -- simple assignment
-          ( "="
+    -- assignments
+          ("=" , 1)
+        , ("+=", 1)
+        , ("-=", 1)
+        , ("/=", 1)
+        , ( "*="
           , 1
           ) -- ^ why brittany insists on formatting it like this ?.?
 
@@ -43,10 +47,7 @@ installEdhBatteries world = liftIO $ do
         , ("<" , 4)
         , ("<=", 4)
         , ("==", 4)
-        , ( "!=" -- C style
-          , 4
-          )
-        , ( "/=" -- Haskell style
+        , ( "!=" -- C style here, as (/=) is used for inplace division
           , 4
           )
     -- logical arithmetic
