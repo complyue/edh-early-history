@@ -98,7 +98,10 @@ class E () {
 
 You can even comprehend into list/dict with existing data,
 this may be good or bad depending on your opinion. But you
-know what, you can override the `(=<)` operator!
+know what, you can override the `(=<)` operator to refuse 
+to comprehend into non-empty list/dict!
+
+> TODO Đ repl session demo here
 
 ### goroutine, defer, and channels
 
