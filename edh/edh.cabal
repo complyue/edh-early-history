@@ -40,12 +40,12 @@ library edh-internal
     exposed-modules:
         Language.Edh.Control
         Language.Edh.Interpreter
-        Language.Edh.Interpreter.Evaluate
-        Language.Edh.Interpreter.Details
         Language.Edh.Batteries
         Language.Edh.Runtime
         Language.Edh.AST
         Language.Edh.Parser
+        Language.Edh.Details.RtTypes
+        Language.Edh.Details.Evaluate
         Paths_edh
     hs-source-dirs: src
     autogen-modules:

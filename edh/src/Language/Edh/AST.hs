@@ -144,6 +144,7 @@ data EdhTypeValue = TypeType
         | ListType
         | Tupletype
         | GroupType
+        | HostProcType
         | ClassType
         | MethodType
         | GeneratorType

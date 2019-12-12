@@ -430,6 +430,7 @@ parseLitExpr = choice
     , TypeLiteral ListType <$ symbol "ListType"
     , TypeLiteral Tupletype <$ symbol "Tupletype"
     , TypeLiteral GroupType <$ symbol "GroupType"
+    , TypeLiteral HostProcType <$ symbol "HostProcType"
     , TypeLiteral ClassType <$ symbol "ClassType"
     , TypeLiteral MethodType <$ symbol "MethodType"
     , TypeLiteral GeneratorType <$ symbol "GeneratorType"

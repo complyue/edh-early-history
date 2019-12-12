@@ -19,9 +19,8 @@ import           Text.Megaparsec
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
-import           Language.Edh.Runtime
 import           Language.Edh.Interpreter
-import           Language.Edh.Interpreter.Evaluate
+import           Language.Edh.Runtime
 import           Language.Edh.AST
 import           Language.Edh.Parser
 

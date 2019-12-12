@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 
-module Language.Edh.Interpreter.Details where
+module Language.Edh.Details.Evaluate where
 
 import           Prelude
 
@@ -18,14 +18,8 @@ import           Text.Megaparsec
 
 import           Language.Edh.Control
 import           Language.Edh.AST
-import           Language.Edh.Runtime
+import           Language.Edh.Details.RtTypes
 
-
-data Context = Context {
-        contextWorld :: EdhWorld
-        , contextModu :: Module
-        , contextScope :: !Scope
-    }
 
 evalStmt :: MonadIO m => Context -> StmtSrc -> m EdhValue
 evalStmt ctx (srcPos, stmt) =
@@ -67,6 +61,7 @@ evalExpr' ctx expr = liftIO $ case expr of
         BoolLiteral   v -> return $ EdhBool v
         NilLiteral      -> return nil
         TypeLiteral v   -> return $ EdhType v
+        -- TODO impl this
         ChanCtor        -> throwIO $ EvalError "channel ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
@@ -88,6 +83,7 @@ evalExpr' ctx expr = liftIO $ case expr of
                     <> T.pack (show v)
                     <> " ❌"
 
+        -- TODO impl these
         Go    -> throwIO $ EvalError "goroutine starter not impl. yet"
         Defer -> throwIO $ EvalError "defer scheduler not impl. yet"
 
@@ -97,7 +93,7 @@ evalExpr' ctx expr = liftIO $ case expr of
             Just elseClause -> evalSS elseClause
             _               -> return nil
         v ->
-            throwIO
+            throwIO -- we are so strongly typed
                 $  EvalError
                 $  "Not a boolean value: "
                 <> T.pack (show v)
@@ -126,6 +122,7 @@ evalExpr' ctx expr = liftIO $ case expr of
     TupleExpr vs        -> EdhTuple <$> mapM eval' vs
     GroupExpr vs        -> EdhGroup <$> mapM evalSS vs
 
+    -- TODO impl this
     ForExpr ar iter act -> undefined
 
     GeneratorExpr sp pd -> return $ EdhGenrDef $ GenrDef
@@ -133,6 +130,25 @@ evalExpr' ctx expr = liftIO $ case expr of
         , generatorSourcePos   = sp
         , generatorProcedure   = pd
         }
+
+    -- AttrExpr addr -> 
+    -- IndexExpr ixExpr tgtExpr ->
+
+    CallExpr procExpr args -> eval' procExpr >>= \case
+        -- EdhClass classDef -> 
+        -- EdhMethod mthExpr -> 
+        -- EdhGenrDef genrDef ->
+
+        v ->
+            throwIO
+                $  EvalError
+                $  "Can not call: "
+                <> T.pack (show v)
+                <> " ❌ expressed with: "
+                <> T.pack (show procExpr)
+
+
+    -- InfixExpr op lhExpr rhExpr -> 
 
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
   where
@@ -142,5 +158,51 @@ evalExpr' ctx expr = liftIO $ case expr of
     eval'  = evalExpr' ctx
     evalSS = evalStmt ctx
 
+
+-- | The Edh call convention is so called call-by-entity, i.e.  a new
+-- entity is created with its attributes filled according to a pair of
+-- manifestations for argument sending and receiving respectively.
+makeEdhCall :: Context -> ArgsSender -> Scope -> ArgsReceiver -> IO Entity
+makeEdhCall callerCtx asend calleeScp arecv = do
+    undefined
+
+
+runEdhProgram
+    :: MonadIO m
+    => EdhWorld
+    -> Module
+    -> SeqStmts
+    -> m (Either EvalError EdhValue)
+runEdhProgram w m rs = liftIO $ runEdhProgram' ctx rs
+    where ctx = moduleContext w m
+
+
+evalEdhStmt
+    :: MonadIO m
+    => EdhWorld
+    -> Module
+    -> StmtSrc
+    -> m (Either EvalError EdhValue)
+evalEdhStmt w m s = liftIO $ evalEdhStmt' ctx s where ctx = moduleContext w m
+
+
+moduleContext :: EdhWorld -> Module -> Context
+moduleContext w m = ctx
+  where
+    mo    = moduleObject m
+    scope = Scope { scopeStack = objEntity mo : (classScope . objClass) mo
+                  , thisObject = mo
+                  }
+    ctx = Context { contextWorld = w, contextModu = m, contextScope = scope }
+
+
+runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
+runEdhProgram' _   []       = return $ Right EdhNil
+runEdhProgram' ctx [s     ] = evalEdhStmt' ctx s
+runEdhProgram' ctx (s : rs) = evalEdhStmt' ctx s *> runEdhProgram' ctx rs
+
+
+evalEdhStmt' :: Context -> StmtSrc -> IO (Either EvalError EdhValue)
+evalEdhStmt' ctx s = tryJust Just $ evalStmt ctx s
 
 
