@@ -142,7 +142,7 @@ data EdhTypeValue = TypeType
         | ModuleType
         | DictType
         | ListType
-        | Tupletype
+        | TupleType
         | SequeType
         | ThunkType
         | HostProcType

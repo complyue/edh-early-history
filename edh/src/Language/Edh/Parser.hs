@@ -440,7 +440,7 @@ parseLitExpr = choice
     , TypeLiteral ModuleType <$ symbol "ModuleType"
     , TypeLiteral DictType <$ symbol "DictType"
     , TypeLiteral ListType <$ symbol "ListType"
-    , TypeLiteral Tupletype <$ symbol "Tupletype"
+    , TypeLiteral TupleType <$ symbol "TupleType"
     , TypeLiteral SequeType <$ symbol "SequeType"
     , TypeLiteral ThunkType <$ symbol "ThunkType"
     , TypeLiteral HostProcType <$ symbol "HostProcType"
