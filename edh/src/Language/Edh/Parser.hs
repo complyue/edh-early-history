@@ -333,9 +333,16 @@ parsePrefixExpr = choice
     [ PrefixExpr PrefixPlus <$> (symbol "+" *> parseExpr)
     , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
-    , PrefixExpr Go <$> (symbol "go" >> parseExpr)
-    , PrefixExpr Defer <$> (symbol "defer" >> parseExpr)
+    , PrefixExpr Go <$> (symbol "go" >> requireCall)
+    , PrefixExpr Defer <$> (symbol "defer" >> requireCall)
     ]
+  where
+    requireCall = do
+        o <- getOffset
+        e <- parseExpr
+        case e of
+            ce@(CallExpr _ _) -> return ce
+            _                 -> setOffset o >> fail "a call required here"
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do
