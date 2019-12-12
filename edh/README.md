@@ -191,6 +191,26 @@ a few hardcoded prefix operators:
 - (|) gard
 - the keyword `go` and `defer` are implemented as prefix operator
 
+### indexing override
+
+The indexing syntax is a special case (not an infix operator), but very
+crucial for tasks e.g. porting Numpy to Edh. As Edh allows parenthesis
+quoted operator symbol as attribute name, such a method can be written:
+
+```haskell
+class ndarray (*args, **kwargs) {
+    method ([]) (ix) {
+        ix can be scalar, slice or tuple of them ...
+    }
+}
+```
+
+With some additional tricks in the language, including parsing Python style
+index keys, i.e. slice syntax with (:) and (,) to create tuple key within
+the indexing bracket ([]) pair, then finally redirecting indexing against
+an object to method ([]), it'll be much similar as implementing
+`__getitem__(self, ix)` in Python.
+
 ### lossless decimal for numbers
 
 Python gives you lossless integers by default, but `float64` for decimal:
