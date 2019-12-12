@@ -66,6 +66,7 @@ evalExpr' ctx expr = liftIO $ case expr of
         StringLiteral v -> return $ EdhString v
         BoolLiteral   v -> return $ EdhBool v
         NilLiteral      -> return nil
+        TypeLiteral v   -> return $ EdhType v
         ChanCtor        -> throwIO $ EvalError "channel ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of

@@ -418,6 +418,26 @@ parseLitExpr = choice
     , DecLiteral D.nan <$ symbol "nan"
     , DecLiteral D.inf <$ symbol "inf"
     , DecLiteral <$> parseDecLit
+
+    -- todo use template-haskell here to avoid manual sync with 'EdhTypeValue'
+    , TypeLiteral DecimalType <$ symbol "DecimalType"
+    , TypeLiteral BoolType <$ symbol "BoolType"
+    , TypeLiteral StringType <$ symbol "StringType"
+    , TypeLiteral SymbolType <$ symbol "SymbolType"
+    , TypeLiteral ObjectType <$ symbol "ObjectType"
+    , TypeLiteral ModuleType <$ symbol "ModuleType"
+    , TypeLiteral DictType <$ symbol "DictType"
+    , TypeLiteral ListType <$ symbol "ListType"
+    , TypeLiteral Tupletype <$ symbol "Tupletype"
+    , TypeLiteral GroupType <$ symbol "GroupType"
+    , TypeLiteral ClassType <$ symbol "ClassType"
+    , TypeLiteral MethodType <$ symbol "MethodType"
+    , TypeLiteral GeneratorType <$ symbol "GeneratorType"
+    , TypeLiteral IteratorType <$ symbol "IteratorType"
+    , TypeLiteral YieldType <$ symbol "YieldType"
+    , TypeLiteral ReturnType <$ symbol "ReturnType"
+    , TypeLiteral ProxyType <$ symbol "ProxyType"
+    , TypeLiteral TypeType <$ symbol "TypeType"
     ]
 
 

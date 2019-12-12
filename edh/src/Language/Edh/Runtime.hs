@@ -231,29 +231,7 @@ data EdhWorld = EdhWorld {
 -- database for storage, will tend to define a generated UUID 
 -- attribute or the like.
 
--- | the value of type of a value
-data EdhTypeValue = TypeType
-        -- nil has no type, its type if you really ask, is nil
-        | DecimalType
-        | BoolType
-        | StringType
-        | SymbolType
-        | ObjectType
-        | ModuleType
-        | DictType
-        | ListType
-        | Tupletype
-        | GroupType
-        | ClassType
-        | MethodType
-        | GeneratorType
-        | IteratorType
-        | YieldType
-        | ReturnType
-        | ProxyType
-    deriving (Eq, Ord, Show)
-
--- | the type of a value
+-- | the type for a value
 data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
     -- * immutable values
         | EdhNil

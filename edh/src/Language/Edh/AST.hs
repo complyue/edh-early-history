@@ -123,7 +123,33 @@ data Literal = NilLiteral
         | BoolLiteral !Bool
         | StringLiteral !Text
         | ChanCtor -- channel constructor
+        | TypeLiteral !EdhTypeValue
     deriving (Show)
 
 
 type Precedence = Int
+
+
+-- | the type for the value of type of a value,
+-- a type name should parse as literals, so here it is.
+data EdhTypeValue = TypeType
+        -- nil has no type, its type if you really ask, is nil
+        | DecimalType
+        | BoolType
+        | StringType
+        | SymbolType
+        | ObjectType
+        | ModuleType
+        | DictType
+        | ListType
+        | Tupletype
+        | GroupType
+        | ClassType
+        | MethodType
+        | GeneratorType
+        | IteratorType
+        | YieldType
+        | ReturnType
+        | ProxyType
+    deriving (Eq, Ord, Show)
+
