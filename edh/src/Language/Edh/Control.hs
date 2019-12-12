@@ -31,14 +31,14 @@ type ParserError = ParseErrorBundle Text Void
 newtype EvalError = EvalError Text
     deriving (Eq, Typeable)
 instance Show EvalError where
-    show (EvalError msg) = "💣 " ++ T.unpack msg
+    show (EvalError msg) = T.unpack msg
 instance Exception EvalError
 
 
 data InterpretError = EdhParseError ParserError | EdhEvalError EvalError
     deriving (Eq, Typeable)
 instance Show InterpretError where
-    show (EdhParseError err) = errorBundlePretty err
-    show (EdhEvalError  err) = show err
+    show (EdhParseError err) = "⛔ " ++ errorBundlePretty err
+    show (EdhEvalError  err) = "💣 " ++ show err
 instance Exception InterpretError
 

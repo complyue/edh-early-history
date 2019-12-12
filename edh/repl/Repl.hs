@@ -61,10 +61,10 @@ doEval world modu code = evalEdhSource world modu code
 doPrint :: (Either InterpretError EdhValue) -> InputT IO ()
 doPrint = \case
     Left err -> case err of
-        EdhParseError err -> do
+        EdhParseError _ -> do
             outputStrLn "* 😓 *"
-            outputStrLn $ errorBundlePretty err
-        EdhEvalError err -> do
+            outputStrLn $ show err
+        EdhEvalError _ -> do
             outputStrLn "* 😱 *"
             outputStrLn $ show err
     Right o -> case o of
