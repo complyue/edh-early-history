@@ -7,8 +7,8 @@ those languages but running embedded in Haskell.
 # Acknowledgement
 
 Edh's parser is built with
-[Megaparsec](https://github.com/mrkkrp/megaparsec),
-[on hackage](https://hackage.haskell.org/package/megaparsec),
+[Megaparsec](https://github.com/mrkkrp/megaparsec) (
+[on hackage](https://hackage.haskell.org/package/megaparsec) ),
 parser making with Megaparsec is so pleasant.
 
 The development of Edh was started from cloning
