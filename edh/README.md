@@ -194,16 +194,17 @@ Python gives you lossless integers by default, but `float64` for decimal:
 >>>
 ```
 
-Haskell did pretty the same:
+Haskell does pretty the same:
 
-````haskell
+```haskell
 λ> 1.1 + 2.2
 3.3000000000000003
 λ>
+```
 
-Well Edh use
- [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
- by default and by all means:
+While Edh use
+[lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
+by default and by all means:
 (TODO this is Haskell using the type, add Đ repl log once the (+) operator works)
 
 ```haskell
@@ -226,4 +227,3 @@ parser making with Megaparsec is so pleasant.
 The development of Edh was started from cloning
 [monkey-hs](https://github.com/utatti/monkey-hs)
 by Hyunje Jun, but later re-written entirely.
-````
