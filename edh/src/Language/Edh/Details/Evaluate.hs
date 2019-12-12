@@ -32,9 +32,6 @@ evalStmt ctx (srcPos, stmt) =
               )
         $ evalStmt' ctx stmt
 
-evalExpr :: MonadIO m => Context -> Expr -> m EdhValue
-evalExpr ctx expr = liftIO $ evalExpr' ctx expr
-
 
 evalStmt' :: Context -> Stmt -> IO EdhValue
 evalStmt' ctx stmt = case stmt of
@@ -52,6 +49,9 @@ evalStmt' ctx stmt = case stmt of
     _ ->
         throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
 
+
+evalExpr :: MonadIO m => Context -> Expr -> m EdhValue
+evalExpr ctx expr = liftIO $ evalExpr' ctx expr
 
 evalExpr' :: Context -> Expr -> IO EdhValue
 evalExpr' ctx expr = liftIO $ case expr of
@@ -82,6 +82,9 @@ evalExpr' ctx expr = liftIO $ case expr of
                     $  "Expect bool but got: "
                     <> T.pack (show v)
                     <> " ❌"
+
+        -- TODO this impl correct ?
+        Guard -> eval' expr'
 
         -- TODO impl these
         Go    -> throwIO $ EvalError "goroutine starter not impl. yet"
@@ -120,7 +123,8 @@ evalExpr' ctx expr = liftIO $ case expr of
 
     ListExpr  vs        -> EdhList <$> mapM eval' vs
     TupleExpr vs        -> EdhTuple <$> mapM eval' vs
-    GroupExpr vs        -> EdhGroup <$> mapM evalSS vs
+
+    SequeExpr vs        -> EdhSeque <$> mapM evalSS vs
 
     -- TODO impl this
     ForExpr ar iter act -> undefined

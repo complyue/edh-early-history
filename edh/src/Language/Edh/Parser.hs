@@ -333,6 +333,7 @@ parsePrefixExpr = choice
     [ PrefixExpr PrefixPlus <$> (symbol "+" *> parseExpr)
     , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
+    , PrefixExpr Guard <$> (symbol "|" >> parseExpr)
     , PrefixExpr Go <$> (symbol "go" >> requireCall)
     , PrefixExpr Defer <$> (symbol "defer" >> requireCall)
     ]
@@ -354,6 +355,14 @@ parseIfExpr = do
         void $ symbol "else"
         parseStmt
     return $ IfExpr cond cseq alt
+
+parseCaseExpr :: Parser Expr
+parseCaseExpr = do
+    void $ symbol "case"
+    tgt <- parseExpr
+    void $ symbol "of"
+    seque <- parseStmt
+    return $ CaseExpr tgt seque
 
 parseForExpr :: Parser Expr
 parseForExpr = do
@@ -429,15 +438,17 @@ parseLitExpr = choice
     , TypeLiteral DictType <$ symbol "DictType"
     , TypeLiteral ListType <$ symbol "ListType"
     , TypeLiteral Tupletype <$ symbol "Tupletype"
-    , TypeLiteral GroupType <$ symbol "GroupType"
+    , TypeLiteral SequeType <$ symbol "SequeType"
+    , TypeLiteral ThunkType <$ symbol "ThunkType"
     , TypeLiteral HostProcType <$ symbol "HostProcType"
     , TypeLiteral ClassType <$ symbol "ClassType"
     , TypeLiteral MethodType <$ symbol "MethodType"
     , TypeLiteral GeneratorType <$ symbol "GeneratorType"
+    , TypeLiteral BreakType <$ symbol "BreakType"
+    , TypeLiteral ContinueType <$ symbol "ContinueType"
     , TypeLiteral IteratorType <$ symbol "IteratorType"
-    -- yield/return seems not useful to value type tests
-    -- , TypeLiteral YieldType <$ symbol "YieldType"
-    -- , TypeLiteral ReturnType <$ symbol "ReturnType"
+    , TypeLiteral YieldType <$ symbol "YieldType"
+    , TypeLiteral ReturnType <$ symbol "ReturnType"
     , TypeLiteral ChannelType <$ symbol "ChannelType"
     , TypeLiteral ProxyType <$ symbol "ProxyType"
     , TypeLiteral TypeType <$ symbol "TypeType"
@@ -466,18 +477,18 @@ parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 parseIndexExpr :: Parser Expr
 parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
 
-parseTupleOrGroup :: Parser Expr
-parseTupleOrGroup = (symbol "(")
-    *> choice [(try $ parseGroup []), parseTuple []]
+parseTupleOrSeque :: Parser Expr
+parseTupleOrSeque = (symbol "(")
+    *> choice [(try $ parseSeque []), parseTuple []]
   where
-    parseGroup :: [StmtSrc] -> Parser Expr
-    parseGroup t =
+    parseSeque :: [StmtSrc] -> Parser Expr
+    parseSeque t =
         (notFollowedBy $ symbol ",") *> (optional $ symbol ";") *> choice
-            [ ((symbol ")") *> (return $ GroupExpr (reverse t)))
+            [ ((symbol ")") *> (return $ SequeExpr (reverse t)))
             , (do
                   srcPos <- getSourcePos
                   e      <- parseExpr
-                  parseGroup $ (srcPos, ExprStmt e) : t
+                  parseSeque $ (srcPos, ExprStmt e) : t
               )
             ]
     parseTuple :: [Expr] -> Parser Expr
@@ -507,6 +518,7 @@ parsNonIdxNonCallPrec prec leftCtor = do
     e1 <- choice
         [ -- non-idexable, non-callable exprs
           parseIfExpr
+        , parseCaseExpr
         , parseForExpr
         , parsePrefixExpr -- can only be bool or decimal
         , LitExpr <$> parseLitExpr
@@ -520,7 +532,7 @@ parseIdxNonCallPrec prec leftCtor = do
           AttrExpr <$> parseSupersRef
         , parseListExpr
         , parseDictExpr
-        , parseTupleOrGroup
+        , parseTupleOrSeque
         ]
     optional parseIndexExpr >>= \case
         Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor

@@ -105,7 +105,7 @@ data Scope = Scope {
         , thisObject :: Object -- `this` object of current scope
     }
 instance Eq Scope where
-    Scope x's _ == Scope y's _ = x's == y's
+    Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
 
 -- | calling stack frames at any point of Edh code execution
 data Context = Context {
@@ -113,6 +113,27 @@ data Context = Context {
         , contextModu :: Module
         , contextScope :: !Scope
     }
+
+
+-- | Pending evaluated statement, it can be later forced against a
+-- target value in context.
+--
+-- Note: we rely on the 'CString' field (which is essentially a ptr),
+--       for equality testing of thunks.
+data Thunk = Thunk {
+        thunkDescription :: CString
+        , thunkValuator :: EdhValue -> IO EdhValue
+    }
+instance Eq Thunk where
+    Thunk x'd _ == Thunk y'd _ = x'd == y'd
+instance Show Thunk where
+    show (Thunk d _) = "[thunk: " <> s <> "]"
+        where s = unsafePerformIO $ peekCString d
+mkThunk :: String -> (EdhValue -> IO EdhValue) -> IO Thunk
+mkThunk desc valuator = do
+    s <- newCString desc
+    addFinalizer s $ free s
+    return $ Thunk s valuator
 
 
 -- | An object views an entity, with inheritance relationship 
@@ -296,7 +317,10 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhDict !Dict
         | EdhList ![EdhValue]
         | EdhTuple ![EdhValue]
-        | EdhGroup ![EdhValue]
+        | EdhSeque ![EdhValue]
+
+    -- * harness for lazy evaluation
+        | EdhThunk !Thunk
 
     -- * host procedure callable from Edh world
         | EdhHostProc !HostProcedure
@@ -306,12 +330,13 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhMethod !Method
         | EdhGenrDef !GenrDef
 
-    -- * special harness
+    -- * flow control
+        | EdhBreak | EdhContinue
         | EdhIterator !Iterator
         | EdhYield !EdhValue
         | EdhReturn !EdhValue
 
-    -- * goroutine style channel
+    -- * Go style channel
         | EdhChannel !(MVar EdhValue)
 
     -- * reflection
@@ -337,9 +362,11 @@ instance Show EdhValue where
     show (EdhTuple v) = if Prelude.null v
         then "(,)" -- the denotation of empty tuple is same as Python
         else "(" ++ Prelude.concat [ show i ++ ", " | i <- v ] ++ ")"
-    show (EdhGroup v) = if Prelude.null v
+    show (EdhSeque v) = if Prelude.null v
         then "(;)" -- make it obvious this is an empty group
         else "(" ++ Prelude.concat [ show i ++ "; " | i <- v ] ++ ")"
+
+    show (EdhThunk    v) = show v
 
     show (EdhHostProc v) = show v
 
@@ -347,6 +374,8 @@ instance Show EdhValue where
     show (EdhMethod   v) = show v
     show (EdhGenrDef  v) = show v
 
+    show EdhBreak        = "[break]"
+    show EdhContinue     = "[continue]"
     show (EdhIterator i) = show i
     show (EdhYield    v) = "[yield: " ++ show v ++ "]"
     show (EdhReturn   v) = "[return: " ++ show v ++ "]"
@@ -369,7 +398,9 @@ instance Eq EdhValue where
     EdhDict     x   == EdhDict     y   = x == y
     EdhList     x   == EdhList     y   = x == y
     EdhTuple    x   == EdhTuple    y   = x == y
-    EdhGroup    x   == EdhGroup    y   = x == y
+    EdhSeque    x   == EdhSeque    y   = x == y
+
+    EdhThunk    x   == EdhThunk    y   = x == y
 
     EdhHostProc x   == EdhHostProc y   = x == y
 
@@ -377,6 +408,8 @@ instance Eq EdhValue where
     EdhMethod   x   == EdhMethod   y   = x == y
     EdhGenrDef  x   == EdhGenrDef  y   = x == y
 
+    EdhBreak        == EdhBreak        = True
+    EdhContinue     == EdhContinue     = True
     EdhIterator x   == EdhIterator y   = x == y
     -- todo: regard a yielded/returned value equal to the value itself ?
     EdhYield    x'v == EdhYield    y'v = x'v == y'v

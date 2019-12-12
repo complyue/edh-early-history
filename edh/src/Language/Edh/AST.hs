@@ -81,7 +81,8 @@ data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
     deriving (Show)
 
 data Prefix = PrefixPlus | PrefixMinus | Not
-        | Go | Defer -- goroutine stuff
+        | Guard -- similar to guard in Haskell
+        | Go | Defer -- similar to goroutine in Go
     deriving (Show)
 
 data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
@@ -89,21 +90,19 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
                 , if'consequence :: !StmtSrc
                 , if'alternative :: !(Maybe StmtSrc)
                 }
+        | CaseExpr { case'target :: !Expr , case'seque :: !StmtSrc }
 
         | DictExpr ![(Expr, Expr)]
         | ListExpr ![Expr]
         | TupleExpr ![Expr]
 
-        -- a sequence of exprs in a pair of parentheses,
-        -- optionally separated by semcolon,
-        -- need this as curly braces have been used for
-        -- dict expr, this works like a block statement,
-        -- but should eval to last expr's value.
-        -- and further an AST inspector can tell whether a
-        -- single expr is in parentheses from this.
-        -- store as 'StmtSrc' so source location is attached
-        -- to each expression, the group may span many lines.
-        | GroupExpr ![StmtSrc]
+        -- a sequence of statements in a pair of parentheses,
+        -- optionally separated by semcolon. this is used
+        -- to implement the case-of construct, as well as
+        -- to allow multiple statements grouped as a single
+        -- expression fitting into subclauses of if-then-else,
+        -- while, and for-from-do constructs.
+        | SequeExpr ![StmtSrc]
 
         | ForExpr !ArgsReceiver !Expr !Expr
         | GeneratorExpr !SourcePos !ProcDecl
@@ -143,11 +142,13 @@ data EdhTypeValue = TypeType
         | DictType
         | ListType
         | Tupletype
-        | GroupType
+        | SequeType
+        | ThunkType
         | HostProcType
         | ClassType
         | MethodType
         | GeneratorType
+        | BreakType | ContinueType
         | IteratorType
         | YieldType
         | ReturnType
