@@ -132,7 +132,7 @@ class EventProducer (chPub, chStop, name="announcer") {
 }
 
 chPubSub = chan
-(mon1, mon2) = (
+let (mon1, mon2) = (
     EventMonitor(chPubSub, "Mon1"),
     EventMonitor(chPubSub, "Mon2"),
 )
