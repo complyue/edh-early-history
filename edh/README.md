@@ -212,7 +212,9 @@ Haskell does pretty the same:
 While Edh use
 [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
 by default and by all means:
-(TODO this is Haskell using the type, add Đ repl log once the (+) operator works)
+
+> (TODO this is the usage of the type in Haskell, add Đ repl session demo
+> once the (+) operator works)
 
 ```haskell
 λ> 1.1 + 2.2 :: Decimal
