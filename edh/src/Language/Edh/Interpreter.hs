@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -36,7 +37,11 @@ runEdhModule world moduId moduSource = liftIO $ do
     case pr of
         Left  err   -> return $ Left $ EdhParseError err
         Right stmts -> do
-            entity <- newIORef Map.empty
+            let moduIdAttrVal = EdhString $ T.pack moduId
+            entity <- newIORef $ Map.fromList
+                [ (AttrByName "__name__", moduIdAttrVal)
+                , (AttrByName "__file__", EdhString "<adhoc>")
+                ]
             let moduObj = Object { objEntity = entity
                                  , objClass  = moduleClass world
                                  , objSupers = []

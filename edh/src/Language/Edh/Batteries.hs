@@ -2,32 +2,22 @@
 module Language.Edh.Batteries where
 
 import           Prelude
-import           Debug.Trace
 
-import           Control.Exception
-import           Control.Monad
 import           Control.Monad.IO.Class
-import           Control.Monad.State.Strict
-
-import           Data.Ratio
-import           Data.IORef
-import           Data.Text                     as T
-import qualified Data.Map.Strict               as Map
-
-import           Text.Megaparsec
 
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
-import           Language.Edh.Interpreter
 import           Language.Edh.Runtime
 import           Language.Edh.AST
-import           Language.Edh.Parser
 
 
 installEdhBatteries :: MonadIO m => EdhWorld -> m ()
 installEdhBatteries world = liftIO $ do
     let rootEntity = (objEntity . worldRoot) world
+
+    -- TODO survey for best practices & advices on precedences here
+    --      once it's declared, can not be changed in the world.
 
     declareEdhOperators
         world
@@ -39,36 +29,99 @@ installEdhBatteries world = liftIO $ do
           , 1
           ) -- ^ why brittany insists on formatting it like this ?.?
 
-    -- comprehension
-        , ( "<="
-          , 3
-          ) -- ^ why brittany insists on formatting it like this ?.?
-
-    -- channel read/write
-        , ( "<-"
-          , 5
-          )
-
-    -- basic arithmetic
+    -- arithmetic
         , ("+", 6)
         , ("-", 6)
         , ("*", 7)
         , ("/", 7)
+        , ( "**"
+          , 8
+          )
+    -- comparations
+        , (">" , 4)
+        , (">=", 4)
+        , ("<" , 4)
+        , ("<=", 4)
+        , ("==", 4)
+        , ( "!=" -- C style
+          , 4
+          )
+        , ( "/=" -- Haskell style
+          , 4
+          )
+    -- logical arithmetic
+        , ("&&", 3)
+        , ( "||"
+          , 3
+          ) -- ^ why brittany insists on formatting it like this ?.?
+
+    -- emulate the ternary operator in C:
+    --       onCnd ? oneThing : theOther
+    --  * Python
+    --       onCnd and oneThing or theOther
+    --  * Edh
+    --       onCnd &= oneThing |= theOther
+        , ("&=", 2)
+        , ( "|="
+          , 2
+          ) -- ^ why brittany insists on formatting it like this ?.?
+
+    -- comprehension
+    --  * list comprehension:
+    --     [] =< for x from range(100) do x*x
+    --  * dict comprehension:
+    --     {} =< for x from range(100) do (x, x*x)
+        , ( "=<"
+          , 3
+          ) -- ^ why brittany insists on formatting it like this ?.?
+
+    -- channel read/write
+    --  * channel read
+    --      inEvent <- chSub
+    --  * channel write
+    --      chPub <- outEvent
+        , ( "<-"
+          , 5
+          )
+
+    -- case branch (| guard is a hardcoded prefix operator)
+    --    let essay = case type(v) of (
+    --       BoolType -> "to be or not to be, that's a problem"
+    --       DecimalType -> (
+    --          |v<2 -> "consume less, produce more"
+    --          |v<10 -> "no more than " ++ v ++ " cups of coffee a day"
+    --          true -> "every one get his/her lucky number"
+    --       )
+    --       StringType -> (quiz=v fallthrough)
+    --       SymbolType -> (quiz='mistery attracts most people' fallthrough)
+    --       ModuleType -> (quiz='I live in ' ++ v.__name__; fallthrough)
+    --       "do you known, that " ++ quiz ++ " ?"
+    --    )
+        , ( "->"
+          , 1
+          )
+
+    -- string/list concatenation
+        , ("++", 5)
         ]
+
+    assignHP <- mkHostProc "=" assignProc
+    concatHP <- mkHostProc "++" concatProc
+    typeHP   <- mkHostProc "type" typeProc
 
     putEdhAttrs
         rootEntity
         [
-    -- builtin operators
-    -- TODO these should really be host functions
-          (AttrByName "=" , EdhString "the assign op")
-        , (AttrByName "<-", EdhString "the cmprh op")
-        , (AttrByName "+" , EdhString "plus")
-        , (AttrByName "-" , EdhString "minus")
-        , (AttrByName "*" , EdhString "mul")
-        , ( AttrByName "/"
-          , EdhString "div"
-          ) -- ^ why brittany insists on formatting it like this ?.?
+    -- operators
+          (AttrByName "=", EdhHostProc assignHP)
+        , ( AttrByName "++"
+          , EdhHostProc concatHP
+          )
+
+    -- introspection
+        , ( AttrByName "type"
+          , EdhHostProc typeHP
+          )
 
     -- math constants
     -- todo figure out proper ways to make these really **constant**,
@@ -77,10 +130,18 @@ installEdhBatteries world = liftIO $ do
           , EdhDecimal
               $ Decimal 1 (-40) 31415926535897932384626433832795028841971
           )
-
-    -- testing ... 
-        , (AttrByName "fff", EdhDecimal $ fromRational $ 3 % 14)
         ]
 
     return ()
+
+
+assignProc :: EdhProcedure
+assignProc ctx aSender scope = undefined
+
+concatProc :: EdhProcedure
+concatProc ctx aSender scope = undefined
+
+typeProc :: EdhProcedure
+typeProc ctx aSender scope = undefined
+
 
