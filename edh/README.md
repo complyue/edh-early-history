@@ -190,19 +190,19 @@ You should be supprised that the following language constructs are all
 implemented as overridable operators:
 
 - assignment
-  - (=), (+=), (-=), (\*=), (/=)
+  - (`=`), (`+=`), (`-=`), (`\*=`), (`/=`)
 - logical arithmetic
-  - (&&), (||)
+  - (`&&`), (`||`)
 - ternary
-  - (&=), (|=)
+  - (`&=`), (`|=`)
 - list/dict comprehension
-  - (=<)
+  - (`=<`)
 - channel read/write
-  - (<-)
+  - (`<-`)
 - case branch
-  - (->)
+  - (`->`)
 - string concat
-  - (++)
+  - (`++`)
 
 Meaning you can override them for the program scope under your control,
 and you can even roll your own, arbitrary new operators with a precendence
@@ -211,10 +211,10 @@ you'd like with, as very well as in Haskell.
 All operators in Edh are left associative, infix only, though. Well, except
 a few hardcoded prefix operators:
 
-- (+) prefix plus
-- (-) prefix minus
-- (not) prefix bool negation
-- (|) guard
+- (`+`) prefix plus
+- (`-`) prefix minus
+- (`not`) prefix bool negation
+- (`|`) guard
 - the keyword `go` and `defer` are implemented as prefix operator
 
 ### indexing override
