@@ -173,6 +173,16 @@ evalExpr' ctx expr = liftIO $ case expr of
 -- | The Edh call convention is so called call-by-entity, i.e.  a new
 -- entity is created with its attributes filled according to a pair of
 -- manifestations for argument sending and receiving respectively.
+-- 
+-- This is semantically much the same as Python's call convention, regarding
+-- positional and keyword argument matching, and additionally supports:
+--  * wildcard receiver - receive all keyword arguments into the entity
+--  * argument renaming - match the name as sent, receive to a  differently
+--     named attribute of the entity. while renaming a positional argument
+--     is doable but meaningless, you'd just use the later name
+--  * retargeting - don't receive the argument into the entity, but assign
+--    to an attribute of another object, typically `this` object in scope
+--
 makeEdhCall :: Context -> ArgsSender -> Scope -> ArgsReceiver -> IO Entity
 makeEdhCall callerCtx asend calleeScp arecv = do
     undefined

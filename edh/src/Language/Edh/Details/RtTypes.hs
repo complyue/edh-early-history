@@ -62,7 +62,7 @@ instance Show ItemKey where
 -- Note: we rely on the 'CString' field (which is essentially a ptr),
 --       for equality testing of symbols.
 newtype Symbol = Symbol {
-    -- use CString to obtain a stable ptr as identity
+        -- TODO remember to default the description to the source pos
         symbol'description :: CString
     } deriving (Eq, Ord)
 instance Show Symbol where
