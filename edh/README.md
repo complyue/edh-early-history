@@ -25,7 +25,7 @@ g (name="Yesman")
 // while it's acceptable for imports
 import * from './lib.edh'
 // compared to the more explicit forms
-import (doA, doB, **goodies) from './lib'
+import (doA, doB, **newGoodiesToKnow) from './lib'
 
 // argument retargetting
 method setName (name=this.name) pass
@@ -45,7 +45,7 @@ and in Python you do:
 onCnd and oneThing or theOther
 ```
 
-and in Edh you do:
+well in Edh you do:
 
 ```haskell
 onCnd &= oneThing |= theOther
@@ -55,10 +55,10 @@ onCnd &= oneThing |= theOther
 
 ```haskell
 [] =< for x from range(100) do x*x
-{} =< for x from range(100) do (x, x*x)
+{} =< for x from range(100) do ("square of " ++ x, x*x)
 ```
 
-### goroutine and channels
+### goroutine, defer, and channels
 
 ```haskell
 class EventMonitor (chSub, name="observer") {
@@ -68,16 +68,20 @@ class EventMonitor (chSub, name="observer") {
     )
 }
 
-class EventProducer (chPub, name="announcer") {
+class EventProducer (chPub, chStop, name="announcer") {
     evtCnt = 0
     method reportSummary() {
         console.info(name ++ " totally dispatched " ++ evtCnt ++ " event(s).")
     }
     method giveTiming (interval) {
         defer this.reportSummary()
-        for currentTime from Runtime.everyMillisN(interval) do (
-            this.evtCnt += 1
-            chPub <- "[Event-" ++ evtCnt ++ "@" ++ currentTime ++ "]"
+
+        select (
+            for _ from chStop do pass,
+            for currentTime from runtime.everyMillisN(interval) do (
+                this.evtCnt += 1
+                chPub <- "[Event-" ++ evtCnt ++ "@" ++ currentTime ++ "]"
+            )
         )
     }
 }
@@ -90,11 +94,12 @@ chPubSub = chan
 go mon1.ackEvents()
 go mon2.ackEvents()
 
-prod = EventProducer (chPubSub)
+chStop = chan
+prod = EventProducer (chPubSub, chStop)
 go prod.giveTiming(1.5e3)
 
-for _ from Runtime.afterMillisN(60e3) do
-    Runtime.endTheWorld()
+for _ from runtime.afterMillisN(60e3) do
+    chStop.close()
 ```
 
 ### Haskell style case-of, with Go style fallthrough
@@ -118,7 +123,7 @@ let essay = case type(v) of (
 
 ...
 
-### operator override
+### operator override / creation
 
 You should be supprised that the following language constructs are all
 implemented as overridable operators:
@@ -139,8 +144,10 @@ implemented as overridable operators:
   - (++)
 
 Meaning you can override them for the program scope under your control,
-and you can define arbitrary new operators with the precendence you'd
-like.
+and you can even roll your own, arbitrary new operators with a precendence
+you'd like with, as very well as in Haskell.
+
+All operators in Edh are left associative, infix only, though.
 
 ## Acknowledgement
 
