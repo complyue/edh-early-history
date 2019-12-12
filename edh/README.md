@@ -31,24 +31,43 @@ import (doA, doB, **newGoodiesToKnow) from './lib'
 method setName (name=this.name) pass
 ```
 
-### Ternary operator
+### Go embedding style multiple "inheritance"
 
-in C you do:
+This is not real object-oriented inheritance though, but you'll go as far and
+well as Go [Type Embedding](https://go101.org/article/type-embedding.html)
+let you.
 
-```C
-onCnd ? oneThing : theOther
+```javascript
+class B (name) {
+    method greeting(guest) {
+        console.log("Hello "++guest++", I am "++name++', your guide.')
+    }
+}
+
+class C () {
+    extends B('Nobleman')
+}
+
+class D () {
+    extends B('Farmer')
+
+    method hello() {
+        console.log(`Hello there!`)
+    }
+}
+
+class E () {
+    extends C()
+    extends D()
+    // an E object will contain 2 copies of B object,
+    // the order above matters in resolving the `greeting` method.
+}
 ```
 
-and in Python you do:
+### ES6 style symbol
 
-```python
-onCnd and oneThing or theOther
-```
-
-well in Edh you do:
-
-```haskell
-onCnd &= oneThing |= theOther
+```javascript
+...
 ```
 
 ### list/dict comprehension
@@ -119,9 +138,25 @@ let essay = case type(v) of (
 )
 ```
 
-### Reflection
+### Ternary operator
 
-...
+in C you do:
+
+```C
+onCnd ? oneThing : theOther
+```
+
+and in Python you do:
+
+```python
+onCnd and oneThing or theOther
+```
+
+well in Edh you do:
+
+```haskell
+onCnd &= oneThing |= theOther
+```
 
 ### operator override / creation
 
@@ -149,6 +184,38 @@ you'd like with, as very well as in Haskell.
 
 All operators in Edh are left associative, infix only, though.
 
+### lossless decimal for numbers
+
+Python gives you lossless integers by default, but `float64` for decimal:
+
+```python
+>>> 1.1 + 2.2
+3.3000000000000003
+>>>
+```
+
+Haskell did pretty the same:
+
+````haskell
+λ> 1.1 + 2.2
+3.3000000000000003
+λ>
+
+Well Edh use
+ [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
+ by default and by all means:
+(TODO this is Haskell using the type, add Đ repl log once the (+) operator works)
+
+```haskell
+λ> 1.1 + 2.2 :: Decimal
+3.3
+λ>
+```
+
+### Reflection
+
+...
+
 ## Acknowledgement
 
 Edh's parser is built with
@@ -159,3 +226,4 @@ parser making with Megaparsec is so pleasant.
 The development of Edh was started from cloning
 [monkey-hs](https://github.com/utatti/monkey-hs)
 by Hyunje Jun, but later re-written entirely.
+````
