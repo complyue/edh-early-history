@@ -209,7 +209,7 @@ Haskell does pretty the same:
 λ>
 ```
 
-While Edh use
+While Edh uses
 [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
 by default and by all means:
 
