@@ -214,7 +214,7 @@ a few hardcoded prefix operators:
 - (+) prefix plus
 - (-) prefix minus
 - (not) prefix bool negation
-- (|) gard
+- (|) guard
 - the keyword `go` and `defer` are implemented as prefix operator
 
 ### indexing override
