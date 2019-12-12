@@ -128,13 +128,16 @@ evalExpr' ctx expr = liftIO $ case expr of
     ForExpr ar iter act -> undefined
 
     GeneratorExpr sp pd -> return $ EdhGenrDef $ GenrDef
-        { generatorOwnerObject = undefined
+        { generatorOwnerObject = this
         , generatorSourcePos   = sp
         , generatorProcedure   = pd
         }
 
     _ -> throwIO $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
   where
+    this   = thisObject scope
+    scope  = contextScope ctx
+
     eval'  = evalExpr' ctx
     evalSS = evalStmt ctx
 
