@@ -326,6 +326,12 @@ All numbers in Edh are `Data.Lossless.Decimal` from
 
 ...
 
+## the name
+
+Edh stands for **Event Distributing & Hosting**
+
+Đ is a more stylish, single letter, symbolic name of Edh the language
+
 ## Acknowledgement
 
 Edh's parser is built with
