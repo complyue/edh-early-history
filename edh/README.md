@@ -23,7 +23,7 @@ and another for performance.
 Haskell on its own has long achieved both in many domains, but in numeric
 crunching, the overwhelming success of Numpy/Pandas come with good reasons.
 
-My take is that object semantic may be more powerful to describe the mutable
+My take is that object semantics may be more powerful to describe the mutable
 parts of your problem domain, while functional approach will be really fluent
 when describing just the immutable parts.
 
@@ -49,7 +49,8 @@ f (3, 7, 21, *[9, 11], name='doer', **{'msg': "you've got it", 'keynum': 2})
 ```javascript
 // wild argument receiver
 method g * {
-    return "I guess you passed me a name '" ++ name ++ "', or I should've crashed!"
+    return "I guess you passed me a name '" ++ name
+        ++ "', or I should've crashed!"
 }
 // but this is not really a good idea for api signature
 g (name="Yesman")
@@ -66,7 +67,7 @@ method setName (name as this.name) pass
 import * from './lib.edh'
 
 // surely there'are more explicit forms for general imports,
-// also see argument renaming here:
+// also see argument retargeting here:
 import (doA, doB as thatB, **newGoodiesToKnow) from 'awsomelib'
 if len(newGoodiesToKnow) > 0 then
     console.debug(
@@ -77,7 +78,7 @@ if len(newGoodiesToKnow) > 0 then
 > TODO demostrate `edh_modules` directory structure for dependency management
 > akin to npm's `node_modules` structure.
 
-### Go embedding style multiple "inheritance"
+### Go Type-Embedding style multiple "inheritance"
 
 This is not geniune object-oriented inheritance though, but you'll go as far
 and well as Go [Type Embedding](https://go101.org/article/type-embedding.html)
@@ -133,25 +134,29 @@ to comprehend into non-empty list/dict!
 
 ### list/dict modification
 
-```javascript
-let (l, d) = ([3,7,5], {'a': 2, 'b': 9})
+```haskell
+let (l, d) = ([3,'foo',5], {'a': 'good', 'b': 9})
 // append to a list/dict, just use the comprehension operator as well
-l =< [2,9]; d =< {'b': 1, 'm': 'cool!'}
+l =< [2,'bar',9]; d =< {'b': 1, 'm': 'cool!'}
 // prepend to a list, insert/update single entry to a dict,
 // there's a dedicated operator (=>) for it
-11 => l; ('n', 'yeah') => d
+'baz' => l; ('n', 'yeah') => d
 ```
 
 ### generators
 
-```haskell
+```js
 g = generator (n) {
     for i from range(n) do
-        yield (i, i * i)
+        // using argument sender syntax in yield,
+        // you'd feel it like calling a callback
+        yield (i, i * i, desc="square of " ++ i)
 }
 
-for (x, y) from g(100) do
-    console.log('got ' ++ x ++ '>>' ++ y)
+// argument receiver syntax in for, you'd feel as
+// defining a callback
+for (x, y, desc="the result") from g(100) do
+    console.log(x ++ ": " ++ desc ++ " is " ++ y)
 ```
 
 ### goroutine, defer and concurrency ctrl

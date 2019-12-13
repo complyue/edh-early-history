@@ -41,7 +41,8 @@ evalStmt' ctx stmt = case stmt of
     BreakStmt             -> return EdhBreak
     ContinueStmt          -> return EdhContinue
     FallthroughStmt       -> return EdhFallthrough
-    YieldStmt  expr       -> EdhYield <$> evalExpr ctx expr
+    -- TODO impl. this
+    YieldStmt  asend      -> undefined -- EdhYield <$>  
     ReturnStmt expr       -> EdhReturn <$> evalExpr ctx expr
 
 

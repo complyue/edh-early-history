@@ -299,8 +299,8 @@ parseTryStmt = do
 parseYieldStmt :: Parser Stmt
 parseYieldStmt = do
     void $ symbol "yield"
-    expr <- parseExpr
-    return $ YieldStmt expr
+    asend <- parseArgsSender
+    return $ YieldStmt asend
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
