@@ -485,23 +485,28 @@ parseIndexExpr :: Parser Expr
 parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
 
 parseTupleOrSeque :: Parser Expr
-parseTupleOrSeque = (symbol "(")
-    *> choice [(try $ parseSeque []), parseTuple []]
+parseTupleOrSeque = choice [(try $ parseSeque), parseTuple]
+
+parseSeque :: Parser Expr
+parseSeque = symbol "(" *> (notFollowedBy $ symbol ",") *> parseSequeRest []
   where
-    parseSeque :: [StmtSrc] -> Parser Expr
-    parseSeque t =
-        (notFollowedBy $ symbol ",") *> (optional $ symbol ";") *> choice
-            [ ((symbol ")") *> (return $ SequeExpr (reverse t)))
-            , (do
-                  srcPos <- getSourcePos
-                  e      <- parseExpr
-                  parseSeque $ (srcPos, ExprStmt e) : t
-              )
-            ]
-    parseTuple :: [Expr] -> Parser Expr
-    parseTuple t = (optional $ symbol ",") *> choice
+    parseSequeRest :: [StmtSrc] -> Parser Expr
+    parseSequeRest t = (optional $ symbol ";") *> choice
+        [ ((symbol ")") *> (return $ SequeExpr (reverse t)))
+        , (do
+              srcPos <- getSourcePos
+              e      <- parseExpr
+              parseSequeRest $ (srcPos, ExprStmt e) : t
+          )
+        ]
+
+parseTuple :: Parser Expr
+parseTuple = symbol "(" *> parseTupleRest []
+  where
+    parseTupleRest :: [Expr] -> Parser Expr
+    parseTupleRest t = (optional $ symbol ",") *> choice
         [ (symbol ")") *> (return $ TupleExpr (reverse t))
-        , parseExpr >>= \e -> parseTuple $ e : t
+        , parseExpr >>= \e -> parseTupleRest $ e : t
         ]
 
 
