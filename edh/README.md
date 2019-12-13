@@ -52,8 +52,8 @@ if len(newGoodiesToKnow) > 0 then
 
 ### Go embedding style multiple "inheritance"
 
-This is not real object-oriented inheritance though, but you'll go as far and
-well as Go [Type Embedding](https://go101.org/article/type-embedding.html)
+This is not geniune object-oriented inheritance though, but you'll go as far
+and well as Go [Type Embedding](https://go101.org/article/type-embedding.html)
 let you.
 
 ```javascript
@@ -89,11 +89,12 @@ class E () {
 ...
 ```
 
-### list/dict comprehension
+### list/dict/tuple comprehension
 
 ```haskell
 [] =< for x from range(100) do x*x
 {} =< for x from range(100) do ("square of " ++ x, x*x)
+(,) =< for x from range(100) do x*x
 ```
 
 You can even comprehend into list/dict with existing data,
@@ -103,7 +104,18 @@ to comprehend into non-empty list/dict!
 
 > TODO Đ repl session demo here
 
-### goroutine, defer, and channels
+### list/dict modification
+
+```javascript
+let (l, d) = ([3,7,5], {'a': 2, 'b': 9})
+// append to a list/dict, just use the comprehension operator as well
+l =< [2,9]; d =< {'b': 1, 'm': 'cool!'}
+// prepend to a list, insert/update single entry to a dict,
+// there's a dedicated operator (=>) for it
+11 => l; ('n', 'yeah') => d
+```
+
+### goroutine, select among channel readers, and defer
 
 ```haskell
 class EventMonitor (chSub, name="observer") {
@@ -197,6 +209,8 @@ implemented as overridable operators:
   - (`&=`), (`|=`)
 - list/dict comprehension
   - (`=<`)
+- list/dict prepend/insert
+  - (`=>`)
 - channel read/write
   - (`<-`)
 - case branch
@@ -239,6 +253,12 @@ an object to method ([]), it'll be much similar as implementing
 
 ### lossless decimal for numbers
 
+In JavaScript, even today, all numbers are `float64`, it puzzled me a while,
+before I figured out this is the reason why we can not have `Int64Array`
+besides `Int32Array`/`Int16Array`/`Float64Array`/`Float32Array` etc. that
+the language simply unable to handle elements from an `Int64Array` if it's
+ever provided.
+
 Python gives you lossless integers by default, but `float64` for decimal:
 
 ```python
@@ -247,25 +267,59 @@ Python gives you lossless integers by default, but `float64` for decimal:
 >>>
 ```
 
-Haskell does pretty the same:
+Haskell forces you to choose a type for every number in your program,
+normal options are the lossless `Integer` and precision-lossing `Double`
+(which is `float64` per se):
 
 ```haskell
-λ> 1.1 + 2.2
+λ> 1.1 + 2.2 :: Double
 3.3000000000000003
+λ> 1.1 + 2.2 :: Float
+3.3000002
 λ>
 ```
 
-While Edh uses
-[lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
-by default and by all means:
-
-> (TODO this is the usage of the type in Haskell, add Đ repl session demo
-> once the (+) operator works)
+And you have `Data.Scientific` for the rescure, but with its own quirks
+from practical daily use:
 
 ```haskell
-λ> 1.1 + 2.2 :: Decimal
+λ> :m +Data.Scientific
+λ> 1.1 + 2.2 :: Scientific
 3.3
+λ> x = 1.1 + 2.2 :: Scientific
+λ> x / 0
+*** Exception: Ratio has zero denominator
 λ>
+```
+
+> Your compiled Haskell program will crash on division-by-zero if not
+> handled specifically.
+
+Then here's `Data.Lossless.Decimal` from package
+[lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
+
+```haskell
+λ> x = 1.1 + 2.2 :: Decimal
+λ> x / 0
+inf
+λ> (-x) / 0
+-inf
+λ> 0/0 :: Decimal
+nan
+λ> (0/0 :: Decimal) == 0/0
+False
+λ> pi = Decimal 1 (-40) 31415926535897932384626433832795028841971
+λ> pi
+3.1415926535897932384626433832795028841971
+λ>
+```
+
+All numbers in Edh are `Data.Lossless.Decimal` from
+[lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
+, by default and by all means:
+
+```
+...
 ```
 
 ### Reflection
