@@ -4,6 +4,25 @@ Missing Python/JavaScript or even Go in shifting to
 Haskell? Now you can have Edh, with many goodies from
 those languages but running embedded in Haskell.
 
+## Why splice
+
+I have long been amused by how Python and C++ work together.
+
+> I use the modern `pybind11` toolchain, while C++ with `boost` has worked
+> longer, and C with Python has a even longer history.
+
+With Python code, you set a stage up with tensors forming a computation network,
+with those tensors implemented in C++, while during full speed sprinting,
+the tensor code can call Python from C++ through some bindings (`pybind` does
+most of that out-of-the-box), to tell the framework to _shift gear_ in some
+parts.
+
+Take away is: you use one language/runtime for flexibility/expressiveness,
+and another for performance.
+
+Haskell on its own has long achieved both in many domains, but in numeric
+crunching, the overwhelming success of Numpy/Pandas come with good reasons.
+
 ## Teasers
 
 ### Python style argument passing
