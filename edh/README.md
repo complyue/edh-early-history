@@ -318,6 +318,9 @@ All numbers in Edh are `Data.Lossless.Decimal` from
 [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
 , by default and by all means:
 
+> will treat numeric data inside `Repa` / `AccerlerateHS` arrays as foreign data,
+> given we port `Numpy`/`Pandas` to Edh to manipulate them
+
 ```
 ...
 ```
