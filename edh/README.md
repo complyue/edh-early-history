@@ -336,9 +336,9 @@ from practical daily use:
 
 ```haskell
 λ> :m +Data.Scientific
-λ> 1.1 + 2.2 :: Scientific
-3.3
 λ> x = 1.1 + 2.2 :: Scientific
+λ> x
+3.3
 λ> x / 0
 *** Exception: Ratio has zero denominator
 λ>
@@ -352,6 +352,8 @@ Then here's `Data.Lossless.Decimal` from package
 
 ```haskell
 λ> x = 1.1 + 2.2 :: Decimal
+λ> x
+3.3
 λ> x / 0
 inf
 λ> (-x) / 0
