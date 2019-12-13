@@ -126,9 +126,14 @@ evalExpr' ctx expr = liftIO $ case expr of
                             <> T.pack (show k)
                             <> " ❌"
         in
-            mapM evalPair ps >>= (return . EdhDict . Dict . Map.fromList)
+            do
+                pl <- mapM evalPair ps
+                EdhDict <$> newIORef (Dict $ Map.fromList pl)
 
-    ListExpr  vs        -> EdhList <$> mapM eval' vs
+    ListExpr vs -> do
+        l <- mapM eval' vs
+        EdhList <$> newIORef l
+
     TupleExpr vs        -> EdhTuple <$> mapM eval' vs
 
     SequeExpr vs        -> EdhSeque <$> mapM evalSS vs

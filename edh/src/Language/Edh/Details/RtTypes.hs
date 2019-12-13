@@ -314,8 +314,8 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhModule !Module
 
     -- * immutable by self, but may contain pointer to entities
-        | EdhDict !Dict
-        | EdhList ![EdhValue]
+        | EdhDict !(IORef Dict)
+        | EdhList !(IORef [EdhValue])
         | EdhTuple ![EdhValue]
         | EdhSeque ![EdhValue]
 
@@ -356,10 +356,12 @@ instance Show EdhValue where
     show (EdhModule  v) = show v
 
 -- advocate trailing comma here
-    show (EdhDict    v) = show v
-    show (EdhList    v) = if Prelude.null v
-        then "[]"
-        else "[" ++ Prelude.concat [ show i ++ ", " | i <- v ] ++ "]"
+    show (EdhDict    v) = let d = unsafePerformIO (readIORef v) in show d
+    show (EdhList v) =
+        let l = unsafePerformIO (readIORef v)
+        in  if Prelude.null l
+                then "[]"
+                else "[" ++ Prelude.concat [ show i ++ ", " | i <- l ] ++ "]"
     show (EdhTuple v) = if Prelude.null v
         then "(,)" -- the denotation of empty tuple is same as Python
         else "(" ++ Prelude.concat [ show i ++ ", " | i <- v ] ++ ")"
@@ -414,15 +416,15 @@ instance Eq EdhValue where
     EdhContinue     == EdhContinue     = True
     EdhFallthrough  == EdhFallthrough  = True
     EdhIterator x   == EdhIterator y   = x == y
-    -- todo: regard a yielded/returned value equal to the value itself ?
+-- todo: regard a yielded/returned value equal to the value itself ?
     EdhYield    x'v == EdhYield    y'v = x'v == y'v
     EdhReturn   x'v == EdhReturn   y'v = x'v == y'v
 
     EdhProxy    x'v == EdhProxy    y'v = x'v == y'v
 
-    -- todo: support coercing equality ?
-    --       * without this, we are a strongly typed dynamic language
-    --       * with this, we'll be a weakly typed dynamic language
+-- todo: support coercing equality ?
+--       * without this, we are a strongly typed dynamic language
+--       * with this, we'll be a weakly typed dynamic language
     _               == _               = False
 
 
