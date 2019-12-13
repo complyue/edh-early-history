@@ -146,7 +146,7 @@ for (x, y) from g(100) do
     console.log('got ' ++ x ++ '>>' ++ y)
 ```
 
-### goroutine, select among channel readers, and defer
+### goroutine, defer and concurrency ctrl
 
 ```haskell
 class EventMonitor (chSub, name="observer") {
@@ -164,7 +164,7 @@ class EventProducer (chPub, chStop, name="announcer") {
     method giveTiming (interval) {
         defer this.reportSummary()
 
-        select (
+        altog (
             for _ from chStop do pass,
             for currentTime from runtime.everyMillisN(interval) do (
                 this.evtCnt += 1
@@ -189,6 +189,14 @@ go prod.giveTiming(1.5e3)
 for _ from runtime.afterMillisN(60e3) do
     chStop.close()
 ```
+
+We have `altog(*tasks)` (as shown above) and `concur(n,*tasks)` for
+concurrency control. The implementation is trivial with Haskell's
+`throwTo` construct for async cancellation.
+
+> TODO should we implement `select` (as in Go) on multiple channel
+> reads ? This may not be trivial when we simply implement channels
+> with `MVar`s.
 
 ### Haskell style case-of, with Go style fallthrough
 
