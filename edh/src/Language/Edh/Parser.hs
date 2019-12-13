@@ -340,7 +340,8 @@ parsePrefixExpr = choice
     [ PrefixExpr PrefixPlus <$> (symbol "+" *> parseExpr)
     , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
-    , PrefixExpr Guard <$> (symbol "|" >> parseExpr)
+    -- guard precedence should be no smaller than the branch op (->)
+    , (symbol "|" >> parseExprPrec 1 (PrefixExpr Guard))
     , PrefixExpr Go <$> (symbol "go" >> requireCallOrSeque)
     , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrSeque)
     ]
