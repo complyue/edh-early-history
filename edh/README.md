@@ -23,6 +23,14 @@ and another for performance.
 Haskell on its own has long achieved both in many domains, but in numeric
 crunching, the overwhelming success of Numpy/Pandas come with good reasons.
 
+My take is that object semantic may be more powerful to describe the mutable
+parts of your problem domain, while functional approach will be really fluent
+when describing just the immutable parts.
+
+And an object system is not necessarily strictly Object-Oriented in suiting
+particular problems, sometimes just managing transactional states is enough,
+e.g. Go solved many problems more fluently than other OO languages.
+
 ## Teasers
 
 ### Python style argument passing
