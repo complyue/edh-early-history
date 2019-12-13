@@ -90,7 +90,10 @@ evalExpr' ctx expr = liftIO $ case expr of
                     <> T.pack (show v)
                     <> " ❌"
 
-        -- TODO this impl correct ?
+        -- TODO this should probably create Thunk instead, but mind to
+        --      cooperate with the branch operator (->), find a way to
+        --      tell it that this is guarded value, don't compare with
+        --      thunk target value. but how ?
         Guard -> eval' expr'
 
         -- TODO impl these
@@ -136,6 +139,8 @@ evalExpr' ctx expr = liftIO $ case expr of
 
     TupleExpr vs        -> EdhTuple <$> mapM eval' vs
 
+    -- TODO this should check for Thunk, and implement
+    --      break/fallthrough semantics
     SequeExpr vs        -> EdhSeque <$> mapM evalSS vs
 
     -- TODO impl this
