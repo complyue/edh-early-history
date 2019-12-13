@@ -134,6 +134,18 @@ l =< [2,9]; d =< {'b': 1, 'm': 'cool!'}
 11 => l; ('n', 'yeah') => d
 ```
 
+### generators
+
+```haskell
+g = generator (n) {
+    for i from range(n) do
+        yield (i, i * i)
+}
+
+for (x, y) from g(100) do
+    console.log('got ' ++ x ++ '>>' ++ y)
+```
+
 ### goroutine, select among channel readers, and defer
 
 ```haskell
