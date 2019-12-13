@@ -28,7 +28,7 @@ method g * {
 g (name="Yesman")
 
 // argument retargetting
-method setName (name=this.name) pass
+method setName (name as this.name) pass
 ```
 
 ### import by argument receiving
@@ -98,7 +98,7 @@ class E () {
 
 You can even comprehend into list/dict with existing data,
 this may be good or bad depending on your opinion. But you
-know what, you can override the `(=<)` operator to refuse 
+know what, you can override the `(=<)` operator to refuse
 to comprehend into non-empty list/dict!
 
 > TODO Đ repl session demo here
