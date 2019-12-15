@@ -33,20 +33,25 @@ e.g. Go solved many problems more fluently than other OO languages.
 
 ## Teasers
 
-### Python style argument passing
+### Python style arguments passing
 
 ```javascript
 // the Pythonic way of argument receiving
 method f (x, y=10, *ns, **kwargs) {
     // ...
 }
+
 // the Pythonic way of argument sending
 f (3, 7, 21, *[9, 11], name='doer', **{'msg': "you've got it", 'keynum': 2})
 ```
 
-### and more of argument receiving
+### and more of arguments receiving
 
 ```javascript
+// simplified property setter method by leveraging argument retargetting
+method setName (name as this._name) pass
+method getName () this._name
+
 // wild argument receiver
 method g * {
     return "I guess you passed me a name '" ++ name
@@ -54,12 +59,9 @@ method g * {
 }
 // but this is not really a good idea for api signature
 g (name="Yesman")
-
-// argument retargetting
-method setName (name as this.name) pass
 ```
 
-### import by argument receiving
+### import by arguments receiving
 
 ```javascript
 // while the wild argument receiver is bad for procedures, it's fairly
@@ -77,6 +79,22 @@ if len(newGoodiesToKnow) > 0 then
 
 > TODO demostrate `edh_modules` directory structure for dependency management
 > akin to npm's `node_modules` structure.
+
+### arguments sending, generators
+
+```js
+generator g (n) {
+    for i from range(n) do
+        // pack an arguments sender to yield out,
+        // you'd feel it like calling a callback
+        yield pack (i, i * i, desc="square of " ++ i)
+}
+
+// arguments receiver syntax in for expression,
+// you'd feel it like defining a callback
+for (x, y, desc="the result") from g(100) do
+    console.log(x ++ ": " ++ desc ++ " is " ++ y)
+```
 
 ### Go Type-Embedding style multiple "inheritance"
 
@@ -111,10 +129,41 @@ class E () {
 }
 ```
 
-### ES6 style symbol
+### ES6 style symbol for better encapsulation
+
+You can control the access to an object's attribute by binding it using
+a symbol instead of an alphanumeric name. The symbol value can be defined
+at the module level, so all procedures in the module have access; or
+defined as an instance level value, so only procedures belong to the
+same object have access. Further more, the symbol value can be given to
+a friend procedure to grant the access.
 
 ```javascript
-...
+class C () {
+    name = symbol
+
+    method getName() this.@name
+    method setName(name as this.@name) pass
+}
+```
+
+symbols are normally obtained from current scope, or a direct reference
+after `this` reference. Other attempts to dereference for a symbol
+value are always prohibited.
+
+```js
+c = C()
+
+// this won't success unless the calling scope has the same symbol value
+// bound to it as an attribute named `name`.
+c.@name
+
+// this is prohibited as `name` on a class `C` instance is a symbol value
+c.name
+// so this can never succeed to get the `name` property off a `C` object
+c.@(c.name)
+
+// TODO add repl session log demonstrating the relevant errors
 ```
 
 ### list/dict/tuple comprehension
@@ -143,33 +192,22 @@ l =< [2,'bar',9]; d =< {'b': 1, 'm': 'cool!'}
 'baz' => l; ('n', 'yeah') => d
 ```
 
-### generators
+### goroutine, concurrency control, and `sink` the broadcasting channel
 
 ```js
-g = generator (n) {
-    for i from range(n) do
-        // using argument sender syntax in yield,
-        // you'd feel it like calling a callback
-        yield (i, i * i, desc="square of " ++ i)
-}
-
-// argument receiver syntax in for, you'd feel as
-// defining a callback
-for (x, y, desc="the result") from g(100) do
-    console.log(x ++ ": " ++ desc ++ " is " ++ y)
-```
-
-### goroutine, defer and concurrency ctrl
-
-```haskell
-class EventMonitor (chSub, name="observer") {
-    method ackEvents () (
-        for inEvent from chSub do
-            console.info(name ++ " got " ++ inEvent)
+class EventMonitor (evsSub, name="observer") {
+    method ackEvents (maxN=5) (
+        ackN = maxN
+        for (t, description, **) from evsSub do (
+            ackN += 1
+            console.info(name ++ " got #" ++ ackN ++ " event: "
+                ++ description ++ " @ " ++ t)
+            if ackN >= maxN then break
+        )
     )
 }
 
-class EventProducer (chPub, chStop, name="announcer") {
+class EventProducer (evsStop, evsPub, name="announcer") {
     evtCnt = 0
     method reportSummary() {
         console.info(name ++ " totally dispatched " ++ evtCnt ++ " event(s).")
@@ -177,39 +215,56 @@ class EventProducer (chPub, chStop, name="announcer") {
     method giveTiming (interval) {
         defer this.reportSummary()
 
+        // `altog` schedules specified concurrent tasks to run altogether,
+        // the rest tasks will be cancelled upon any of them to finish first
         altog (
-            for _ from chStop do pass,
+            for _ from evsStop do break,
             for currentTime from runtime.everyMillisN(interval) do (
                 this.evtCnt += 1
-                chPub <- "[Event-" ++ evtCnt ++ "@" ++ currentTime ++ "]"
+                evsPub <- pack (t=currentTime, n=evtCnt,
+                    description="Event#" ++ evtCnt)
             )
         )
     }
 }
 
-chPubSub = chan
-let (mon1, mon2) = (
-    EventMonitor(chPubSub, "Mon1"),
-    EventMonitor(chPubSub, "Mon2"),
-)
-go mon1.ackEvents()
-go mon2.ackEvents()
+evsLiveCast = sink
 
-chStop = chan
-prod = EventProducer (chPubSub, chStop)
-go prod.giveTiming(1.5e3)
+// `concur` schedules the specified number of tasks to run at the same time,
+// with all specified tasks in backlog
+concur (
+    EventMonitor(evsLiveCast, "Mon1").ackEvents(3),
+    EventMonitor(evsLiveCast, "Mon2").ackEvents(2),
+    EventMonitor(evsLiveCast, "Mon3").ackEvents(3),
+    EventMonitor(evsLiveCast, "Mon4").ackEvents(1),
+    EventMonitor(evsLiveCast, "Mon5").ackEvents(5),
+
+    c=2 // keep at max 2 concurrent tasks at a time
+)
+
+evsStop = sink
+go EventProducer(evsStop, evsLiveCast).giveTiming(1.5e3)
 
 for _ from runtime.afterMillisN(60e3) do
-    chStop.close()
+    evsStop <- nil
 ```
 
-We have `altog(*tasks)` (as shown above) and `concur(n,*tasks)` for
-concurrency control. The implementation is trivial with Haskell's
-`throwTo` construct for async cancellation.
+As shown above, we use `go` prefix to start new execution threads, and we
+have `altog(*tasks)` and `concur(*tasks, c=<n>)` for concurrency control.
 
-> TODO should we implement `select` (as in Go) on multiple channel
-> reads ? This may not be trivial when we simply implement channels
-> with `MVar`s.
+An `sink` is a multi-sender, multi-receiver broadcasting channel
+for messages, comparable to a `chan` in Go, which is a multi-sender,
+load-balanced-multi-receiver unicast channel for messsages.
+
+An _event_ message in Edh can be an `ArgsPack` created by `pack()`, then
+further received by the _argument receiver_ of the `for` expression.
+
+All procedures written in Edh are inherently thread-safe, invariants across
+multiple attributes on a single object ('s underlying entity) is guaranteed
+if always assigned together within a same `let` statement.
+
+More complex invariants should be reduced to the 3rd normal form in
+relational sense to take advantage of the single object guarantee.
 
 ### Haskell style case-of, with Go style fallthrough
 
