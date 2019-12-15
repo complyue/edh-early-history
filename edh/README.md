@@ -196,15 +196,15 @@ l =< [2,'bar',9]; d =< {'b': 1, 'm': 'cool!'}
 
 ```js
 class EventMonitor (evsSub, name="observer") {
-    method ackEvents (maxN=5) (
+    method ackEvents (maxN=5) {
         ackN = maxN
-        for (t, description, **) from evsSub do (
+        for (t, description, **) from evsSub do {
             ackN += 1
             console.info(name ++ " got #" ++ ackN ++ " event: "
                 ++ description ++ " @ " ++ t)
             if ackN >= maxN then break
-        )
-    )
+        }
+    }
 }
 
 class EventProducer (evsStop, evsPub, name="announcer") {
@@ -219,11 +219,11 @@ class EventProducer (evsStop, evsPub, name="announcer") {
         // the rest tasks will be cancelled upon any of them to finish first
         altog (
             for _ from evsStop do break,
-            for currentTime from runtime.everyMillisN(interval) do (
+            for currentTime from runtime.everyMillisN(interval) do {
                 this.evtCnt += 1
                 evsPub <- pack (t=currentTime, n=evtCnt,
                     description="Event#" ++ evtCnt)
-            )
+            }
         )
     }
 }
@@ -269,18 +269,18 @@ relational sense to take advantage of the single object guarantee.
 ### Haskell style case-of, with Go style fallthrough
 
 ```haskell
-let essay = case type(v) of (
+let essay = case type(v) of {
    BoolType -> "to be or not to be, that's a problem"
-   DecimalType -> (
+   DecimalType -> {
       |v<2 -> "consume less, produce more"
       |v<10 -> "no more than " ++ v ++ " cups of coffee a day"
       true -> "every one get his/her lucky number"
-   )
+   }
    StringType -> (quiz=v fallthrough)
    SymbolType -> (quiz='mistery attracts most people' fallthrough)
    ModuleType -> (quiz='I live in ' ++ v.__name__; fallthrough)
    "do you known, that " ++ quiz ++ " ?"
-)
+}
 ```
 
 ### Ternary operator
