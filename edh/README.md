@@ -63,7 +63,7 @@ Take away is: you use one language/runtime for flexibility/expressiveness,
 and another for performance.
 
 Haskell on its own has long achieved both in many domains, but in numeric
-crunching, the overwhelming success of **Numpy**/**Pandas** come with good
+crunching, the overwhelming success of **Numpy**/**Pandas** came with good
 reasons.
 
 My take is that object semantics may be more powerful to describe the mutable
@@ -177,13 +177,13 @@ class E () {
 You can control the access to an object's attribute by binding it using
 a symbol instead of an alphanumeric name. The symbol value can be defined
 at the module level, so all procedures in the module have access; or
-defined as an instance level value, so only procedures belong to the
+defined as an instance level value, so only procedures belonging to the
 same object have access. Further more, the symbol value can be given to
 a friend procedure to grant the access.
 
 ```javascript
 class C () {
-    name = symbol
+    name = Symbol('name')
 
     method getName() this.@name
     method setName(name as this.@name) pass
@@ -217,10 +217,10 @@ c.@(c.name)
 (,) =< for x from range(100) do x*x
 ```
 
-You can even comprehend into list/dict with existing data,
-this may be good or bad depending on your opinion. But you
-know what, you can override the `(=<)` operator to refuse
-to comprehend into non-empty list/dict!
+You can even comprehend into list/dict with existing data, this may be
+good or bad depending on your opinion. But you have the option to
+[override](#operator-override--creation) the `(=<)` operator to refuse
+comprehending into non-empty list/dict!
 
 > TODO Đ repl session demo here
 
@@ -228,14 +228,26 @@ to comprehend into non-empty list/dict!
 
 ```haskell
 let (l, d) = ([3,'foo',5], {'a': 'good', 'b': 9})
+
 // append to a list/dict, just use the comprehension operator as well
 l =< [2,'bar',9]; d =< {'b': 1, 'm': 'cool!'}
+
 // prepend to a list, insert/update single entry to a dict,
 // there's a dedicated operator (=>) for it
 'baz' => l; ('n', 'yeah') => d
 ```
 
 ### goroutine, concurrency control, and `sink` the broadcasting channel
+
+As shown below, we use `go` prefix to start new execution threads, and we
+have `altog(*tasks)` and `concur(*tasks, c=<n>)` for concurrency control.
+
+An `sink` is a multi-sender, multi-receiver broadcasting channel
+for messages, comparable to a `chan` in Go, which is a multi-sender,
+load-balanced-multi-receiver unicast channel for messsages.
+
+An _event_ message in **Edh** can be an `ArgsPack` created by `pack()`, then
+further received by the _argument receiver_ of the `for` expression.
 
 ```js
 class EventMonitor (evsSub, name="observer") {
@@ -292,16 +304,6 @@ for _ from runtime.afterMillisN(60e3) do
     evsStop <- nil
 ```
 
-As shown above, we use `go` prefix to start new execution threads, and we
-have `altog(*tasks)` and `concur(*tasks, c=<n>)` for concurrency control.
-
-An `sink` is a multi-sender, multi-receiver broadcasting channel
-for messages, comparable to a `chan` in Go, which is a multi-sender,
-load-balanced-multi-receiver unicast channel for messsages.
-
-An _event_ message in **Edh** can be an `ArgsPack` created by `pack()`, then
-further received by the _argument receiver_ of the `for` expression.
-
 ### Haskell style case-of, with Go style fallthrough
 
 ```haskell
@@ -321,13 +323,13 @@ let essay = case type(v) of {
 
 ### Ternary operator
 
-in C you do:
+in **C** you do:
 
 ```C
 onCnd ? oneThing : theOther
 ```
 
-and in Python you do:
+and in **Python** you do:
 
 ```python
 onCnd and oneThing or theOther
@@ -350,23 +352,25 @@ implemented as overridable operators:
   - (`&&`), (`||`)
 - ternary
   - (`&=`), (`|=`)
-- list/dict comprehension
+- list/dict/tuple comprehension/concatenation
   - (`=<`)
 - list/dict prepend/insert
   - (`=>`)
-- channel read/write
+- publish an event to a sink
   - (`<-`)
 - case branch
   - (`->`)
-- string concat
+- string coercing concatenation
   - (`++`)
 
-Meaning you can override them for the program scope under your control,
-and you can even roll your own, arbitrary new operators with a precendence
-you'd like with, as very well as in Haskell.
+Meaning you can override them for the entire **Edh** world, or part of the
+program scope (e.g. a module, a class).
 
-All operators in **Edh** are left associative, infix only, though. Well, except
-a few hardcoded prefix operators:
+And you can even roll your own, arbitrary new operators with a precendence
+you'd like with, as so similar as **Haskell** allows you.
+
+All operators in **Edh** are left associative, infix only, though. Well,
+except a few hardcoded prefix operators:
 
 - (`+`) prefix plus
 - (`-`) prefix minus
@@ -381,19 +385,19 @@ crucial for tasks e.g. porting **Numpy** to **Edh**. As **Edh** allows
 parenthesis quoted operator symbol as attribute name, such a method can be
 written:
 
-```haskell
+```js
 class ndarray (*args, **kwargs) {
     method ([]) (ix) {
-        ix can be scalar, slice or tuple of them ...
+        // ix can be scalar, slice or tuple of them ...
     }
 }
 ```
 
-With some additional tricks in the language, including parsing Python style
-index keys, i.e. slice syntax with (:) and (,) to create tuple key within
-the indexing bracket ([]) pair, then finally redirecting indexing against
-an object to method ([]), it'll be much similar as implementing
-`__getitem__(self, ix)` as in Python.
+With some additional tricks in the language, including parsing **Python**
+style index keys, i.e. slice syntax with (:) and (,) to create tuple key
+within the indexing bracket ([]) pair, then finally redirecting indexing
+against an object to method ([]), it'll be much similar as implementing
+`__getitem__(self, ix)` as in **Python**.
 
 ### lossless decimal for numbers
 
