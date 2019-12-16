@@ -299,7 +299,7 @@ An `sink` is a multi-sender, multi-receiver broadcasting channel
 for messages, comparable to a `chan` in Go, which is a multi-sender,
 load-balanced-multi-receiver unicast channel for messsages.
 
-An _event_ message in Edh can be an `ArgsPack` created by `pack()`, then
+An _event_ message in **Edh** can be an `ArgsPack` created by `pack()`, then
 further received by the _argument receiver_ of the `for` expression.
 
 ### Haskell style case-of, with Go style fallthrough
@@ -333,7 +333,7 @@ and in Python you do:
 onCnd and oneThing or theOther
 ```
 
-well in Edh you do:
+well in **Edh** you do:
 
 ```haskell
 onCnd &= oneThing |= theOther
@@ -365,7 +365,7 @@ Meaning you can override them for the program scope under your control,
 and you can even roll your own, arbitrary new operators with a precendence
 you'd like with, as very well as in Haskell.
 
-All operators in Edh are left associative, infix only, though. Well, except
+All operators in **Edh** are left associative, infix only, though. Well, except
 a few hardcoded prefix operators:
 
 - (`+`) prefix plus
@@ -377,8 +377,9 @@ a few hardcoded prefix operators:
 ### indexing override
 
 The indexing syntax is a special case (not an infix operator), but very
-crucial for tasks e.g. porting Numpy to Edh. As Edh allows parenthesis
-quoted operator symbol as attribute name, such a method can be written:
+crucial for tasks e.g. porting **Numpy** to **Edh**. As **Edh** allows
+parenthesis quoted operator symbol as attribute name, such a method can be
+written:
 
 ```haskell
 class ndarray (*args, **kwargs) {
@@ -411,8 +412,8 @@ Python gives you lossless integers by default, but `float64` for decimal:
 ```
 
 Haskell forces you to choose a type for every number in your program,
-normal options are the lossless `Integer` and precision-lossing `Double`
-(which is `float64` per se):
+normal options including the lossless `Integer`, bounded `Int`, and
+precision-lossing `Double`/`Float`:
 
 ```haskell
 λ> 1.1 + 2.2 :: Double
@@ -459,12 +460,12 @@ False
 λ>
 ```
 
-All numbers in Edh are `Data.Lossless.Decimal` from
+All numbers in **Edh** are `Data.Lossless.Decimal` from
 [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
 , by default and by all means:
 
 > will treat numeric data inside `Repa` / `AccerlerateHS` arrays as foreign data,
-> given we port `Numpy`/`Pandas` to Edh to manipulate them
+> given we port `Numpy`/`Pandas` to **Edh** to manipulate them
 
 ```
 ...
@@ -478,7 +479,7 @@ All numbers in Edh are `Data.Lossless.Decimal` from
 
 Edh stands for **Event Distributing & Hosting**
 
-Đ is a more stylish, single letter, symbolic name of Edh the language
+Đ is a more stylish, single letter, symbolic name of **Edh** the language
 
 ## Acknowledgement
 
@@ -487,6 +488,6 @@ Edh's parser is built with
 [on hackage](https://hackage.haskell.org/package/megaparsec) ),
 parser making with Megaparsec is so pleasant.
 
-The development of Edh was started from cloning
+The development of **Edh** was started from cloning
 [monkey-hs](https://github.com/utatti/monkey-hs)
 by Hyunje Jun, but later re-written entirely.
