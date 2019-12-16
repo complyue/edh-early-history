@@ -1,35 +1,78 @@
 # Đ - (WIP) a modern Object layer spliced with Haskell
 
-Missing Python/JavaScript or even Go in shifting to
-Haskell? Now you can have Edh, with many goodies from
+Missing **Python**/**JavaScript** or even **Go** in shifting to
+**Haskell**? Now you can have \*_Edh_, with many goodies from
 those languages but running embedded in Haskell.
 
 ## Why splice
 
-I have long been amused by how Python and C++ work together.
+I have long been amused by how **Python** and **C++** work together.
 
-> I use the modern `pybind11` toolchain, while C++ with `boost` has worked
-> longer, and C with Python has a even longer history.
+> I use the modern [pybind11](https://pybind11.readthedocs.io/)
+> toolchain, while **C++** with [boost](https://www.boost.org/)
+> has worked longer, and **C** and **Python** has a even longer history of
+> entanglement.
 
-With Python code, you set a stage up with tensors forming a computation network,
-with those tensors implemented in C++, while during full speed sprinting,
-the tensor code can call Python from C++ through some bindings (`pybind` does
-most of that out-of-the-box), to tell the framework to _shift gear_ in some
-parts.
+With **Python** code, you set a stage up with tensors forming a computation
+network, with those tensors implemented in **C++**, while during full speed
+sprinting, the tensor code can call **Python** from **C++** through some
+bindings (**pybind** does most of that out-of-the-box), to tell the framework
+to _shift gear_ in some parts.
 
 Take away is: you use one language/runtime for flexibility/expressiveness,
 and another for performance.
 
 Haskell on its own has long achieved both in many domains, but in numeric
-crunching, the overwhelming success of Numpy/Pandas come with good reasons.
+crunching, the overwhelming success of **Numpy**/**Pandas** come with good
+reasons.
 
 My take is that object semantics may be more powerful to describe the mutable
 parts of your problem domain, while functional approach will be really fluent
 when describing just the immutable parts.
 
 And an object system is not necessarily strictly Object-Oriented in suiting
-particular problems, sometimes just managing transactional states is enough,
+particular problems, sometimes just managing transitional states is enough,
 e.g. Go solved many problems more fluently than other OO languages.
+
+## Why a new programming language
+
+### conceptual clearance
+
+To stay conceptually clear for the object system (which is
+[procedural](https://en.wikipedia.org/wiki/Procedural_programming) per se)
+living together with the
+[functional](https://en.wikipedia.org/wiki/Functional_programming)
+parts, there are only **procedures** but no **function** in **Edh** the
+language. Simply put, in **Edh** context, a **procedure** tends to
+_change the world_, while a **function** must stay
+[side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
+free.
+
+### thread-safe without programmer's care
+
+All procedures written in **Edh** are inherently
+[thread-safe](https://en.wikipedia.org/wiki/Thread_safety)
+without special treatment, thanks to **Haskell**'s immutable data structures
+underlying.
+
+### ease the programming of data consistency
+
+The
+[invariants](<https://en.wikipedia.org/wiki/Invariant_(mathematics)>)
+concerning a set of attributes on a single object (or more accurately its
+underlying **entity**), is guaranteed
+[iff](https://en.wikipedia.org/wiki/If_and_only_if)
+this set of attributes are always extracted/assigned together within a same
+`let` statement.
+
+For more complex invariants, the class schema should be normalized to the
+[3NF](https://en.wikipedia.org/wiki/Third_normal_form) or further as
+necessary (in relational sense), to take advantage of the single object
+(entity) guarantee.
+
+### lossless decimal for numbers
+
+see [details below](<#lossless decimal for numbers>)
 
 ## Teasers
 
@@ -258,13 +301,6 @@ load-balanced-multi-receiver unicast channel for messsages.
 
 An _event_ message in Edh can be an `ArgsPack` created by `pack()`, then
 further received by the _argument receiver_ of the `for` expression.
-
-All procedures written in Edh are inherently thread-safe, invariants across
-multiple attributes on a single object ('s underlying entity) is guaranteed
-if always assigned together within a same `let` statement.
-
-More complex invariants should be reduced to the 3rd normal form in
-relational sense to take advantage of the single object guarantee.
 
 ### Haskell style case-of, with Go style fallthrough
 
