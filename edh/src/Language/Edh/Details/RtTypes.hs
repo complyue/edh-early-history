@@ -317,7 +317,7 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhDict !(IORef Dict)
         | EdhList !(IORef [EdhValue])
         | EdhTuple ![EdhValue]
-        | EdhSeque ![EdhValue]
+        | EdhBlock ![StmtSrc]
 
     -- * harness for lazy evaluation
         | EdhThunk !Thunk
@@ -332,7 +332,7 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
 
     -- * flow control
         | EdhBreak | EdhContinue
-        | EdhFallthrough
+        | EdhCaseClose !EdhValue | EdhFallthrough
         | EdhIterator !Iterator
         | EdhYield !EdhValue
         | EdhReturn !EdhValue
@@ -356,7 +356,11 @@ instance Show EdhValue where
     show (EdhModule  v) = show v
 
 -- advocate trailing comma here
-    show (EdhDict    v) = let d = unsafePerformIO (readIORef v) in show d
+    show (EdhDict v) =
+        let d@(Dict m) = unsafePerformIO (readIORef v)
+        in  if Map.null m
+                then "{,}" -- make it obvious this is an empty dict
+                else show d
     show (EdhList v) =
         let l = unsafePerformIO (readIORef v)
         in  if Prelude.null l
@@ -365,28 +369,30 @@ instance Show EdhValue where
     show (EdhTuple v) = if Prelude.null v
         then "(,)" -- the denotation of empty tuple is same as Python
         else "(" ++ Prelude.concat [ show i ++ ", " | i <- v ] ++ ")"
-    show (EdhSeque v) = if Prelude.null v
-        then "(;)" -- make it obvious this is an empty group
-        else "(" ++ Prelude.concat [ show i ++ "; " | i <- v ] ++ ")"
 
-    show (EdhThunk    v) = show v
+    show (EdhBlock v) = if Prelude.null v
+        then "{;}" -- make it obvious this is an empty block
+        else "{" ++ Prelude.concat [ show i ++ "; " | i <- v ] ++ "}"
 
-    show (EdhHostProc v) = show v
+    show (EdhThunk    v)  = show v
 
-    show (EdhClass    v) = show v
-    show (EdhMethod   v) = show v
-    show (EdhGenrDef  v) = show v
+    show (EdhHostProc v)  = show v
 
-    show EdhBreak        = "[break]"
-    show EdhContinue     = "[continue]"
-    show EdhFallthrough  = "[fallthrough]"
-    show (EdhIterator i) = show i
-    show (EdhYield    v) = "[yield: " ++ show v ++ "]"
-    show (EdhReturn   v) = "[return: " ++ show v ++ "]"
+    show (EdhClass    v)  = show v
+    show (EdhMethod   v)  = show v
+    show (EdhGenrDef  v)  = show v
 
-    show (EdhChannel  _) = "[channel]"
+    show EdhBreak         = "[break]"
+    show EdhContinue      = "[continue]"
+    show (EdhCaseClose v) = "[caseclose: " ++ show v ++ "]"
+    show EdhFallthrough   = "[fallthrough]"
+    show (EdhIterator i)  = show i
+    show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
+    show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
 
-    show (EdhProxy    v) = "[proxy: " ++ show v ++ "]"
+    show (EdhChannel  _)  = "[channel]"
+
+    show (EdhProxy    v)  = "[proxy: " ++ show v ++ "]"
 
 instance Eq EdhValue where
     EdhType x       == EdhType y       = x == y
@@ -402,7 +408,8 @@ instance Eq EdhValue where
     EdhDict     x   == EdhDict     y   = x == y
     EdhList     x   == EdhList     y   = x == y
     EdhTuple    x   == EdhTuple    y   = x == y
-    EdhSeque    x   == EdhSeque    y   = x == y
+
+    EdhBlock    x   == EdhBlock    y   = x == y
 
     EdhThunk    x   == EdhThunk    y   = x == y
 
@@ -414,6 +421,7 @@ instance Eq EdhValue where
 
     EdhBreak        == EdhBreak        = True
     EdhContinue     == EdhContinue     = True
+    EdhCaseClose x  == EdhCaseClose y  = x == y
     EdhFallthrough  == EdhFallthrough  = True
     EdhIterator x   == EdhIterator y   = x == y
 -- todo: regard a yielded/returned value equal to the value itself ?
@@ -455,9 +463,10 @@ createEdhWorld = liftIO $ do
             { classScope     = []
             , className      = "<world>"
             , classSourcePos = srcPos
-            , classProcedure = ProcDecl { procedure'args = WildReceiver
-                                        , procedure'body = (srcPos, VoidStmt)
-                                        }
+            , classProcedure = ProcDecl
+                                   { procedure'args = WildReceiver
+                                   , procedure'body = StmtSrc (srcPos, VoidStmt)
+                                   }
             }
     opPD  <- newIORef Map.empty
     modus <- newIORef Map.empty
@@ -473,7 +482,8 @@ createEdhWorld = liftIO $ do
                 , classSourcePos = srcPos
                 , classProcedure = ProcDecl
                                        { procedure'args = WildReceiver
-                                       , procedure'body = (srcPos, VoidStmt)
+                                       , procedure'body = StmtSrc
+                                                              (srcPos, VoidStmt)
                                        }
                 }
         , worldOperators = opPD

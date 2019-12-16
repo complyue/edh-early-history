@@ -22,7 +22,7 @@ import           Language.Edh.Details.RtTypes
 
 
 evalStmt :: MonadIO m => Context -> StmtSrc -> m EdhValue
-evalStmt ctx (srcPos, stmt) =
+evalStmt ctx (StmtSrc (srcPos, stmt)) =
     liftIO
         $ handleJust
               Just
@@ -142,7 +142,7 @@ evalExpr' ctx expr = liftIO $ case expr of
 
     -- TODO this should check for Thunk, and implement
     --      break/fallthrough semantics
-    SequeExpr vs        -> EdhSeque <$> mapM evalSS vs
+    BlockExpr stmts     -> return $ EdhBlock stmts
 
     -- TODO impl this
     ForExpr ar iter act -> undefined

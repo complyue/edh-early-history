@@ -312,17 +312,17 @@ parseReturnStmt = do
 parseStmt :: Parser StmtSrc
 parseStmt = do
     srcPos <- getSourcePos
-    ((,) srcPos)
+    (StmtSrc . ((,) srcPos))
         <$> choice
                 [ parseImportStmt
                 , parseClassStmt
                 , parseExtendsStmt
                 , parseMethodStmt
                 , parseWhileStmt
-                -- TODO validate break/continue must within a loop seque
+                -- TODO validate break/continue must within a loop construct
                 , BreakStmt <$ symbol "break"
                 , ContinueStmt <$ symbol "continue"
-                -- TODO validate fallthrough must within a case-of seque
+                -- TODO validate fallthrough must within a case-of block
                 , FallthroughStmt <$ symbol "fallthrough"
                 , parseOpDeclOvrdStmt
                 , parseTryStmt
@@ -342,17 +342,17 @@ parsePrefixExpr = choice
     , PrefixExpr Not <$> (symbol "not" >> parseExpr)
     -- guard precedence should be no smaller than the branch op (->)
     , (symbol "|" >> parseExprPrec 1 (PrefixExpr Guard))
-    , PrefixExpr Go <$> (symbol "go" >> requireCallOrSeque)
-    , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrSeque)
+    , PrefixExpr Go <$> (symbol "go" >> requireCallOrForLoop)
+    , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrForLoop)
     ]
   where
-    requireCallOrSeque = do
+    requireCallOrForLoop = do
         o <- getOffset
         e <- parseExpr
         case e of
-            ce@(CallExpr _ _) -> return ce
-            se@(SequeExpr _) -> return se
-            _ -> setOffset o >> fail "a call/seque required here"
+            ce@(CallExpr _ _ ) -> return ce
+            se@(ForExpr _ _ _) -> return se
+            _                  -> setOffset o >> fail "a call/for required here"
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do
@@ -370,8 +370,8 @@ parseCaseExpr = do
     void $ symbol "case"
     tgt <- parseExpr
     void $ symbol "of"
-    seque <- parseStmt
-    return $ CaseExpr tgt seque
+    branches <- parseStmt
+    return $ CaseExpr tgt branches
 
 parseForExpr :: Parser Expr
 parseForExpr = do
@@ -396,22 +396,6 @@ parseListExpr =
         <$> ( between (symbol "[") (symbol "]")
             $ many (parseExpr <* trailingComma)
             )
-
-parseDictExpr :: Parser Expr
-parseDictExpr =
-    DictExpr <$> (between (symbol "{") (symbol "}") $ many parseDictPair)
-  where
-    parseDictPair = do
-        keyExpr <- parseDictKey
-        void $ symbol ":"
-        valExpr <- parseExpr
-        trailingComma
-        return (keyExpr, valExpr)
-    -- colon is ambiguous in here, for now:
-    -- simply only allow literal and attribute addressor for dict key
-    -- todo improve this by a operator accepting parser, which treats
-    -- colon specially ?
-    parseDictKey = (LitExpr <$> parseLitExpr) <|> (AttrExpr <$> parseAttrAddr)
 
 parseStringLit :: Parser Text
 parseStringLit = lexeme do
@@ -447,7 +431,7 @@ parseLitExpr = choice
     , TypeLiteral DictType <$ litSym "DictType"
     , TypeLiteral ListType <$ litSym "ListType"
     , TypeLiteral TupleType <$ litSym "TupleType"
-    , TypeLiteral SequeType <$ litSym "SequeType"
+    , TypeLiteral BlockType <$ litSym "BlockType"
     , TypeLiteral ThunkType <$ litSym "ThunkType"
     , TypeLiteral HostProcType <$ litSym "HostProcType"
     , TypeLiteral ClassType <$ litSym "ClassType"
@@ -484,21 +468,49 @@ parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 parseIndexExpr :: Parser Expr
 parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
 
-parseTupleOrSeque :: Parser Expr
-parseTupleOrSeque = choice [(try $ parseSeque), parseTuple]
+parseBlockOrDict :: Parser Expr
+parseBlockOrDict = choice [(try $ parseBlock), parseDict]
 
-parseSeque :: Parser Expr
-parseSeque = symbol "(" *> (notFollowedBy $ symbol ",") *> parseSequeRest []
+parseBlock :: Parser Expr
+parseBlock =
+    symbol "{" *> (notFollowedBy $ symbol ",") *> parseBlockRest False []
   where
-    parseSequeRest :: [StmtSrc] -> Parser Expr
-    parseSequeRest t = (optional $ symbol ";") *> choice
-        [ ((symbol ")") *> (return $ SequeExpr (reverse t)))
-        , (do
-              srcPos <- getSourcePos
-              e      <- parseExpr
-              parseSequeRest $ (srcPos, ExprStmt e) : t
-          )
+    parseBlockRest :: Bool -> [StmtSrc] -> Parser Expr
+    parseBlockRest mustBlock t = do
+        mustBlock' <- (optional $ symbol ";") >>= \case
+            Nothing -> return mustBlock
+            _       -> return True
+        choice
+            [ (  (symbol "}")
+              *> (return $ if Prelude.null t && not mustBlock'
+                     then DictExpr [] -- let {} parse as empty dict
+                     else BlockExpr (reverse t) -- instead of empty block
+                 )
+              )
+            , (do
+                  srcPos <- getSourcePos
+                  e      <- parseExpr
+                  notFollowedBy (symbol ":")
+                  parseBlockRest mustBlock' $ StmtSrc (srcPos, ExprStmt e) : t
+              )
+            ]
+
+parseDict :: Parser Expr
+parseDict = symbol "{" *> parseDictRest []
+  where
+    parseDictRest :: [(Expr, Expr)] -> Parser Expr
+    parseDictRest t = (optional $ symbol ",") *> choice
+        [ (symbol "}") *> (return $ DictExpr (reverse t))
+        , parseKeyValPair >>= \p -> parseDictRest $ p : t
         ]
+    parseKeyValPair :: Parser (Expr, Expr)
+    parseKeyValPair = do
+        keyExpr <- parseExpr
+        void $ symbol ":"
+        valExpr <- parseExpr
+        trailingComma
+        return (keyExpr, valExpr)
+
 
 parseTuple :: Parser Expr
 parseTuple = symbol "(" *> parseTupleRest []
@@ -543,8 +555,7 @@ parseIdxNonCallPrec prec leftCtor = do
         [ -- possibly indexable, non-callable exprs
           AttrExpr <$> parseSupersRef
         , parseListExpr
-        , parseDictExpr
-        , parseTupleOrSeque
+        , parseBlockOrDict
         ]
     optional parseIndexExpr >>= \case
         Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor

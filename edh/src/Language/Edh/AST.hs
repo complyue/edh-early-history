@@ -7,7 +7,7 @@ import           Prelude
 import           Data.Text                     as T
 import           Data.Lossless.Decimal          ( Decimal )
 
-import           Text.Megaparsec                ( SourcePos )
+import           Text.Megaparsec
 
 
 type OpSymbol = Text
@@ -30,7 +30,13 @@ type MethodName = AttrName
 
 type SeqStmts = [StmtSrc]
 
-type StmtSrc = (SourcePos, Stmt)
+
+newtype StmtSrc = StmtSrc (SourcePos, Stmt)
+instance Eq StmtSrc where
+    StmtSrc (x'sp, _) == StmtSrc (y'sp, _) = x'sp == y'sp
+instance Show StmtSrc where
+    show (StmtSrc (sp, _)) = "Edh statement @ " ++ sourcePosPretty sp
+
 
 data Stmt = VoidStmt
         | ImportStmt !ArgsReceiver !Expr
@@ -91,19 +97,23 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
                 , if'consequence :: !StmtSrc
                 , if'alternative :: !(Maybe StmtSrc)
                 }
-        | CaseExpr { case'target :: !Expr , case'seque :: !StmtSrc }
+        | CaseExpr { case'target :: !Expr , case'branches :: !StmtSrc }
 
         | DictExpr ![(Expr, Expr)]
         | ListExpr ![Expr]
         | TupleExpr ![Expr]
 
-        -- a sequence of statements in a pair of parentheses,
-        -- optionally separated by semcolon. this is used
-        -- to implement the case-of construct, as well as
+        -- a block is an expression in Edh, instead of a statement as in
+        -- a C family language. it evaluates to the value of last expr
+        -- within it, in case no `EdhCaseClose` encountered, or can stop
+        -- early with the value from a `EdhCaseClose`, typically returned
+        -- from the branch `(->)` operator.
+        --
+        -- this is used to implement the case-of construct, as well as
         -- to allow multiple statements grouped as a single
         -- expression fitting into subclauses of if-then-else,
         -- while, and for-from-do constructs.
-        | SequeExpr ![StmtSrc]
+        | BlockExpr ![StmtSrc]
 
         | ForExpr !ArgsReceiver !Expr !Expr
         | GeneratorExpr !SourcePos !ProcDecl
@@ -143,7 +153,7 @@ data EdhTypeValue = TypeType
         | DictType
         | ListType
         | TupleType
-        | SequeType
+        | BlockType
         | ThunkType
         | HostProcType
         | ClassType
