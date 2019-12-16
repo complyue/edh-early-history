@@ -1,7 +1,7 @@
 # Đ - (WIP) a modern Object layer spliced with Haskell
 
 Missing **Python**/**JavaScript** or even **Go** in shifting to
-**Haskell**? Now you can have \*_Edh_, with many goodies from
+**Haskell**? Now you can have _Edh_, with many goodies from
 those languages but running embedded in Haskell.
 
 ## Why splice
@@ -43,7 +43,7 @@ To stay conceptually clear for the object system (which is
 living together with the
 [functional](https://en.wikipedia.org/wiki/Functional_programming)
 parts, there are only **procedures** but no **function** in **Edh** the
-language. Simply put, in **Edh** context, a **procedure** tends to
+language. Simply put, in **Edh** terminology, a **procedure** tends to
 _change the world_, while a **function** must stay
 [side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
 free.
@@ -55,7 +55,7 @@ All procedures written in **Edh** are inherently
 without special treatment, thanks to **Haskell**'s immutable data structures
 underlying.
 
-### ease the programming of data consistency
+### easy programming of data consistency
 
 The
 [invariants](<https://en.wikipedia.org/wiki/Invariant_(mathematics)>)
@@ -72,7 +72,7 @@ necessary (in relational sense), to take advantage of the single object
 
 ### lossless decimal for numbers
 
-see [details below](<#lossless decimal for numbers>)
+see [details below](#lossless-decimal-for-numbers-1)
 
 ## Teasers
 
