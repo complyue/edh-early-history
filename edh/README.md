@@ -6,7 +6,7 @@ those languages but running embedded in Haskell.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
-  - [thread-safe without programmer's care](#thread-safe-without-programmers-care)
+  - [easy concurrency with no-brainer thread-safety](#easy-concurrency-with-no-brainer-thread-safety)
   - [easy programming of data consistency](#easy-programming-of-data-consistency)
   - [lossless decimal for numbers](#lossless-decimal-for-numbers)
 - [Why splice](#why-splice)
@@ -43,12 +43,16 @@ _change the world_, while a **function** must stay
 [side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
 free.
 
-### thread-safe without programmer's care
+### easy concurrency with no-brainer thread-safety
 
 All procedures written in **Edh** are inherently
 [thread-safe](https://en.wikipedia.org/wiki/Thread_safety)
 without special treatment, thanks to **Haskell**'s immutable data structures
 underlying.
+
+And any procedure, or even a `for` loop can be put to a new thread for
+concurrent running with simply a `go` keyword prefixed to it. i.e.
+**goroutines**.
 
 ### easy programming of data consistency
 
