@@ -4,6 +4,31 @@ Missing **Python**/**JavaScript** or even **Go** in shifting to
 **Haskell**? Now you can have **Edh**, with many goodies from
 those languages but running embedded in Haskell.
 
+- [Why a new programming language](#why-a-new-programming-language)
+  - [conceptual clearance](#conceptual-clearance)
+  - [thread-safe without programmer's care](#thread-safe-without-programmers-care)
+  - [easy programming of data consistency](#easy-programming-of-data-consistency)
+  - [lossless decimal for numbers](#lossless-decimal-for-numbers)
+- [Why splice](#why-splice)
+- [Teasers](#teasers)
+  - [Python style arguments passing](#python-style-arguments-passing)
+  - [and more of arguments receiving](#and-more-of-arguments-receiving)
+  - [import by arguments receiving](#import-by-arguments-receiving)
+  - [arguments sending, generators](#arguments-sending-generators)
+  - [Go Type-Embedding style multiple inheritance](#go-type-embedding-style-multiple-inheritance)
+  - [ES6 style symbol for better encapsulation](#es6-style-symbol-for-better-encapsulation)
+  - [list/dict/tuple comprehension](#listdicttuple-comprehension)
+  - [list/dict modification](#listdict-modification)
+  - [goroutine, concurrency control, and sink the broadcasting channel](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
+  - [Haskell style case-of, with Go style fallthrough](#haskell-style-case-of-with-go-style-fallthrough)
+  - [ternary operator](#ternary-operator)
+  - [operator override / creation](#operator-override--creation)
+  - [indexing override](#indexing-override)
+  - [lossless decimal for numbers](#lossless-decimal-for-numbers-1)
+  - [reflection](#reflection)
+- [The name](#the-name)
+- [Acknowledgement](#acknowledgement)
+
 ## Why a new programming language
 
 ### conceptual clearance
@@ -139,7 +164,7 @@ for (x, y, desc="the result") from g(100) do
     console.log(x ++ ": " ++ desc ++ " is " ++ y)
 ```
 
-### Go Type-Embedding style multiple "inheritance"
+### Go Type-Embedding style multiple _inheritance_
 
 This is not geniune object-oriented inheritance though, but you'll go as far
 and well as Go [Type Embedding](https://go101.org/article/type-embedding.html)
@@ -321,7 +346,7 @@ let essay = case type(v) of {
 }
 ```
 
-### Ternary operator
+### ternary operator
 
 in **C** you do:
 
@@ -475,11 +500,11 @@ All numbers in **Edh** are `Data.Lossless.Decimal` from
 ...
 ```
 
-### Reflection
+### reflection
 
 ...
 
-## the name
+## The name
 
 Edh stands for **Event Distributing & Hosting**
 
