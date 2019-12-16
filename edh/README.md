@@ -91,7 +91,7 @@ tgt.on('evt-type', handler1)
 but this:
 
 ```js
-let evt = ...
+let tgt = ...
 
 go for evt from tgt.<evt-type> do {
     if <cond> then break
