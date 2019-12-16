@@ -8,6 +8,7 @@ those languages but running embedded in Haskell.
   - [conceptual clearance](#conceptual-clearance)
   - [easy concurrency with no-brainer thread-safety](#easy-concurrency-with-no-brainer-thread-safety)
   - [easy programming of data consistency](#easy-programming-of-data-consistency)
+  - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
   - [lossless decimal for numbers](#lossless-decimal-for-numbers)
 - [Why splice](#why-splice)
 - [Teasers](#teasers)
@@ -68,6 +69,35 @@ For more complex invariants, the class schema should be normalized to the
 [3NF](https://en.wikipedia.org/wiki/Third_normal_form) or further as
 necessary (in relational sense), to take advantage of the single object
 (entity) guarantee.
+
+### more concise syntax for event handling
+
+No more this:
+
+```js
+let tgt = ...
+
+let handler1 = function() {
+    if (<cond>) {
+        tgt.unregister('evt-type', handler1)
+        return
+    }
+    // ...
+}
+
+tgt.on('evt-type', handler1)
+```
+
+but this:
+
+```js
+let evt = ...
+
+go for evt from tgt.<evt-type> do {
+    if <cond> then break
+    // ...
+}
+```
 
 ### lossless decimal for numbers
 
