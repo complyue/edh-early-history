@@ -24,7 +24,7 @@ those languages but running embedded in Haskell.
   - [Haskell style case-of, with Go style fallthrough](#haskell-style-case-of-with-go-style-fallthrough)
   - [ternary operator](#ternary-operator)
   - [operator override / creation](#operator-override--creation)
-  - [indexing override](#indexing-override)
+  - [indexing override (Numpy/Pandas upon Repa/AccelerateHS)](#indexing-override-numpypandas-upon-repaacceleratehs)
   - [lossless decimal for numbers](#lossless-decimal-for-numbers-1)
   - [reflection](#reflection)
 - [The name](#the-name)
@@ -301,9 +301,9 @@ l =< [2,'bar',9]; d =< {'b': 1, 'm': 'cool!'}
 As shown below, we use `go` prefix to start new execution threads, and we
 have `altog(*tasks)` and `concur(*tasks, c=<n>)` for concurrency control.
 
-An `sink` is a multi-sender, multi-receiver broadcasting channel
+A `sink` is a multi-sender, multi-receiver broadcasting channel
 for messages, comparable to a `chan` in Go, which is a multi-sender,
-load-balanced-multi-receiver unicast channel for messsages.
+load-balanced-multi-receiver unicasting channel for messsages.
 
 An _event_ message in **Edh** can be an `ArgsPack` created by `pack()`, then
 further received by the _argument receiver_ of the `for` expression.
@@ -437,7 +437,7 @@ except a few hardcoded prefix operators:
 - (`|`) guard
 - the keyword `go` and `defer` are implemented as prefix operator
 
-### indexing override
+### indexing override (Numpy/Pandas upon Repa/AccelerateHS)
 
 The indexing syntax is a special case (not an infix operator), but very
 crucial for tasks e.g. porting **Numpy** to **Edh**. As **Edh** allows
@@ -457,6 +457,14 @@ style index keys, i.e. slice syntax with (:) and (,) to create tuple key
 within the indexing bracket ([]) pair, then finally redirecting indexing
 against an object to method ([]), it'll be much similar as implementing
 `__getitem__(self, ix)` as in **Python**.
+
+> Will treat numeric data inside **Repa** / **AccerlerateHS** arrays as
+> foreign data, exchange array elements with _lossless_ `Decimal` values
+> in Edh, pretty much like
+> [Storable](https://hackage.haskell.org/package/base/docs/Foreign-Storable.html)
+> implementations. If we're going to port **Numpy** / **Pandas** to **Edh**,
+> based on [Repa](https://hackage.haskell.org/package/repa) /
+> [AccerlerateHS](https://hackage.haskell.org/package/accelerate).
 
 ### lossless decimal for numbers
 
@@ -526,9 +534,6 @@ False
 All numbers in **Edh** are `Data.Lossless.Decimal` from
 [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
 , by default and by all means:
-
-> will treat numeric data inside `Repa` / `AccerlerateHS` arrays as foreign data,
-> given we port `Numpy`/`Pandas` to **Edh** to manipulate them
 
 ```
 ...
