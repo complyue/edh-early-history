@@ -1,38 +1,8 @@
 # Đ - (WIP) a modern Object layer spliced with Haskell
 
 Missing **Python**/**JavaScript** or even **Go** in shifting to
-**Haskell**? Now you can have _Edh_, with many goodies from
+**Haskell**? Now you can have **Edh**, with many goodies from
 those languages but running embedded in Haskell.
-
-## Why splice
-
-I have long been amused by how **Python** and **C++** work together.
-
-> I use the modern [pybind11](https://pybind11.readthedocs.io/)
-> toolchain, while **C++** with [boost](https://www.boost.org/)
-> has worked longer, and **C** and **Python** has a even longer history of
-> entanglement.
-
-With **Python** code, you set a stage up with tensors forming a computation
-network, with those tensors implemented in **C++**, while during full speed
-sprinting, the tensor code can call **Python** from **C++** through some
-bindings (**pybind** does most of that out-of-the-box), to tell the framework
-to _shift gear_ in some parts.
-
-Take away is: you use one language/runtime for flexibility/expressiveness,
-and another for performance.
-
-Haskell on its own has long achieved both in many domains, but in numeric
-crunching, the overwhelming success of **Numpy**/**Pandas** come with good
-reasons.
-
-My take is that object semantics may be more powerful to describe the mutable
-parts of your problem domain, while functional approach will be really fluent
-when describing just the immutable parts.
-
-And an object system is not necessarily strictly Object-Oriented in suiting
-particular problems, sometimes just managing transitional states is enough,
-e.g. Go solved many problems more fluently than other OO languages.
 
 ## Why a new programming language
 
@@ -73,6 +43,36 @@ necessary (in relational sense), to take advantage of the single object
 ### lossless decimal for numbers
 
 see [details below](#lossless-decimal-for-numbers-1)
+
+## Why splice
+
+I have long been amused by how **Python** and **C++** work together.
+
+> I use the modern [pybind11](https://pybind11.readthedocs.io/)
+> toolchain, while **C++** with [boost](https://www.boost.org/)
+> has worked longer, and **C** and **Python** has a even longer history of
+> entanglement.
+
+With **Python** code, you set a stage up with tensors forming a computation
+network, with those tensors implemented in **C++**, while during full speed
+sprinting, the tensor code can call **Python** from **C++** through some
+bindings (**pybind** does most of that out-of-the-box), to tell the framework
+to _shift gear_ in some parts.
+
+Take away is: you use one language/runtime for flexibility/expressiveness,
+and another for performance.
+
+Haskell on its own has long achieved both in many domains, but in numeric
+crunching, the overwhelming success of **Numpy**/**Pandas** come with good
+reasons.
+
+My take is that object semantics may be more powerful to describe the mutable
+parts of your problem domain, while functional approach will be really fluent
+when describing just the immutable parts.
+
+And an object system is not necessarily strictly Object-Oriented in suiting
+particular problems, sometimes just managing transitional states is enough,
+e.g. Go solved many problems more fluently than other OO languages.
 
 ## Teasers
 
