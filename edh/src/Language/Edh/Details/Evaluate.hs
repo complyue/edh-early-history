@@ -21,15 +21,13 @@ import           Language.Edh.AST
 import           Language.Edh.Details.RtTypes
 
 
-evalStmt :: MonadIO m => Context -> StmtSrc -> m EdhValue
+evalStmt :: Context -> StmtSrc -> IO EdhValue
 evalStmt ctx (StmtSrc (srcPos, stmt)) =
-    liftIO
-        $ handleJust
-              Just
-              (\(EvalError msg) ->
-                  throwIO $ EvalError $ msg <> "\nℹ️ " <> T.pack
-                      (sourcePosPretty srcPos)
-              )
+    handleJust
+            Just
+            (\(EvalError msg) -> throwIO $ EvalError $ msg <> "\nℹ️ " <> T.pack
+                (sourcePosPretty srcPos)
+            )
         $ evalStmt' ctx stmt
 
 
@@ -58,11 +56,8 @@ evalStmt' ctx stmt = case stmt of
         throwIO $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
 
 
-evalExpr :: MonadIO m => Context -> Expr -> m EdhValue
-evalExpr ctx expr = liftIO $ evalExpr' ctx expr
-
-evalExpr' :: Context -> Expr -> IO EdhValue
-evalExpr' ctx expr = liftIO $ case expr of
+evalExpr :: Context -> Expr -> IO EdhValue
+evalExpr ctx expr = liftIO $ case expr of
     LitExpr lit -> case lit of
         DecLiteral    v -> return $ EdhDecimal v
         StringLiteral v -> return $ EdhString v
@@ -177,7 +172,7 @@ evalExpr' ctx expr = liftIO $ case expr of
     this   = thisObject scope
     scope  = contextScope ctx
 
-    eval'  = evalExpr' ctx
+    eval'  = evalExpr ctx
     evalSS = evalStmt ctx
 
 
@@ -197,4 +192,52 @@ evalExpr' ctx expr = liftIO $ case expr of
 makeEdhCall :: Context -> ArgsSender -> Scope -> ArgsReceiver -> IO Entity
 makeEdhCall callerCtx asend calleeScp arecv = do
     undefined
+
+
+packEdhArgs :: Context -> ArgsSender -> IO ArgsPack
+packEdhArgs ctx argsSender = case argsSender of
+    PackSender packSender -> do
+        (ArgsPack posArgs kwArgs) <- foldM fillPack
+                                           (ArgsPack [] Map.empty)
+                                           packSender
+        -- fillPack have posArgs filled right-to-left, reverse needed
+        return $ ArgsPack (Prelude.reverse posArgs) kwArgs
+    SingleSender argSender -> fillPack (ArgsPack [] Map.empty) argSender
+  where
+
+    fillPack :: ArgsPack -> ArgSender -> IO ArgsPack
+    fillPack (ArgsPack posArgs kwArgs) argSender = case argSender of
+        UnpackPosArgs listExpr -> eval' listExpr >>= \case
+            EdhList listRef -> do
+                listVal <- readIORef listRef
+                return $ ArgsPack (posArgs ++ listVal) kwArgs
+            v ->
+                throwIO $ EvalError $ "Can not unpack posargs from: " <> T.pack
+                    (show v)
+        UnpackKwArgs dictExpr -> eval' dictExpr >>= \case
+            EdhDict dictRef -> do
+                Dict dictVal <- readIORef dictRef
+                return $ ArgsPack
+                    posArgs
+                    (Map.union (Map.mapKeys dictKey2Kw dictVal) kwArgs)
+            v -> throwIO $ EvalError $ "Can not unpack kwargs from: " <> T.pack
+                (show v)
+        SendPosArg argExpr -> do
+            argVal <- eval' argExpr
+            return $ ArgsPack (argVal : posArgs) kwArgs
+        SendKwArg kw argExpr -> do
+            argVal <- eval' argExpr
+            return $ ArgsPack posArgs $ Map.insert kw argVal kwArgs
+
+    dictKey2Kw :: ItemKey -> AttrName
+    dictKey2Kw = \case
+        ItemByStr name -> name
+        k ->
+            unsafePerformIO
+                $  throwIO
+                $  EvalError
+                $  "Invalid dict key for argument keyword: "
+                <> T.pack (show k)
+
+    eval'  = evalExpr ctx
 

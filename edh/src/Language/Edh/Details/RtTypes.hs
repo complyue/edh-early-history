@@ -114,6 +114,13 @@ data Context = Context {
         , contextScope :: !Scope
     }
 
+-- | A pack of evaluated argument values with positional/keyword
+-- origin.
+data ArgsPack = ArgsPack {
+        positional'args :: ![EdhValue]
+        , keyword'args :: !(Map.Map AttrName EdhValue)
+    }
+
 
 -- | Pending evaluated statement, it can be later forced against a
 -- target value in context.
