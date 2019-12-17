@@ -6,7 +6,7 @@ those languages but running embedded in Haskell.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
-  - [easy concurrency with no-brainer thread-safety](#easy-concurrency-with-no-brainer-thread-safety)
+  - [easy concurrency, no-brainer atomicity, lock-free serialization](#easy-concurrency-no-brainer-atomicity-lock-free-serialization)
   - [easy programming of data consistency](#easy-programming-of-data-consistency)
   - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
   - [lossless decimal for numbers](#lossless-decimal-for-numbers)
@@ -44,16 +44,25 @@ _change the world_, while a **function** must stay
 [side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
 free.
 
-### easy concurrency with no-brainer thread-safety
+### easy concurrency, no-brainer atomicity, lock-free serialization
 
-All procedures written in **Edh** are inherently
-[thread-safe](https://en.wikipedia.org/wiki/Thread_safety)
-without special treatment, thanks to **Haskell**'s immutable data structures
-underlying.
+Any procedure, or even a `for` loop can be put to a new thread for concurrent
+running with simply a `go` keyword prefixed to it. i.e. **goroutines**.
 
-And any procedure, or even a `for` loop can be put to a new thread for
-concurrent running with simply a `go` keyword prefixed to it. i.e.
-**goroutines**.
+Thanks to **Haskell**'s immutable data structures underlying, modifications
+on `list`/`dict`, including concatenation (comprehension into), prepending,
+are straight forward atomic. Edh also implements operators like `(+=)` `(-=)`
+`(*=)` `(/=)` on object attributes to be atomic.
+
+Finally, the
+[event `sink`](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
+is implemented in a way that concurrent/parallel publications into it won't
+block (actually won't even delay) each others, so you can implement a single
+back-storage-writer draining a event `sink`, then have multiple concurrent
+data-writers to the `sink`, to easily have the writes well serialized, without
+worrying slow writers to slow down fast writers.
+
+Please make sure the back-storage-writer is as fast as necessary though.
 
 ### easy programming of data consistency
 
