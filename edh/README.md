@@ -51,18 +51,19 @@ running with simply a `go` keyword prefixed to it. i.e. **goroutines**.
 
 Thanks to **Haskell**'s immutable data structures underlying, modifications
 on `list`/`dict`, including concatenation (comprehension into), prepending,
-are straight forward atomic. Edh also implements operators like `(+=)` `(-=)`
-`(*=)` `(/=)` on object attributes to be atomic.
+are straight forward atomic. Default batteries of **Edh** also have operators
+like `(+=)` `(-=)` `(*=)` `(/=)` on object attributes implemented being atomic.
 
 Finally, the
 [event `sink`](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
 is implemented in a way that concurrent/parallel publications into it won't
 block (actually won't even delay) each others, so you can implement a single
-back-storage-writer draining a event `sink`, then have multiple concurrent
-data-writers to the `sink`, to easily have the writes well serialized, without
-worrying slow writers to slow down fast writers.
+_back-storage-writer_ draining a event `sink`, then have multiple concurrent
+_data-writers_ to the `sink`, to easily have the writes well serialized,
+without worrying that slow writers may slow down fast writers.
 
-Please make sure the back-storage-writer is as fast as necessary though.
+Please make sure the _back-storage-writer_ is reasonable fast as necessary
+though.
 
 ### easy programming of data consistency
 
