@@ -152,12 +152,8 @@ data Object = Object {
 
         -- | the class (a.k.a constructor procedure) of an object
         --
-        -- similar to obj.__class__ in Python, but does not serve
-        -- method resolution as in Python.
-        --
-        -- similar to obj.(__proto__.)constructor in JavaScript, 
-        -- can be used to fake up an object, not going through
-        -- the typical construction procedure.
+        -- this serves information purpose only, not participanting
+        -- in attribute resolution anyway.
         --
         -- TODO not sure whether referential transparency (GHC)
         -- works to reduce ram overhead of this field to cost a

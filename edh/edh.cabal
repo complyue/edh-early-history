@@ -46,6 +46,7 @@ library edh-internal
         Language.Edh.Parser
         Language.Edh.Details.RtTypes
         Language.Edh.Details.Evaluate
+        Language.Edh.Details.Utils
         Paths_edh
     hs-source-dirs: src
     autogen-modules:
