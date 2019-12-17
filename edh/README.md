@@ -321,7 +321,7 @@ further received by the _argument receiver_ of the `for` expression.
 ```js
 class EventMonitor (evsSub, name="observer") {
     method ackEvents (maxN=5) {
-        ackN = maxN
+        ackN = 0
         for (t, description, **) from evsSub do {
             ackN += 1
             console.info(name ++ " got #" ++ ackN ++ " event: "
