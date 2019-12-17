@@ -132,7 +132,7 @@ data Literal = NilLiteral
         | DecLiteral !Decimal
         | BoolLiteral !Bool
         | StringLiteral !Text
-        | ChanCtor -- channel constructor
+        | SinkCtor -- sink constructor
         | TypeLiteral !EdhTypeValue
     deriving (Show)
 
@@ -161,7 +161,7 @@ data EdhTypeValue = TypeType
         | GeneratorType
         | FlowCtrlType -- for break/continue/fallthrough/yield/return
         | IteratorType
-        | ChannelType
+        | SinkType
         | ProxyType
     deriving (Eq, Ord, Show)
 

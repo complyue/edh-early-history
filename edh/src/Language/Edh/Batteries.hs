@@ -84,11 +84,8 @@ installEdhBatteries world = liftIO $ do
       , 3
       )
 
-  -- channel read/write
-  --  * channel read
-  --      inEvent <- chSub
-  --  * channel write
-  --      chPub <- outEvent
+  -- publish to sink
+  --     evsPub <- outEvent
     , ( "<-"
       , 5
       )

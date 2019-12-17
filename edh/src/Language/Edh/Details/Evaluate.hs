@@ -70,7 +70,7 @@ evalExpr' ctx expr = liftIO $ case expr of
         NilLiteral      -> return nil
         TypeLiteral v   -> return $ EdhType v
         -- TODO impl this
-        ChanCtor        -> throwIO $ EvalError "channel ctor not impl. yet"
+        SinkCtor        -> throwIO $ EvalError "sink ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
         PrefixPlus  -> eval' expr'
@@ -181,18 +181,18 @@ evalExpr' ctx expr = liftIO $ case expr of
     evalSS = evalStmt ctx
 
 
--- | The Edh call convention is so called call-by-entity, i.e.  a new
+-- | The Edh call convention is so called call-by-entity, i.e. a new
 -- entity is created with its attributes filled according to a pair of
 -- manifestations for argument sending and receiving respectively.
 -- 
 -- This is semantically much the same as Python's call convention, regarding
 -- positional and keyword argument matching, and additionally supports:
 --  * wildcard receiver - receive all keyword arguments into the entity
+--  * retargeting - don't receive the argument into the entity, but assign
+--    to an attribute of another object, typically `this` object in scope
 --  * argument renaming - match the name as sent, receive to a  differently
 --     named attribute of the entity. while renaming a positional argument
 --     is doable but meaningless, you'd just use the later name
---  * retargeting - don't receive the argument into the entity, but assign
---    to an attribute of another object, typically `this` object in scope
 --
 makeEdhCall :: Context -> ArgsSender -> Scope -> ArgsReceiver -> IO Entity
 makeEdhCall callerCtx asend calleeScp arecv = do

@@ -247,6 +247,18 @@ instance Show Iterator where
     show (Iterator _ _) = "[iterator]"
 
 
+data EventStream = EventStream {
+        evs'event :: !EdhValue -- nil should mean not an event
+        , evs'next :: !(MVar EventStream)
+    } deriving Eq
+instance Show EventStream where
+    show (EventStream e _) = "[event: " ++ show e ++ "]"
+
+-- | An event sink is similar to a Go channel, but is broadcast
+-- in nature, in contrast to the Go channel's unicast nature.
+type EventSink = IORef EventStream
+
+
 data EdhWorld = EdhWorld {
         worldRoot :: !Object
     -- all module objects in this world belong to this class
@@ -313,10 +325,15 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhObject !Object
         | EdhModule !Module
 
-    -- * immutable by self, but may contain pointer to entities
+    -- * mutable containers
         | EdhDict !(IORef Dict)
         | EdhList !(IORef [EdhValue])
+
+    -- * immutable containers
+    --   the elements may still pointer to mutable data
         | EdhTuple ![EdhValue]
+
+    -- * pending evaluated code block
         | EdhBlock ![StmtSrc]
 
     -- * harness for lazy evaluation
@@ -325,7 +342,7 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
     -- * host procedure callable from Edh world
         | EdhHostProc !HostProcedure
 
-    -- * immutable by self, but have access to lexical entities
+    -- * precedure definitions
         | EdhClass !Class
         | EdhMethod !Method
         | EdhGenrDef !GenrDef
@@ -337,8 +354,8 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhYield !EdhValue
         | EdhReturn !EdhValue
 
-    -- * Go style channel
-        | EdhChannel !(MVar EdhValue)
+    -- * event sink
+        | EdhSink !EventSink
 
     -- * reflection
         | EdhProxy !EdhValue
@@ -390,7 +407,7 @@ instance Show EdhValue where
     show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
     show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
 
-    show (EdhChannel  _)  = "[channel]"
+    show (EdhSink     _)  = "[sink]"
 
     show (EdhProxy    v)  = "[proxy: " ++ show v ++ "]"
 
@@ -427,6 +444,8 @@ instance Eq EdhValue where
 -- todo: regard a yielded/returned value equal to the value itself ?
     EdhYield    x'v == EdhYield    y'v = x'v == y'v
     EdhReturn   x'v == EdhReturn   y'v = x'v == y'v
+
+    EdhSink     x   == EdhSink     y   = x == y
 
     EdhProxy    x'v == EdhProxy    y'v = x'v == y'v
 

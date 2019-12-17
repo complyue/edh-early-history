@@ -416,7 +416,7 @@ parseLitExpr = choice
     [ NilLiteral <$ litSym "nil"
     , BoolLiteral <$> parseBoolLit
     , StringLiteral <$> parseStringLit
-    , ChanCtor <$ litSym "chan"
+    , SinkCtor <$ litSym "sink"
     , DecLiteral D.nan <$ litSym "nan"
     , DecLiteral D.inf <$ litSym "inf"
     , DecLiteral <$> parseDecLit
@@ -439,7 +439,7 @@ parseLitExpr = choice
     , TypeLiteral GeneratorType <$ litSym "GeneratorType"
     , TypeLiteral FlowCtrlType <$ litSym "FlowCtrlType"
     , TypeLiteral IteratorType <$ litSym "IteratorType"
-    , TypeLiteral ChannelType <$ litSym "ChannelType"
+    , TypeLiteral SinkType <$ litSym "SinkType"
     , TypeLiteral ProxyType <$ litSym "ProxyType"
     , TypeLiteral TypeType <$ litSym "TypeType"
     ]
