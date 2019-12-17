@@ -58,11 +58,11 @@ Finally, the
 [event `sink`](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
 is implemented in a way that concurrent/parallel publications into it won't
 block (actually won't even delay) each others, so you can implement a single
-_back-storage-writer_ draining a event `sink`, then have multiple concurrent
+_back-storage-writer_ draining an event `sink`, then have multiple concurrent
 _data-writers_ to the `sink`, to easily have the writes well serialized,
 without worrying that slow writers may slow down fast writers.
 
-Please make sure the _back-storage-writer_ is reasonable fast as necessary
+Please make sure the _back-storage-writer_ is reasonably fast as necessary
 though.
 
 ### easy programming of data consistency
