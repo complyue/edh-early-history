@@ -1,4 +1,5 @@
 {
-    "markdown.extension.toc.levels": "2..6",
-    "markdown.extension.orderedList.marker": "one"
+  "markdown.extension.toc.levels": "2..6",
+  "markdown.extension.orderedList.marker": "one",
+  "editor.tabSize": 2
 }
