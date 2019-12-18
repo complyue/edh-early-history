@@ -548,6 +548,7 @@ parseIdxNonCallPrec prec leftCtor = do
     [ -- possibly indexable, non-callable exprs
       AttrExpr <$> parseSupersRef
     , parseListExpr
+    , parseTuple
     , parseBlockOrDict
     ]
   optional parseIndexExpr >>= \case
