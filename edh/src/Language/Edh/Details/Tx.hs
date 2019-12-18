@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Details.Tx
   ( EdhTxAddr
@@ -12,24 +13,13 @@ where
 import           Prelude
 
 import           Control.Monad
-import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Fail
 import           Control.Monad.Reader
 import           Control.Concurrent
-import           Control.Concurrent.MVar
 
-import           Data.IORef
-import           Foreign.C.String
-import           System.IO.Unsafe
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
-import           Text.Megaparsec
-
-import           Language.Edh.Control
-import           Language.Edh.AST
 import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Utils
 
@@ -61,22 +51,8 @@ runEdhTx tx = do
   txReads  <- newMVar []
   txWrites <- newMVar []
   runReaderT (unEdhTx tx) (txReads, txWrites)
-  driveEdhTx txReads txWrites
-
-driveEdhTx :: EdhTxReads -> EdhTxWrites -> IO ()
-driveEdhTx txReads txWrites = do
-  txrs <- takeMVar txReads
-  txws <- takeMVar txWrites
-  if null txrs && null txws
-    then return ()
-    else do
-          -- do atomic reads&writes per entity
-
-          -- loop another iteration
-      putMVar txReads  []
-      putMVar txWrites []
-      driveEdhTx txReads txWrites
-
+  -- TODO eliminate or fine tune the magical `retryCnt` value here
+  driveEdhTx 3 txReads txWrites
 
 edhTxRead :: EdhTxAddr -> (EdhValue -> EdhTx ()) -> EdhTx ()
 edhTxRead addr r = ask >>= liftIO . schdRead
@@ -119,4 +95,68 @@ edhTxEnqOp (ent, key) p rs = edhTxEnqOp' rs
       return rs
 
 
+-- TODO need theoretical proof & practical verification that this
+--      will always converge to proper halt; if `retryCnt` is
+--      unavoidable, the optimal safe value it can range in.
+
+driveEdhTx :: Int -> EdhTxReads -> EdhTxWrites -> IO ()
+driveEdhTx retryCnt txReads txWrites = do
+  txrs <- takeMVar txReads
+  txws <- takeMVar txWrites
+  if null txrs && null txws
+    then
+      -- hope this leads to proper halt
+      when (retryCnt > 0) $ yield >> driveEdhTx (retryCnt - 1) txReads txWrites
+    else do
+      -- kickoff atomic reads&writes per entity
+      scanEntities txrs txws
+
+      -- allow current running tx ops to register further ops
+      putMVar txReads  []
+      putMVar txWrites []
+
+      -- loop another iteration
+      driveEdhTx retryCnt txReads txWrites
+
+ where
+
+  scanEntities
+    :: [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+    -> [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+    -> IO ()
+  scanEntities [] [] = return ()
+  scanEntities (r : txrs) [] =
+    void $ forkIO $ perEntity (Just r) Nothing >> scanEntities txrs []
+  scanEntities [] (w : txws) =
+    void $ forkIO $ perEntity Nothing (Just w) >> scanEntities [] txws
+  scanEntities (r@(ent, _) : txrs) txws@(_ : _) =
+    let (w, txws') = takeOutFromList ((== ent) . fst) txws
+    in  void $ forkIO $ perEntity (Just r) w >> scanEntities txrs txws'
+
+  perEntity
+    :: Maybe (Entity, MVar [(AttrKey, MVar EdhValue)])
+    -> Maybe (Entity, MVar [(AttrKey, MVar EdhValue)])
+    -> IO ()
+  perEntity ers ews = case ers of
+    Nothing -> case ews of
+      Nothing        -> error "bug"
+      Just (ent, ws) -> readMVar ws >>= \ws' -> modifyMVar_ ent $ \e ->
+        flip Map.union e . Map.fromList <$> forM
+          ws'
+          (\(key, vv) -> (key, ) <$> readMVar vv)
+    Just (ent, rs) -> case ews of
+      Nothing -> readMVar rs >>= \rs' -> readMVar ent >>= \e ->
+        forM_ rs' $ \(key, vv) -> case Map.lookup key e of
+          Nothing -> error "bug"
+          Just v  -> putMVar vv v
+      Just (_ent', ws) -> do
+        rs' <- readMVar rs
+        ws' <- readMVar ws
+        modifyMVar_ ent $ \e -> do
+          forM_ rs' $ \(key, vv) -> case Map.lookup key e of
+            Nothing -> error "bug"
+            Just v  -> putMVar vv v
+          flip Map.union e . Map.fromList <$> forM
+            ws'
+            (\(key, vv) -> (key, ) <$> readMVar vv)
 
