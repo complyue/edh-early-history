@@ -106,7 +106,11 @@ driveEdhTx retryCnt txReads txWrites = do
   if null txrs && null txws
     then
       -- hope this leads to proper halt
-      when (retryCnt > 0) $ yield >> driveEdhTx (retryCnt - 1) txReads txWrites
+         when (retryCnt > 0) $ do
+      putMVar txReads  []
+      putMVar txWrites []
+      yield
+      driveEdhTx (retryCnt - 1) txReads txWrites
     else do
       -- kickoff atomic reads&writes per entity
       scanEntities txrs txws
