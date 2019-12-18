@@ -6,22 +6,29 @@ module Language.Edh.Details.Tx
   , EdhTx
   , edhTxRead
   , edhTxWrite
+  , throwEdh
   , runEdhTx
   )
 where
 
 import           Prelude
 
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Fail
 import           Control.Monad.Reader
 import           Control.Concurrent
 
+
 import qualified Data.Map.Strict               as Map
 
 import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Utils
+
+
+throwEdh :: Exception e => e -> EdhTx a
+throwEdh e = liftIO $ throwIO e
 
 
 -- | A resolved attribute addressor
@@ -46,13 +53,12 @@ newtype EdhTx a = EdhTx { unEdhTx :: ReaderT (EdhTxReads, EdhTxWrites) IO a }
         MonadIO, MonadFail)
 
 
-runEdhTx :: EdhTx () -> IO ()
-runEdhTx tx = do
+runEdhTx :: MVar () -> EdhTx () -> IO ()
+runEdhTx halt tx = do
   txReads  <- newMVar []
   txWrites <- newMVar []
   runReaderT (unEdhTx tx) (txReads, txWrites)
-  -- TODO eliminate or fine tune the magical `retryCnt` value here
-  driveEdhTx 3 txReads txWrites
+  driveEdhTx halt txReads txWrites
 
 edhTxRead :: EdhTxAddr -> (EdhValue -> EdhTx ()) -> EdhTx ()
 edhTxRead addr r = ask >>= liftIO . schdRead
@@ -95,32 +101,20 @@ edhTxEnqOp (ent, key) p rs = edhTxEnqOp' rs
       return rs
 
 
--- TODO need theoretical proof & practical verification that this
---      will always converge to proper halt; if `retryCnt` is
---      unavoidable, the optimal safe value it can range in.
-
-driveEdhTx :: Int -> EdhTxReads -> EdhTxWrites -> IO ()
-driveEdhTx retryCnt txReads txWrites = do
-  txrs <- takeMVar txReads
-  txws <- takeMVar txWrites
-  if null txrs && null txws
-    then
-      -- hope this leads to proper halt
-         when (retryCnt > 0) $ do
-      putMVar txReads  []
-      putMVar txWrites []
-      yield
-      driveEdhTx (retryCnt - 1) txReads txWrites
-    else do
-      -- kickoff atomic reads&writes per entity
-      scanEntities txrs txws
-
-      -- allow current running tx ops to register further ops
-      putMVar txReads  []
-      putMVar txWrites []
-
-      -- loop another iteration
-      driveEdhTx retryCnt txReads txWrites
+driveEdhTx :: MVar () -> EdhTxReads -> EdhTxWrites -> IO ()
+driveEdhTx halt txReads txWrites = isEmptyMVar halt >>= \case
+  False -> return ()
+  True  -> do
+    txrs <- takeMVar txReads
+    txws <- takeMVar txWrites
+    -- kickoff atomic reads&writes per entity
+    scanEntities txrs txws
+    -- allow current running tx ops to register further ops
+    putMVar txReads  []
+    putMVar txWrites []
+    -- loop another iteration
+    yield
+    driveEdhTx halt txReads txWrites
 
  where
 
