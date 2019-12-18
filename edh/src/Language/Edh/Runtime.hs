@@ -48,9 +48,10 @@ runEdhProgram' _   []    = return $ Right EdhNil
 runEdhProgram' ctx stmts = do
   halt  <- newEmptyMVar
   final <- newEmptyMVar
-  tryJust
-    Just
-    (runEdhTx halt (evalStmts stmts (liftIO . putMVar final)) >> readMVar final)
+  let finalize v = liftIO $ do
+        putMVar halt  ()
+        putMVar final v
+  tryJust Just (runEdhTx halt (evalStmts stmts finalize) >> readMVar final)
 
  where
 
