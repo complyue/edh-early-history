@@ -24,12 +24,12 @@ inputSettings = Settings { complete       = \(_left, _right) -> return ("", [])
 main :: IO ()
 main = runInputT inputSettings $ do
 
-    outputStrLn "(EDHi)"
+  outputStrLn "(EDHi)"
 
-    world <- createEdhWorld
-    installEdhBatteries world
+  world <- createEdhWorld
+  installEdhBatteries world
 
-    runEdhModule world "<interactive>" "pass" >>= \case
-        Left  err  -> error $ show err
-        Right modu -> doLoop world modu
+  runEdhModule world "<interactive>" "pass" >>= \case
+    Left  err  -> error $ show err
+    Right modu -> doLoop world modu
 

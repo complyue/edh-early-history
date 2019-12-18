@@ -10,53 +10,53 @@
 -- world-changing), but not-so-performant (as being interpreted)
 -- procedures in Edh.
 module Language.Edh.EHI
-    (
+  (
     -- * Monadic API
-      EdhInterpreter
-    , EdhSession
+    EdhInterpreter
+  , EdhSession
     -- ** Interpreter entry point    
-    , runEdh
-    , runEdhWithoutBatteries
+  , runEdh
+  , runEdhWithoutBatteries
     -- ** Session entry point
-    , runEdhSession
+  , runEdhSession
     -- ** The eval function
-    , edhEval
+  , edhEval
 
     -- ** Exceptions
-    , InterpretError(..)
+  , InterpretError(..)
 
     -- * Pure API
-    , createEdhWorld
-    , installEdhBatteries
-    , runEdhModule
-    , evalEdhSource
+  , createEdhWorld
+  , installEdhBatteries
+  , runEdhModule
+  , evalEdhSource
 
     -- * Data types
     -- ** End values
-    , EdhValue(..)
-    , nil
-    , true
-    , false
-    , nan
-    , inf
-    , D.Decimal(..)
+  , EdhValue(..)
+  , nil
+  , true
+  , false
+  , nan
+  , inf
+  , D.Decimal(..)
     -- ** Reflection
-    , EdhWorld
-    , Symbol
-    , Entity
-    , AttrKey
-    , Dict
-    , ItemKey
-    , Object
-    , Class
-    , Method
-    , Module
-    , Iterator
+  , EdhWorld
+  , Symbol
+  , Entity
+  , AttrKey
+  , Dict
+  , ItemKey
+  , Object
+  , Class
+  , Method
+  , Module
+  , Iterator
     -- ** World changing tools
-    , declareEdhOperators
-    , putEdhAttrs
-    , putEdhAttr
-    )
+  , declareEdhOperators
+  , putEdhAttrs
+  , putEdhAttr
+  )
 where
 
 import           Prelude
@@ -79,32 +79,32 @@ import           Language.Edh.AST
 
 edhEval :: Text -> EdhSession EdhValue
 edhEval code = do
-    (world, modu) <- ask
-    liftIO $ evalEdhSource world modu code >>= \case
-        Left  err -> throwIO err
-        Right v   -> return v
+  (world, modu) <- ask
+  liftIO $ evalEdhSource world modu code >>= \case
+    Left  err -> throwIO err
+    Right v   -> return v
 
 runEdhSession
-    :: ModuleId
-    -> Text
-    -> EdhSession a
-    -> EdhInterpreter (Either InterpretError a)
+  :: ModuleId
+  -> Text
+  -> EdhSession a
+  -> EdhInterpreter (Either InterpretError a)
 runEdhSession moduId moduSource (EdhSession (ReaderT f)) = do
-    world <- ask
-    runEdhModule world moduId moduSource >>= \case
-        Left  err  -> return $ Left err
-        Right modu -> liftIO $ tryJust Just $ f (world, modu)
+  world <- ask
+  runEdhModule world moduId moduSource >>= \case
+    Left  err  -> return $ Left err
+    Right modu -> liftIO $ tryJust Just $ f (world, modu)
 
 
 runEdh :: MonadIO m => EdhInterpreter a -> m a
 runEdh (EdhInterpreter (ReaderT f)) = liftIO $ do
-    world <- createEdhWorld
-    installEdhBatteries world
-    f world
+  world <- createEdhWorld
+  installEdhBatteries world
+  f world
 
 runEdhWithoutBatteries :: MonadIO m => EdhInterpreter a -> m a
 runEdhWithoutBatteries (EdhInterpreter (ReaderT f)) =
-    liftIO $ createEdhWorld >>= f
+  liftIO $ createEdhWorld >>= f
 
 
 newtype EdhSession a = EdhSession { unEdhS :: ReaderT (EdhWorld,Module) IO a }

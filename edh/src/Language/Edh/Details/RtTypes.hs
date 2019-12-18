@@ -13,7 +13,8 @@ import           Foreign.C.String
 import           Foreign.Marshal.Alloc
 import           System.Mem.Weak
 import           System.IO.Unsafe
-import           Data.Text                     as T
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
 import           Text.Megaparsec
@@ -30,21 +31,20 @@ newtype Dict = Dict (Map.Map ItemKey EdhValue)
     deriving (Eq)
 instance Show Dict where
     -- advocate trailing comma here
-    show (Dict d) =
-        "{"
-            ++ Prelude.concat
-                   [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList d ]
-            ++ "}"
+  show (Dict d) =
+    "{"
+      ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList d ]
+      ++ "}"
 data ItemKey = ItemByType EdhTypeValue
         | ItemByStr Text | ItemBySym Symbol
         | ItemByNum Decimal | ItemByBool Bool
     deriving (Eq, Ord)
 instance Show ItemKey where
-    show (ItemByType k) = show k
-    show (ItemByStr  k) = show k
-    show (ItemBySym  k) = show k
-    show (ItemByNum  k) = showDecimal k
-    show (ItemByBool k) = show $ EdhBool k
+  show (ItemByType k) = show k
+  show (ItemByStr  k) = show k
+  show (ItemBySym  k) = show k
+  show (ItemByNum  k) = showDecimal k
+  show (ItemByBool k) = show $ EdhBool k
 
 
 -- | A symbol can stand in place of an alphanumeric name, used to
@@ -65,13 +65,13 @@ newtype Symbol = Symbol {
         symbol'description :: CString
     } deriving (Eq, Ord)
 instance Show Symbol where
-    show (Symbol dp) = "[@" <> sd <> "]"
-        where sd = unsafePerformIO $ peekCString dp
+  show (Symbol dp) = "[@" <> sd <> "]"
+    where sd = unsafePerformIO $ peekCString dp
 mkSymbol :: String -> IO Symbol
 mkSymbol d = do
-    s <- newCString d
-    addFinalizer s $ free s
-    return $ Symbol s
+  s <- newCString d
+  addFinalizer s $ free s
+  return $ Symbol s
 
 -- | An entity in Edh is the backing storage for a scope, with
 -- possibly an object viewing this entity, an entity has attributes
@@ -104,7 +104,7 @@ data Scope = Scope {
         , thisObject :: Object -- `this` object of current scope
     }
 instance Eq Scope where
-    Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
+  Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
 
 -- | calling stack frames at any point of Edh code execution
 data Context = Context {
@@ -131,15 +131,15 @@ data Thunk = Thunk {
         , thunkValuator :: EdhValue -> IO EdhValue
     }
 instance Eq Thunk where
-    Thunk x'd _ == Thunk y'd _ = x'd == y'd
+  Thunk x'd _ == Thunk y'd _ = x'd == y'd
 instance Show Thunk where
-    show (Thunk d _) = "[thunk: " <> s <> "]"
-        where s = unsafePerformIO $ peekCString d
+  show (Thunk d _) = "[thunk: " <> s <> "]"
+    where s = unsafePerformIO $ peekCString d
 mkThunk :: String -> (EdhValue -> IO EdhValue) -> IO Thunk
 mkThunk desc valuator = do
-    s <- newCString desc
-    addFinalizer s $ free s
-    return $ Thunk s valuator
+  s <- newCString desc
+  addFinalizer s $ free s
+  return $ Thunk s valuator
 
 
 -- | An object views an entity, with inheritance relationship 
@@ -178,22 +178,17 @@ data Object = Object {
     }
 instance Eq Object where
     -- equality by pointer to entity
-    Object x'e _ _ == Object y'e _ _ = x'e == y'e
+  Object x'e _ _ == Object y'e _ _ = x'e == y'e
 instance Show Object where
-    show (Object _ (Class _ cn _ _) supers) =
-        "[object: "
-            ++ T.unpack cn
-            ++ (if Prelude.null supers
-                   then ""
-                   else
-                       T.unpack
-                       $  " extends"
-                       <> T.concat
-                              [ " " <> scn
-                              | (Object _ (Class _ scn _ _) _) <- supers
-                              ]
-               )
-            ++ "]"
+  show (Object _ (Class _ cn _ _) supers) =
+    "[object: "
+      ++ T.unpack cn
+      ++ (if null supers
+           then ""
+           else T.unpack $ " extends" <> T.concat
+             [ " " <> scn | (Object _ (Class _ scn _ _) _) <- supers ]
+         )
+      ++ "]"
 
 data Class = Class {
         classScope :: ![Entity]
@@ -202,9 +197,9 @@ data Class = Class {
         , classProcedure :: !ProcDecl
     }
 instance Eq Class where
-    Class x's _ x'sp _ == Class y's _ y'sp _ = x's == y's && x'sp == y'sp
+  Class x's _ x'sp _ == Class y's _ y'sp _ = x's == y's && x'sp == y'sp
 instance Show Class where
-    show (Class _ cn _ _) = "[class: " ++ T.unpack cn ++ "]"
+  show (Class _ cn _ _) = "[class: " ++ T.unpack cn ++ "]"
 
 data Method = Method {
         methodOwnerObject :: !Object
@@ -213,10 +208,10 @@ data Method = Method {
         , methodProcedure :: !ProcDecl
     }
 instance Eq Method where
-    Method x'o _ x'sp _ == Method y'o _ y'sp _ = x'o == y'o && x'sp == y'sp
+  Method x'o _ x'sp _ == Method y'o _ y'sp _ = x'o == y'o && x'sp == y'sp
 instance Show Method where
-    show (Method (Object _ (Class _ cn _ _) _) mn _ _) =
-        "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
+  show (Method (Object _ (Class _ cn _ _) _) mn _ _) =
+    "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
 
 data GenrDef = GenrDef {
         generatorOwnerObject :: !Object
@@ -224,18 +219,18 @@ data GenrDef = GenrDef {
         , generatorProcedure :: !ProcDecl
     }
 instance Eq GenrDef where
-    GenrDef x'o x'sp _ == GenrDef y'o y'sp _ = x'o == y'o && x'sp == y'sp
+  GenrDef x'o x'sp _ == GenrDef y'o y'sp _ = x'o == y'o && x'sp == y'sp
 instance Show GenrDef where
-    show (GenrDef _ _ _) = "[generator]"
+  show (GenrDef _ _ _) = "[generator]"
 
 data Module = Module {
         moduleObject :: !Object
         , moduleId :: !ModuleId
     }
 instance Eq Module where
-    Module x'o _ == Module y'o _ = x'o == y'o
+  Module x'o _ == Module y'o _ = x'o == y'o
 instance Show Module where
-    show (Module _ mp) = "[module: " ++ mp ++ "]"
+  show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 data Iterator = Iterator {
         iterScope :: !Scope
@@ -244,9 +239,9 @@ data Iterator = Iterator {
 instance Eq Iterator where
     -- TODO prove there won't be concurrent executable iterators
     -- against the same entity, or tackle problems encountered
-    Iterator x'e _ == Iterator y'e _ = x'e == y'e
+  Iterator x'e _ == Iterator y'e _ = x'e == y'e
 instance Show Iterator where
-    show (Iterator _ _) = "[iterator]"
+  show (Iterator _ _) = "[iterator]"
 
 
 data EventStream = EventStream {
@@ -254,7 +249,7 @@ data EventStream = EventStream {
         , evs'next :: !(MVar EventStream)
     } deriving Eq
 instance Show EventStream where
-    show (EventStream e _) = "[event: " ++ show e ++ "]"
+  show (EventStream e _) = "[event: " ++ show e ++ "]"
 
 -- | An event sink is similar to a Go channel, but is broadcast
 -- in nature, in contrast to the Go channel's unicast nature.
@@ -288,15 +283,15 @@ data HostProcedure = HostProcedure {
         , hostProc'proc :: EdhProcedure
     }
 instance Eq HostProcedure where
-    HostProcedure x'n _ == HostProcedure y'n _ = x'n == y'n
+  HostProcedure x'n _ == HostProcedure y'n _ = x'n == y'n
 instance Show HostProcedure where
-    show (HostProcedure pn _) = "[hostproc: " ++ nm ++ "]"
-        where nm = unsafePerformIO $ peekCString pn
+  show (HostProcedure pn _) = "[hostproc: " ++ nm ++ "]"
+    where nm = unsafePerformIO $ peekCString pn
 mkHostProc :: String -> EdhProcedure -> IO HostProcedure
 mkHostProc d p = do
-    s <- newCString d
-    addFinalizer s $ free s
-    return $ HostProcedure { hostProc'name = s, hostProc'proc = p }
+  s <- newCString d
+  addFinalizer s $ free s
+  return $ HostProcedure { hostProc'name = s, hostProc'proc = p }
 
 
 -- Atop Haskell, most types in Edh, as to organize information,
@@ -364,97 +359,97 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
 
 
 instance Show EdhValue where
-    show (EdhType t)    = show t
-    show EdhNil         = "nil"
-    show (EdhDecimal v) = showDecimal v
-    show (EdhBool    v) = if v then "true" else "false"
-    show (EdhString  v) = show v
-    show (EdhSymbol  v) = show v
+  show (EdhType t)    = show t
+  show EdhNil         = "nil"
+  show (EdhDecimal v) = showDecimal v
+  show (EdhBool    v) = if v then "true" else "false"
+  show (EdhString  v) = show v
+  show (EdhSymbol  v) = show v
 
-    show (EdhObject  v) = show v
-    show (EdhModule  v) = show v
+  show (EdhObject  v) = show v
+  show (EdhModule  v) = show v
 
 -- advocate trailing comma here
-    show (EdhDict v) =
-        let d@(Dict m) = unsafePerformIO (readIORef v)
-        in  if Map.null m
-                then "{,}" -- make it obvious this is an empty dict
-                else show d
-    show (EdhList v) =
-        let l = unsafePerformIO (readIORef v)
-        in  if Prelude.null l
-                then "[]"
-                else "[" ++ Prelude.concat [ show i ++ ", " | i <- l ] ++ "]"
-    show (EdhTuple v) = if Prelude.null v
-        then "(,)" -- the denotation of empty tuple is same as Python
-        else "(" ++ Prelude.concat [ show i ++ ", " | i <- v ] ++ ")"
+  show (EdhDict v) =
+    let d@(Dict m) = unsafePerformIO (readIORef v)
+    in  if Map.null m
+          then "{,}" -- make it obvious this is an empty dict
+          else show d
+  show (EdhList v) =
+    let l = unsafePerformIO (readIORef v)
+    in  if null l
+          then "[]"
+          else "[" ++ concat [ show i ++ ", " | i <- l ] ++ "]"
+  show (EdhTuple v) = if null v
+    then "(,)" -- the denotation of empty tuple is same as Python
+    else "(" ++ concat [ show i ++ ", " | i <- v ] ++ ")"
 
-    show (EdhBlock v) = if Prelude.null v
-        then "{;}" -- make it obvious this is an empty block
-        else "{" ++ Prelude.concat [ show i ++ "; " | i <- v ] ++ "}"
+  show (EdhBlock v) = if null v
+    then "{;}" -- make it obvious this is an empty block
+    else "{" ++ concat [ show i ++ "; " | i <- v ] ++ "}"
 
-    show (EdhThunk    v)  = show v
+  show (EdhThunk    v)  = show v
 
-    show (EdhHostProc v)  = show v
+  show (EdhHostProc v)  = show v
 
-    show (EdhClass    v)  = show v
-    show (EdhMethod   v)  = show v
-    show (EdhGenrDef  v)  = show v
+  show (EdhClass    v)  = show v
+  show (EdhMethod   v)  = show v
+  show (EdhGenrDef  v)  = show v
 
-    show EdhBreak         = "[break]"
-    show EdhContinue      = "[continue]"
-    show (EdhCaseClose v) = "[caseclose: " ++ show v ++ "]"
-    show EdhFallthrough   = "[fallthrough]"
-    show (EdhIterator i)  = show i
-    show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
-    show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
+  show EdhBreak         = "[break]"
+  show EdhContinue      = "[continue]"
+  show (EdhCaseClose v) = "[caseclose: " ++ show v ++ "]"
+  show EdhFallthrough   = "[fallthrough]"
+  show (EdhIterator i)  = show i
+  show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
+  show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
 
-    show (EdhSink     _)  = "[sink]"
+  show (EdhSink     _)  = "[sink]"
 
-    show (EdhProxy    v)  = "[proxy: " ++ show v ++ "]"
+  show (EdhProxy    v)  = "[proxy: " ++ show v ++ "]"
 
 instance Eq EdhValue where
-    EdhType x       == EdhType y       = x == y
-    EdhNil          == EdhNil          = True
-    EdhDecimal  x   == EdhDecimal  y   = x == y
-    EdhBool     x   == EdhBool     y   = x == y
-    EdhString   x   == EdhString   y   = x == y
-    EdhSymbol   x   == EdhSymbol   y   = x == y
+  EdhType x       == EdhType y       = x == y
+  EdhNil          == EdhNil          = True
+  EdhDecimal  x   == EdhDecimal  y   = x == y
+  EdhBool     x   == EdhBool     y   = x == y
+  EdhString   x   == EdhString   y   = x == y
+  EdhSymbol   x   == EdhSymbol   y   = x == y
 
-    EdhObject   x   == EdhObject   y   = x == y
-    EdhModule   x   == EdhModule   y   = x == y
+  EdhObject   x   == EdhObject   y   = x == y
+  EdhModule   x   == EdhModule   y   = x == y
 
-    EdhDict     x   == EdhDict     y   = x == y
-    EdhList     x   == EdhList     y   = x == y
-    EdhTuple    x   == EdhTuple    y   = x == y
+  EdhDict     x   == EdhDict     y   = x == y
+  EdhList     x   == EdhList     y   = x == y
+  EdhTuple    x   == EdhTuple    y   = x == y
 
-    EdhBlock    x   == EdhBlock    y   = x == y
+  EdhBlock    x   == EdhBlock    y   = x == y
 
-    EdhThunk    x   == EdhThunk    y   = x == y
+  EdhThunk    x   == EdhThunk    y   = x == y
 
-    EdhHostProc x   == EdhHostProc y   = x == y
+  EdhHostProc x   == EdhHostProc y   = x == y
 
-    EdhClass    x   == EdhClass    y   = x == y
-    EdhMethod   x   == EdhMethod   y   = x == y
-    EdhGenrDef  x   == EdhGenrDef  y   = x == y
+  EdhClass    x   == EdhClass    y   = x == y
+  EdhMethod   x   == EdhMethod   y   = x == y
+  EdhGenrDef  x   == EdhGenrDef  y   = x == y
 
-    EdhBreak        == EdhBreak        = True
-    EdhContinue     == EdhContinue     = True
-    EdhCaseClose x  == EdhCaseClose y  = x == y
-    EdhFallthrough  == EdhFallthrough  = True
-    EdhIterator x   == EdhIterator y   = x == y
+  EdhBreak        == EdhBreak        = True
+  EdhContinue     == EdhContinue     = True
+  EdhCaseClose x  == EdhCaseClose y  = x == y
+  EdhFallthrough  == EdhFallthrough  = True
+  EdhIterator x   == EdhIterator y   = x == y
 -- todo: regard a yielded/returned value equal to the value itself ?
-    EdhYield    x'v == EdhYield    y'v = x'v == y'v
-    EdhReturn   x'v == EdhReturn   y'v = x'v == y'v
+  EdhYield    x'v == EdhYield    y'v = x'v == y'v
+  EdhReturn   x'v == EdhReturn   y'v = x'v == y'v
 
-    EdhSink     x   == EdhSink     y   = x == y
+  EdhSink     x   == EdhSink     y   = x == y
 
-    EdhProxy    x'v == EdhProxy    y'v = x'v == y'v
+  EdhProxy    x'v == EdhProxy    y'v = x'v == y'v
 
 -- todo: support coercing equality ?
 --       * without this, we are a strongly typed dynamic language
 --       * with this, we'll be a weakly typed dynamic language
-    _               == _               = False
+  _               == _               = False
 
 
 nil :: EdhValue
@@ -475,82 +470,81 @@ false = EdhBool False
 
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
-    worldEntity <- newMVar Map.empty
-    let !srcPos = SourcePos { sourceName   = "<Genesis>"
-                            , sourceLine   = mkPos 1
-                            , sourceColumn = mkPos 1
-                            }
-        !worldClass = Class
-            { classScope     = []
-            , className      = "<world>"
-            , classSourcePos = srcPos
-            , classProcedure = ProcDecl
-                                   { procedure'args = WildReceiver
-                                   , procedure'body = StmtSrc (srcPos, VoidStmt)
-                                   }
-            }
-    opPD  <- newIORef Map.empty
-    modus <- newIORef Map.empty
-    return $ EdhWorld
-        { worldRoot      = Object { objEntity = worldEntity
-                                  , objClass  = worldClass
-                                  , objSupers = []
-                                  }
-        , moduleClass    =
-            Class
-                { classScope     = [worldEntity]
-                , className      = "<module>"
-                , classSourcePos = srcPos
-                , classProcedure = ProcDecl
-                                       { procedure'args = WildReceiver
-                                       , procedure'body = StmtSrc
-                                                              (srcPos, VoidStmt)
-                                       }
-                }
-        , worldOperators = opPD
-        , worldModules   = modus
+  worldEntity <- newMVar Map.empty
+  let !srcPos = SourcePos { sourceName   = "<Genesis>"
+                          , sourceLine   = mkPos 1
+                          , sourceColumn = mkPos 1
+                          }
+      !worldClass = Class
+        { classScope     = []
+        , className      = "<world>"
+        , classSourcePos = srcPos
+        , classProcedure = ProcDecl
+                             { procedure'args = WildReceiver
+                             , procedure'body = StmtSrc (srcPos, VoidStmt)
+                             }
         }
+  opPD  <- newIORef Map.empty
+  modus <- newIORef Map.empty
+  return $ EdhWorld
+    { worldRoot      = Object { objEntity = worldEntity
+                              , objClass  = worldClass
+                              , objSupers = []
+                              }
+    , moduleClass    =
+      Class
+        { classScope     = [worldEntity]
+        , className      = "<module>"
+        , classSourcePos = srcPos
+        , classProcedure = ProcDecl
+                             { procedure'args = WildReceiver
+                             , procedure'body = StmtSrc (srcPos, VoidStmt)
+                             }
+        }
+    , worldOperators = opPD
+    , worldModules   = modus
+    }
 
 declareEdhOperators
-    :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
+  :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
 declareEdhOperators world declLoc opps = liftIO
-    $ atomicModifyIORef' (worldOperators world) declarePrecedence
-  where
-    declarePrecedence :: OpPrecDict -> (OpPrecDict, ())
-    declarePrecedence opPD =
-        flip (,) ()
-            $ Map.unionWithKey chkCompatible opPD
-            $ Map.fromList
-            $ flip Prelude.map opps
-            $ \(op, p) -> (op, (p, declLoc))
-    chkCompatible
-        :: OpSymbol
-        -> (Precedence, Text)
-        -> (Precedence, Text)
-        -> (Precedence, Text)
-    chkCompatible op (prevPrec, prevDeclLoc) (newPrec, newDeclLoc) =
-        if prevPrec /= newPrec
-            then throw $ EvalError
-                (  "precedence change from "
-                <> T.pack (show prevPrec)
-                <> " (declared "
-                <> prevDeclLoc
-                <> ") to "
-                <> T.pack (show newPrec)
-                <> " (declared "
-                <> T.pack (show newDeclLoc)
-                <> ") for operator: "
-                <> op
-                )
-            else (prevPrec, prevDeclLoc)
+  $ atomicModifyIORef' (worldOperators world) declarePrecedence
+ where
+  declarePrecedence :: OpPrecDict -> (OpPrecDict, ())
+  declarePrecedence opPD =
+    flip (,) ()
+      $ Map.unionWithKey chkCompatible opPD
+      $ Map.fromList
+      $ flip map opps
+      $ \(op, p) -> (op, (p, declLoc))
+  chkCompatible
+    :: OpSymbol
+    -> (Precedence, Text)
+    -> (Precedence, Text)
+    -> (Precedence, Text)
+  chkCompatible op (prevPrec, prevDeclLoc) (newPrec, newDeclLoc) =
+    if prevPrec /= newPrec
+      then throw $ EvalError
+        (  "precedence change from "
+        <> T.pack (show prevPrec)
+        <> " (declared "
+        <> prevDeclLoc
+        <> ") to "
+        <> T.pack (show newPrec)
+        <> " (declared "
+        <> T.pack (show newDeclLoc)
+        <> ") for operator: "
+        <> op
+        )
+      else (prevPrec, prevDeclLoc)
 
 
 putEdhAttr :: MonadIO m => Entity -> AttrKey -> EdhValue -> m ()
 putEdhAttr e k v =
-    liftIO $ void $ modifyMVar_ e $ \e0 -> return (Map.insert k v e0)
+  liftIO $ void $ modifyMVar_ e $ \e0 -> return (Map.insert k v e0)
 
 putEdhAttrs :: MonadIO m => Entity -> [(AttrKey, EdhValue)] -> m ()
 putEdhAttrs e as = liftIO $ void $ modifyMVar_ e $ \e0 ->
-    return (Map.union ad e0)
-    where ad = Map.fromList as
+  return (Map.union ad e0)
+  where ad = Map.fromList as
 
