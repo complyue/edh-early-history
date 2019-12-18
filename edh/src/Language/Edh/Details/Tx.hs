@@ -27,10 +27,6 @@ import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Utils
 
 
-throwEdh :: Exception e => e -> EdhTx a
-throwEdh e = liftIO $ throwIO e
-
-
 -- | A resolved attribute addressor
 type EdhTxAddr = (Entity, AttrKey)
 
@@ -46,25 +42,32 @@ type EdhTxWrites = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
 --      anyway, neither above is cache friendly.
 
 
+throwEdh :: Exception e => e -> EdhTx a
+throwEdh e = ask >>= \(masterThread, _, _) -> liftIO $ do
+  throwTo masterThread e
+  throwIO ThreadKilled
+
+
 -- | The transactional monad of Edh
-newtype EdhTx a = EdhTx { unEdhTx :: ReaderT (EdhTxReads, EdhTxWrites) IO a }
+newtype EdhTx a = EdhTx { unEdhTx :: ReaderT (ThreadId, EdhTxReads, EdhTxWrites) IO a }
     deriving (Functor, Applicative, Monad,
-        MonadReader (EdhTxReads, EdhTxWrites),
+        MonadReader (ThreadId, EdhTxReads, EdhTxWrites),
         MonadIO, MonadFail)
 
 
 runEdhTx :: MVar () -> EdhTx () -> IO ()
 runEdhTx halt tx = do
-  txReads  <- newMVar []
-  txWrites <- newMVar []
-  runReaderT (unEdhTx tx) (txReads, txWrites)
+  txReads      <- newMVar []
+  txWrites     <- newMVar []
+  masterThread <- myThreadId
+  runReaderT (unEdhTx tx) (masterThread, txReads, txWrites)
   driveEdhTx halt txReads txWrites
 
 edhTxRead :: EdhTxAddr -> (EdhValue -> EdhTx ()) -> EdhTx ()
 edhTxRead addr r = ask >>= liftIO . schdRead
  where
-  schdRead :: (EdhTxReads, EdhTxWrites) -> IO ()
-  schdRead tx@(txReads, _txWrites) = do
+  schdRead :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
+  schdRead tx@(_, txReads, _txWrites) = do
     p <- newEmptyMVar
     modifyMVar_ txReads $ edhTxEnqOp addr p
     void $ forkIO $ do
@@ -74,8 +77,8 @@ edhTxRead addr r = ask >>= liftIO . schdRead
 edhTxWrite :: EdhTxAddr -> (MVar EdhValue -> EdhTx ()) -> EdhTx ()
 edhTxWrite addr w = ask >>= liftIO . schdWrite
  where
-  schdWrite :: (EdhTxReads, EdhTxWrites) -> IO ()
-  schdWrite tx@(_txReads, txWrites) = do
+  schdWrite :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
+  schdWrite tx@(_, _txReads, txWrites) = do
     p <- newEmptyMVar
     modifyMVar_ txWrites $ edhTxEnqOp addr p
     void $ forkIO $ runReaderT (unEdhTx $ w p) tx
