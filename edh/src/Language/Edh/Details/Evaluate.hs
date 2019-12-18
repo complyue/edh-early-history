@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE BlockArguments #-}
 
 module Language.Edh.Details.Evaluate where
 
@@ -7,6 +5,7 @@ import           Prelude
 
 import           Control.Exception
 import           Control.Monad.Except
+import           Control.Concurrent.MVar
 
 import           Data.IORef
 import           Foreign.C.String
@@ -19,6 +18,7 @@ import           Text.Megaparsec
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Details.RtTypes
+import           Language.Edh.Details.Tx
 import           Language.Edh.Details.Utils
 
 
@@ -202,7 +202,7 @@ recvEdhArgs pck@(ArgsPack posArgs kwArgs) ctx argsRcvr = case argsRcvr of
         (pck', attrs) <- recvFromPack ctx (pck, Map.empty) argRcvr
         woResidual pck' attrs
     WildReceiver -> if Prelude.null posArgs
-        then newIORef $ Map.mapKeys AttrByName kwArgs
+        then newMVar $ Map.mapKeys AttrByName kwArgs
         else
             throwIO
             $  EvalError
@@ -225,7 +225,7 @@ recvEdhArgs pck@(ArgsPack posArgs kwArgs) ctx argsRcvr = case argsRcvr of
         = throwIO $ EvalError $ "Extraneous keyword arguments: " <> T.pack
             (show $ Map.keys kwResidual)
         | otherwise
-        = newIORef attrs
+        = newMVar attrs
     recvFromPack
         :: Context
         -> (ArgsPack, Map.Map AttrKey EdhValue)
@@ -282,7 +282,7 @@ recvEdhArgs pck@(ArgsPack posArgs kwArgs) ctx argsRcvr = case argsRcvr of
             -> Maybe Expr
             -> IO (EdhValue, [EdhValue], Map.Map AttrName EdhValue)
         resolveArgValue argName argDefault = do
-            let (inKwArgs, kwArgs'') = takeFromMapByKey argName kwArgs'
+            let (inKwArgs, kwArgs'') = takeOutFromMap argName kwArgs'
             case inKwArgs of
                 Nothing -> case posArgs' of
                     (posArg : posArgs'') ->
@@ -348,9 +348,11 @@ packEdhArgs ctx argsSender = case argsSender of
     eval' = evalExpr ctx
 
 
-resolveLexicalAttr :: [Entity] -> AttrName -> IO (Maybe EdhValue)
+-- TODO following is not right yet
+
+resolveLexicalAttr :: [Entity] -> AttrName -> IO (Maybe  EdhValue)
 resolveLexicalAttr []                    _        = return Nothing
-resolveLexicalAttr (ent : outerEntities) attrName = readIORef ent >>= \em ->
+resolveLexicalAttr (ent : outerEntities) attrName = readMVar ent >>= \em ->
     case Map.lookup (AttrByName attrName) em of
         Just v  -> return $ Just v
         Nothing -> resolveLexicalAttr outerEntities attrName
@@ -358,70 +360,18 @@ resolveLexicalAttr (ent : outerEntities) attrName = readIORef ent >>= \em ->
 resolveEdhSuperAttr :: [Object] -> AttrName -> IO (Maybe EdhValue)
 resolveEdhSuperAttr []                   _    = return Nothing
 resolveEdhSuperAttr (super : restSupers) attr = do
-    ent <- readIORef $ objEntity super
+    ent <- readMVar $ objEntity super
     case Map.lookup (AttrByName attr) ent of
         Just v  -> return $ Just v
         Nothing -> resolveEdhSuperAttr restSupers attr
 
 resolveEdhObjAttr :: Scope -> AttrName -> IO (Maybe EdhValue)
 resolveEdhObjAttr scope attr = do
-    ent <- readIORef $ objEntity obj
+    ent <- readMVar $ objEntity obj
     case Map.lookup (AttrByName attr) ent of
         Just v  -> return $ Just v
         Nothing -> resolveEdhSuperAttr (objSupers obj) attr >>= \case
             Just v  -> return $ Just v
             Nothing -> resolveLexicalAttr (scopeStack scope) attr
     where obj = thisObject scope
-
-
--- | A transaction for grouped reads to address attributes off entities
-type EdhAddrTx = [(Entity, [(AttrKey, (AttrKey -> EdhValue -> IO ()))])]
-
-
--- | A transaction for grouped assignments of attributes onto entities
---
--- TODO a list here should not scale well to large transactions, but
---      can't use Entity (IORef per se) as Map key, need more tweaks.
-type EdhAssignTx = [(Entity, IORef [(AttrKey, EdhValue)])]
-
-prepareEdhAssign
-    :: Context -> EdhAssignTx -> AttrAddressor -> EdhValue -> IO EdhAssignTx
-prepareEdhAssign ctx tx addr v = do
-    k <- resolveAddr addr
-    sched2Tx (k, v) tx
-  where
-    ent   = objEntity $ thisObject scope
-    scope = contextScope ctx
-
-    sched2Tx :: (AttrKey, EdhValue) -> EdhAssignTx -> IO EdhAssignTx
-    sched2Tx u [] = do
-        lr <- newIORef [u]
-        return $ (ent, lr) : tx
-    sched2Tx u ((e, lr) : rest) = if e /= ent
-        then sched2Tx u rest
-        else do
-            modifyIORef' lr (\l -> u : l)
-            return tx
-
-    resolveAddr :: AttrAddressor -> IO AttrKey
-    resolveAddr (NamedAttr attrName) = return $ AttrByName attrName
-    resolveAddr (SymbolicAttr symName) =
-        resolveEdhObjAttr scope symName >>= \case
-            Just (EdhSymbol symVal) -> return $ AttrBySym symVal
-            Nothing ->
-                throwIO
-                    $  EvalError
-                    $  "No symbol named "
-                    <> T.pack (show symName)
-                    <> " available"
-            Just v ->
-                throwIO
-                    $  EvalError
-                    $  "Expect a symbol named "
-                    <> T.pack (show symName)
-                    <> " but got: "
-                    <> T.pack (show v)
-
-
-
 

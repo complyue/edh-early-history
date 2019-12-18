@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 
 module Language.Edh.Details.RtTypes where
 
@@ -77,7 +76,7 @@ mkSymbol d = do
 -- | An entity in Edh is the backing storage for a scope, with
 -- possibly an object viewing this entity, an entity has attributes
 -- associated by 'AttrKey'.
-type Entity = IORef (Map.Map AttrKey EdhValue)
+type Entity = MVar (Map.Map AttrKey EdhValue)
 data AttrKey = AttrByName AttrName | AttrBySym Symbol
     deriving (Eq, Ord, Show)
 
@@ -476,7 +475,7 @@ false = EdhBool False
 
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
-    worldEntity <- newIORef Map.empty
+    worldEntity <- newMVar Map.empty
     let !srcPos = SourcePos { sourceName   = "<Genesis>"
                             , sourceLine   = mkPos 1
                             , sourceColumn = mkPos 1
@@ -548,10 +547,10 @@ declareEdhOperators world declLoc opps = liftIO
 
 putEdhAttr :: MonadIO m => Entity -> AttrKey -> EdhValue -> m ()
 putEdhAttr e k v =
-    liftIO $ void $ atomicModifyIORef' e $ \e0 -> return (Map.insert k v e0, ())
+    liftIO $ void $ modifyMVar_ e $ \e0 -> return (Map.insert k v e0)
 
 putEdhAttrs :: MonadIO m => Entity -> [(AttrKey, EdhValue)] -> m ()
-putEdhAttrs e as = liftIO $ void $ atomicModifyIORef' e $ \e0 ->
-    return (Map.union ad e0, ())
+putEdhAttrs e as = liftIO $ void $ modifyMVar_ e $ \e0 ->
+    return (Map.union ad e0)
     where ad = Map.fromList as
 

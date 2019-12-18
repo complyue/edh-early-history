@@ -1,6 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Language.Edh.Interpreter where
 
@@ -9,6 +7,7 @@ import           Prelude
 
 import           Control.Monad.IO.Class
 import           Control.Monad.State.Strict
+import           Control.Concurrent.MVar
 
 import           Data.IORef
 import           Data.Text                     as T
@@ -38,7 +37,7 @@ runEdhModule world moduId moduSource = liftIO $ do
         Left  err   -> return $ Left $ EdhParseError err
         Right stmts -> do
             let moduIdAttrVal = EdhString $ T.pack moduId
-            entity <- newIORef $ Map.fromList
+            entity <- newMVar $ Map.fromList
                 [ (AttrByName "__name__", moduIdAttrVal)
                 , (AttrByName "__file__", EdhString "<adhoc>")
                 ]
