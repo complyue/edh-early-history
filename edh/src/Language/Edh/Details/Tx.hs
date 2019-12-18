@@ -1,10 +1,22 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Language.Edh.Details.Tx where
+module Language.Edh.Details.Tx
+    ( EdhTxAddr
+    , EdhTx
+    , edhTxRead
+    , edhTxWrite
+    , runEdhTx
+    )
+where
 
 import           Prelude
 
+import           Control.Monad
 import           Control.Exception
 import           Control.Monad.Except
+import           Control.Monad.Fail
+import           Control.Monad.Reader
+import           Control.Concurrent
 import           Control.Concurrent.MVar
 
 import           Data.IORef
@@ -21,65 +33,89 @@ import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Utils
 
 
--- | A transactional read
-type EdhTxRead = (Entity, AttrKey)
--- | A transactional write
-type EdhTxWrite = (Entity, AttrKey, MVar EdhValue)
+-- | A resolved attribute addressor
+type EdhTxAddr = (Entity, AttrKey)
+
 -- | The pending reads within a transaction
-type EdhTxReads = [(Entity, [(AttrKey, MVar EdhValue)])]
--- || The pending writes within a transaction
-type EdhTxWrites = [(Entity, [(AttrKey, MVar EdhValue)])]
--- | An Edh transaction
-type EdhTx = (EdhTxReads, EdhTxWrites)
+type EdhTxReads = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+-- | The pending writes within a transaction
+type EdhTxWrites = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+
+-- todo seek better data structure to manage state of a tx
+--      using list as is for pending ops is not optimal;
+--      simply using strict 'Map Entity [(,)]' may be better,
+--      but not trival as 'Entity' ('MVar' per se) lacks 'Ord' instance.
+--      anyway, neither above is cache friendly.
 
 
+-- | The transactional monad of Edh
+newtype EdhTx a = EdhTx { unEdhTx :: ReaderT (EdhTxReads, EdhTxWrites) IO a }
+    deriving (Functor, Applicative, Monad,
+        MonadReader (EdhTxReads, EdhTxWrites),
+        MonadIO, MonadFail)
 
 
+runEdhTx :: EdhTx () -> IO ()
+runEdhTx tx = do
+    txReads  <- newMVar []
+    txWrites <- newMVar []
+    runReaderT (unEdhTx tx) (txReads, txWrites)
+    driveEdhTx txReads txWrites
 
-
-
--- | A transaction for grouped assignments of attributes onto entities
---
--- TODO a list here should not scale well to large transactions, but
---      can't use Entity (IORef per se) as Map key, need more tweaks.
-type EdhAssignTx = [(Entity, IORef [(AttrKey, EdhValue)])]
-
-prepareEdhAssign
-    :: Context -> EdhAssignTx -> AttrAddressor -> EdhValue -> IO EdhAssignTx
-prepareEdhAssign ctx tx addr v = do
-    k <- resolveAddr addr
-    sched2Tx (k, v) tx
-  where
-    ent   = objEntity $ thisObject scope
-    scope = contextScope ctx
-
-    sched2Tx :: (AttrKey, EdhValue) -> EdhAssignTx -> IO EdhAssignTx
-    sched2Tx u [] = do
-        lr <- newIORef [u]
-        return $ (ent, lr) : tx
-    sched2Tx u ((e, lr) : rest) = if e /= ent
-        then sched2Tx u rest
+driveEdhTx :: EdhTxReads -> EdhTxWrites -> IO ()
+driveEdhTx txReads txWrites = do
+    rs <- takeMVar txReads
+    ws <- takeMVar txWrites
+    if Prelude.null rs && Prelude.null ws
+        then return ()
         else do
-            modifyIORef' lr (\l -> u : l)
-            return tx
+            -- do atomic reads&writes per entity
 
-    resolveAddr :: AttrAddressor -> IO AttrKey
-    resolveAddr (NamedAttr attrName) = return $ AttrByName attrName
-    -- resolveAddr (SymbolicAttr symName) =
-        -- resolveEdhObjAttr scope symName >>= \case
-        --     Just (EdhSymbol symVal) -> return $ AttrBySym symVal
-        --     Nothing ->
-        --         throwIO
-        --             $  EvalError
-        --             $  "No symbol named "
-        --             <> T.pack (show symName)
-        --             <> " available"
-        --     Just v ->
-        --         throwIO
-        --             $  EvalError
-        --             $  "Expect a symbol named "
-        --             <> T.pack (show symName)
-        --             <> " but got: "
-        --             <> T.pack (show v)
+            -- loop another iteration
+            putMVar txReads  []
+            putMVar txWrites []
+            driveEdhTx txReads txWrites
+
+
+edhTxRead :: EdhTxAddr -> (EdhValue -> EdhTx ()) -> EdhTx ()
+edhTxRead addr r = ask >>= liftIO . schdRead
+  where
+    schdRead :: (EdhTxReads, EdhTxWrites) -> IO ()
+    schdRead tx@(txReads, _txWrites) = do
+        p <- newEmptyMVar
+        modifyMVar_ txReads $ edhTxEnqOp addr p
+        void $ forkIO $ do
+            v <- readMVar p
+            runReaderT (unEdhTx $ r v) tx
+
+edhTxWrite :: EdhTxAddr -> (MVar EdhValue -> EdhTx ()) -> EdhTx ()
+edhTxWrite addr w = ask >>= liftIO . schdWrite
+  where
+    schdWrite :: (EdhTxReads, EdhTxWrites) -> IO ()
+    schdWrite tx@(_txReads, txWrites) = do
+        p <- newEmptyMVar
+        modifyMVar_ txWrites $ edhTxEnqOp addr p
+        void $ forkIO $ runReaderT (unEdhTx $ w p) tx
+
+
+edhTxEnqOp
+    :: EdhTxAddr
+    -> MVar EdhValue
+    -> [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+    -> IO [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+edhTxEnqOp (ent, key) p rs = edhTxEnqOp' rs
+  where
+    edhTxEnqOp'
+        :: [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+        -> IO [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+    edhTxEnqOp' [] = do
+        ps <- newMVar [(key, p)]
+        return $ (ent, ps) : rs
+    edhTxEnqOp' ((ent', ops) : rest) = if ent' /= ent
+        then edhTxEnqOp' rest
+        else do
+            modifyMVar_ ops $ \ps -> return $ (key, p) : ps
+            return rs
+
 
 

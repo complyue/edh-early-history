@@ -348,9 +348,30 @@ packEdhArgs ctx argsSender = case argsSender of
     eval' = evalExpr ctx
 
 
+resolveAddr :: AttrAddressor -> EdhTx AttrKey
+resolveAddr (NamedAttr attrName) = return $ AttrByName attrName
+-- resolveAddr (SymbolicAttr symName) =
+    -- resolveEdhObjAttr scope symName >>= \case
+    --     Just (EdhSymbol symVal) -> return $ AttrBySym symVal
+    --     Nothing ->
+    --         throwIO
+    --             $  EvalError
+    --             $  "No symbol named "
+    --             <> T.pack (show symName)
+    --             <> " available"
+    --     Just v ->
+    --         throwIO
+    --             $  EvalError
+    --             $  "Expect a symbol named "
+    --             <> T.pack (show symName)
+    --             <> " but got: "
+    --             <> T.pack (show v)
+
+
+
 -- TODO following is not right yet
 
-resolveLexicalAttr :: [Entity] -> AttrName -> IO (Maybe  EdhValue)
+resolveLexicalAttr :: [Entity] -> AttrName -> IO (Maybe EdhValue)
 resolveLexicalAttr []                    _        = return Nothing
 resolveLexicalAttr (ent : outerEntities) attrName = readMVar ent >>= \em ->
     case Map.lookup (AttrByName attrName) em of
