@@ -1,0 +1,7 @@
+# see https://github.com/ndmitchell/hlint/issues/572#issuecomment-464752600
+- arguments:
+    - -XNoImplicitPrelude
+    - -XOverloadedStrings
+    - -XLambdaCase
+    - -XBlockArguments
+    - -XBangPatterns
