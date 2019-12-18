@@ -124,14 +124,18 @@ driveEdhTx retryCnt txReads txWrites = do
     :: [(Entity, MVar [(AttrKey, MVar EdhValue)])]
     -> [(Entity, MVar [(AttrKey, MVar EdhValue)])]
     -> IO ()
-  scanEntities [] [] = return ()
-  scanEntities (r : txrs) [] =
-    void $ forkIO $ perEntity (Just r) Nothing >> scanEntities txrs []
-  scanEntities [] (w : txws) =
-    void $ forkIO $ perEntity Nothing (Just w) >> scanEntities [] txws
+  scanEntities []         [] = return ()
+  scanEntities (r : txrs) [] = do
+    void $ forkIO $ perEntity (Just r) Nothing
+    scanEntities txrs []
+  scanEntities [] (w : txws) = do
+    void $ forkIO $ perEntity Nothing (Just w)
+    scanEntities [] txws
   scanEntities (r@(ent, _) : txrs) txws@(_ : _) =
     let (w, txws') = takeOutFromList ((== ent) . fst) txws
-    in  void $ forkIO $ perEntity (Just r) w >> scanEntities txrs txws'
+    in  do
+          void $ forkIO $ perEntity (Just r) w
+          scanEntities txrs txws'
 
   perEntity
     :: Maybe (Entity, MVar [(AttrKey, MVar EdhValue)])
