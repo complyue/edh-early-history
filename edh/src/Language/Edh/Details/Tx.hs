@@ -124,43 +124,35 @@ driveEdhTx retryCnt txReads txWrites = do
     :: [(Entity, MVar [(AttrKey, MVar EdhValue)])]
     -> [(Entity, MVar [(AttrKey, MVar EdhValue)])]
     -> IO ()
-  scanEntities []         [] = return ()
-  scanEntities (r : txrs) [] = do
-    void $ forkIO $ perEntity (Just r) Nothing
+  scanEntities []                  [] = return ()
+  scanEntities ((ent, ers) : txrs) [] = do
+    ers' <- readMVar ers
+    void $ forkIO $ perEntity ent ers' []
     scanEntities txrs []
-  scanEntities [] (w : txws) = do
-    void $ forkIO $ perEntity Nothing (Just w)
+  scanEntities [] ((ent, ews) : txws) = do
+    ews' <- readMVar ews
+    void $ forkIO $ perEntity ent [] ews'
     scanEntities [] txws
-  scanEntities (r@(ent, _) : txrs) txws@(_ : _) =
-    let (w, txws') = takeOutFromList ((== ent) . fst) txws
-    in  do
-          void $ forkIO $ perEntity (Just r) w
-          scanEntities txrs txws'
+  scanEntities ((ent, ers) : txrs) txws@(_ : _) = do
+    ers' <- readMVar ers
+    case w of
+      Nothing          -> void $ forkIO $ perEntity ent ers' []
+      Just (_ent, ews) -> do
+        ews' <- readMVar ews
+        void $ forkIO $ perEntity ent ers' ews'
+    scanEntities txrs txws'
+    where (w, txws') = takeOutFromList ((== ent) . fst) txws
 
   perEntity
-    :: Maybe (Entity, MVar [(AttrKey, MVar EdhValue)])
-    -> Maybe (Entity, MVar [(AttrKey, MVar EdhValue)])
+    :: Entity
+    -> [(AttrKey, MVar EdhValue)]
+    -> [(AttrKey, MVar EdhValue)]
     -> IO ()
-  perEntity ers ews = case ers of
-    Nothing -> case ews of
-      Nothing        -> error "bug"
-      Just (ent, ws) -> readMVar ws >>= \ws' -> modifyMVar_ ent $ \e ->
-        flip Map.union e . Map.fromList <$> forM
-          ws'
-          (\(key, vv) -> (key, ) <$> readMVar vv)
-    Just (ent, rs) -> case ews of
-      Nothing -> readMVar rs >>= \rs' -> readMVar ent >>= \e ->
-        forM_ rs' $ \(key, vv) -> case Map.lookup key e of
-          Nothing -> error "bug"
-          Just v  -> putMVar vv v
-      Just (_ent', ws) -> do
-        rs' <- readMVar rs
-        ws' <- readMVar ws
-        modifyMVar_ ent $ \e -> do
-          forM_ rs' $ \(key, vv) -> case Map.lookup key e of
-            Nothing -> error "bug"
-            Just v  -> putMVar vv v
-          flip Map.union e . Map.fromList <$> forM
-            ws'
-            (\(key, vv) -> (key, ) <$> readMVar vv)
+  perEntity ent ers ews = modifyMVar_ ent $ \e -> do
+    forM_ ers $ \(key, vv) -> case Map.lookup key e of
+      Nothing -> error "bug"
+      Just v  -> putMVar vv v
+    flip Map.union e . Map.fromList <$> forM
+      ews
+      (\(key, vv) -> (key, ) <$> readMVar vv)
 
