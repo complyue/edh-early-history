@@ -1,12 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Edh.Details.Tx
   ( EdhTxAddr
-  , EdhTx
+  , EdhTx(..)
   , edhTxRead
   , edhTxWrite
   , throwEdh
+  -- , throwEdhTx
   , runEdhTx
   )
 where
@@ -43,10 +45,12 @@ type EdhTxWrites = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
 
 
 throwEdh :: Exception e => e -> EdhTx a
-throwEdh e = ask >>= \(masterThread, _, _) -> liftIO $ do
-  throwTo masterThread e
-  throwIO ThreadKilled
+throwEdh e = liftIO $ throwIO e
 
+-- throwEdhTx :: Exception e => e -> EdhTx a
+-- throwEdhTx e = ask >>= \(masterThread, _, _) -> liftIO $ do
+--   throwTo masterThread e
+--   throwIO ThreadKilled
 
 -- | The transactional monad of Edh
 newtype EdhTx a = EdhTx { unEdhTx :: ReaderT (ThreadId, EdhTxReads, EdhTxWrites) IO a }
@@ -63,25 +67,39 @@ runEdhTx halt tx = do
   runReaderT (unEdhTx tx) (masterThread, txReads, txWrites)
   driveEdhTx halt txReads txWrites
 
+
 edhTxRead :: EdhTxAddr -> (EdhValue -> EdhTx ()) -> EdhTx ()
 edhTxRead addr r = ask >>= liftIO . schdRead
  where
   schdRead :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
-  schdRead tx@(_, txReads, _txWrites) = do
+  schdRead tx@(masterThread, txReads, _txWrites) = do
     p <- newEmptyMVar
     modifyMVar_ txReads $ edhTxEnqOp addr p
-    void $ forkIO $ do
-      v <- readMVar p
-      runReaderT (unEdhTx $ r v) tx
+    void
+      $ forkIO
+      $ handle
+          (\(e :: SomeException) ->
+            throwTo masterThread e >> throwIO ThreadKilled
+          )
+      $ do
+          v <- readMVar p
+          runReaderT (unEdhTx $ r v) tx
+
 
 edhTxWrite :: EdhTxAddr -> (MVar EdhValue -> EdhTx ()) -> EdhTx ()
 edhTxWrite addr w = ask >>= liftIO . schdWrite
  where
   schdWrite :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
-  schdWrite tx@(_, _txReads, txWrites) = do
+  schdWrite tx@(masterThread, _txReads, txWrites) = do
     p <- newEmptyMVar
     modifyMVar_ txWrites $ edhTxEnqOp addr p
-    void $ forkIO $ runReaderT (unEdhTx $ w p) tx
+    void
+      $ forkIO
+      $ handle
+          (\(e :: SomeException) ->
+            throwTo masterThread e >> throwIO ThreadKilled
+          )
+      $ runReaderT (unEdhTx $ w p) tx
 
 
 edhTxEnqOp
