@@ -94,17 +94,18 @@ type EdhAttrWrite = (EdhTxAddr, MVar EdhValue -> EdhProg ())
 
 runEdhTx :: [EdhAttrRead] -> [EdhAttrWrite] -> EdhProg ()
 runEdhTx attrReads attrWrites = do
-  txs@(EdhTxState masterThread txOps) <- ask
+  txs@(EdhTxState !masterThread !txOps) <- ask
+
   let schedTx :: IO ()
       schedTx = do
-        readPack  <- foldM packRead [] attrReads
-        writePack <- foldM packWrite [] attrWrites
+        !readPack  <- foldM packRead [] attrReads
+        !writePack <- foldM packWrite [] attrWrites
         putMVar txOps $ EdhTxOps readPack writePack
 
       packRead :: EdhOpsPack -> EdhAttrRead -> IO EdhOpsPack
       packRead pck (addr, rdr) = do
         var <- newEmptyMVar
-        let pck' = _packTxOp addr var pck
+        let !pck' = _packTxOp addr var pck
         asyncEdh masterThread $ do
           v <- readMVar var
           runReaderT (unEdhProg $ rdr v) txs
@@ -113,7 +114,7 @@ runEdhTx attrReads attrWrites = do
       packWrite :: EdhOpsPack -> EdhAttrWrite -> IO EdhOpsPack
       packWrite pck (addr, wtr) = do
         var <- newEmptyMVar
-        let pck' = _packTxOp addr var pck
+        let !pck' = _packTxOp addr var pck
         asyncEdh masterThread $ runReaderT (unEdhProg $ wtr var) txs
         return pck'
 
@@ -123,7 +124,7 @@ runEdhTx attrReads attrWrites = do
 driveEdhTx :: ThreadId -> MVar () -> MVar EdhTxOps -> IO ()
 driveEdhTx masterThread halt txOps = do
   -- block wait next tx to come
-  EdhTxOps txrs txws <- readMVar txOps
+  EdhTxOps !txrs !txws <- readMVar txOps
   -- kickoff atomic reads&writes per entity
   launchTx txrs txws
   yield
@@ -159,11 +160,11 @@ driveEdhTx masterThread halt txOps = do
     -> [(AttrKey, MVar EdhValue)]
     -> [(AttrKey, MVar EdhValue)]
     -> IO ()
-  perEntity ent ers ews = modifyMVar_ ent $ \e -> do
-    forM_ ers $ \(key, vv) -> case Map.lookup key e of
-      Nothing -> error "bug in attr resolution"
-      Just v  -> putMVar vv v
-    flip Map.union e . Map.fromList <$> forM
+  perEntity ent ers ews = modifyMVar_ ent $ \em -> do
+    forM_ ers $ \(key, var) -> case Map.lookup key em of
+      Nothing  -> error "bug in attr resolution"
+      Just val -> putMVar var val
+    flip Map.union em . Map.fromList <$> forM
       ews
-      (\(key, vv) -> (key, ) <$> readMVar vv)
+      (\(key, var) -> (key, ) <$> readMVar var)
 
