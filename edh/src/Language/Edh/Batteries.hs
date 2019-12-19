@@ -24,8 +24,13 @@ installEdhBatteries world = liftIO $ do
     "<batteries>"
     [ -- format: (symbol, precedence)
 
+  -- dict key:value seperator, is dummy in operator regards
+      ( ":"
+      , 1
+      ) -- ^ why brittany insists on formatting it like this ?.?
+
   -- assignments
-      ("=" , 1)
+    , ("=" , 1)
     , ("+=", 1)
     , ("-=", 1)
     , ("/=", 1)

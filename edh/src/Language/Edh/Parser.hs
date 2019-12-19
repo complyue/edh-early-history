@@ -475,9 +475,14 @@ parseBlock =
       _       -> return True
     choice
       [ (  (symbol "}")
-        *> (return $ if null t && not mustBlock'
-             then DictExpr [] -- let {} parse as empty dict
-             else BlockExpr (reverse t) -- instead of empty block
+        *> (return case t of
+             [] | mustBlock' -> BlockExpr []
+          -- let {} parse as empty dict instead of empty block
+             []              -> DictExpr []
+          -- single k:v pair without comma will reach here
+             [StmtSrc (_, ExprStmt (InfixExpr ":" kExpr vExpr))] ->
+               DictExpr [(kExpr, vExpr)]
+             _ -> BlockExpr (reverse t)
            )
         )
       , (do
@@ -498,11 +503,11 @@ parseDict = symbol "{" *> parseDictRest []
     ]
   parseKeyValPair :: Parser (Expr, Expr)
   parseKeyValPair = do
-    keyExpr <- parseExpr
-    void $ symbol ":"
-    valExpr <- parseExpr
+    kvExpr <- parseExpr
     trailingComma
-    return (keyExpr, valExpr)
+    case kvExpr of
+      InfixExpr ":" keyExpr valExpr -> return (keyExpr, valExpr)
+      _ -> fail $ "Invalid dict entry: " <> show kvExpr
 
 
 parseTuple :: Parser Expr
