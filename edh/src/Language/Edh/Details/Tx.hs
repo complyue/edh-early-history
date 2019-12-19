@@ -18,6 +18,7 @@ module Language.Edh.Details.Tx
 where
 
 import           Prelude
+-- import           Debug.Trace
 
 import           Control.Exception
 import           Control.Monad
@@ -118,7 +119,7 @@ runEdhTx attrReads attrWrites = do
         asyncEdh masterThread $ runReaderT (unEdhProg $ wtr var) txs
         return pck'
 
-  liftIO schedTx
+  liftIO $ asyncEdh masterThread schedTx
 
 
 driveEdhTx :: ThreadId -> MVar () -> MVar EdhTxOps -> IO ()
