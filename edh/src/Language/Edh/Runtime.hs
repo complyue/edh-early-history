@@ -40,9 +40,7 @@ moduleContext w m = Context { contextWorld = w
                             }
  where
   mo    = moduleObject m
-  scope = Scope { scopeStack = objEntity mo : (classScope . objClass) mo
-                , thisObject = mo
-                }
+  scope = Scope { scopeEntity = objEntity mo, thisObject = mo }
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)

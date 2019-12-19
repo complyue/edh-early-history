@@ -2,6 +2,7 @@
 module Language.Edh.Batteries where
 
 import           Prelude
+import           Debug.Trace
 
 import           Control.Monad.IO.Class
 
@@ -152,6 +153,6 @@ concatProc :: EdhProcedure
 concatProc ctx aSender scope = undefined
 
 typeProc :: EdhProcedure
-typeProc ctx aSender scope = undefined
+typeProc ctx aSender scope = trace " ** type() called." $ return nil
 
 

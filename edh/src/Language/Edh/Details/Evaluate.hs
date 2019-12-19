@@ -172,6 +172,8 @@ evalExpr ctx expr exit = case expr of
       -- EdhMethod mthExpr -> 
       -- EdhGenrDef genrDef ->
 
+    EdhHostProc (HostProcedure _name proc) -> proc ctx args scope >>= exit
+
     v ->
       throwEdh
         $  EvalError
@@ -317,7 +319,7 @@ evalExpr ctx expr exit = case expr of
 --   SingleSender argSender -> fillPack (ArgsPack [] Map.empty) argSender
 --  where
 
---   fillPack :: ArgsPack -> ArgSender -> EdhTx ArgsPack
+--   fillPack :: ArgsPack -> ArgSender -> EdhProg ArgsPack
 --   fillPack (ArgsPack posArgs kwArgs) argSender = case argSender of
 --     UnpackPosArgs listExpr -> eval' listExpr >>= \case
 --       EdhList listRef -> do
@@ -398,8 +400,9 @@ resolveEdhObjAttr scope attr = liftIO $ readMVar ent >>= \em ->
     then return (Just ent)
     else resolveEdhSuperAttr (objSupers obj) attr >>= \case
       Just ent' -> return (Just ent')
-      Nothing   -> resolveLexicalAttr (scopeStack scope) attr
+      Nothing   -> resolveLexicalAttr (classScope $ objClass obj) attr
  where
-  ent = objEntity obj
-  obj = thisObject scope
+  ent    = scopeEntity scope
+  obj    = thisObject scope
+  objEnt = objEntity obj
 

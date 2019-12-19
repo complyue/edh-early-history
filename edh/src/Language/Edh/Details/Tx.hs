@@ -1,19 +1,14 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Edh.Details.Tx
-  ( EdhProg(..)
-  , runEdhProg
+  ( runEdhProg
   , cleanupEdhProg
   , edhReadAttr
   , edhWriteAttr
   , throwEdh
   , runEdhTx
 
-  -- , EdhTxState(..)
-  -- , EdhTxOps(..)
-  -- , EdhOpsPack
   -- , asyncEdh
   )
 where
@@ -24,7 +19,6 @@ import           Prelude
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Except
-import           Control.Monad.Fail
 import           Control.Monad.Reader
 import           Control.Concurrent
 
@@ -44,37 +38,6 @@ asyncEdh masterThread f = void $ forkIO $ void $ handle onExc f
   onExc :: SomeException -> IO ()
   onExc e = throwTo masterThread e >> throwIO ThreadKilled
 
-
--- | Transactional operations packed per entity basis
-type EdhOpsPack = [(Entity, [(AttrKey, MVar EdhValue)])]
--- todo seek better data structure to manage state of a tx.
---      using list as is for pending ops is not optimal;
---      simply using strict 'Map Entity [(,)]' may be better,
---      but not trival as 'Entity' ('MVar' per se) lacks 'Ord' instance.
---      anyway, neither above is cache friendly.
-_packTxOp :: Entity -> AttrKey -> MVar EdhValue -> EdhOpsPack -> EdhOpsPack
-_packTxOp ent key var = packTxOp' []
- where
-  packTxOp' :: EdhOpsPack -> EdhOpsPack -> EdhOpsPack
-  packTxOp' prefix []                     = (ent, [(key, var)]) : prefix
-  packTxOp' prefix (r@(ent', eos) : rest) = if ent' /= ent
-    then packTxOp' (r : prefix) rest
-    else (ent, (key, var) : eos) : prefix ++ rest
-
-
--- | All operations per a transaction
-data EdhTxOps = EdhTxOps {
-    _edh'tx'reads :: !EdhOpsPack
-    , _edh'tx'writes :: !EdhOpsPack
-  }
-
-data EdhTxState = EdhTxState {
-    _edh'tx'master :: !ThreadId
-    -- | the op set still open for new ops to join
-    , _edh'tx'open :: !(MVar (IORef EdhTxOps))
-    -- | the op set submitted for execution
-    , _edh'tx'exec :: !(MVar EdhTxOps)
-  }
 
 runEdhTx :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
 runEdhTx initOps collectResult = do
@@ -119,13 +82,6 @@ edhWriteAttr ent key exit = do
         (EdhTxOps rpck (_packTxOp ent key var wpck), ())
       asyncEdh masterThread
         $ runReaderT (unEdhProg $ exit (liftIO . putMVar var)) txs
-
-
--- | The transactional monad of Edh
-newtype EdhProg a = EdhProg { unEdhProg :: ReaderT EdhTxState IO a }
-    deriving (Functor, Applicative, Monad,
-        MonadReader EdhTxState,
-        MonadIO, MonadFail)
 
 
 runEdhProg :: MVar () -> EdhProg () -> IO ()

@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Language.Edh.Details.RtTypes where
 
@@ -5,17 +6,20 @@ import           Prelude
 
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Concurrent.MVar
+import           Control.Monad.Except
+import           Control.Monad.Fail
+import           Control.Monad.Reader
+import           Control.Concurrent
+
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as T
+import qualified Data.Map.Strict               as Map
 
 import           Data.IORef
 import           Foreign.C.String
 import           Foreign.Marshal.Alloc
 import           System.Mem.Weak
 import           System.IO.Unsafe
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
-import qualified Data.Map.Strict               as Map
 
 import           Text.Megaparsec
 
@@ -81,6 +85,22 @@ data AttrKey = AttrByName AttrName | AttrBySym Symbol
     deriving (Eq, Ord, Show)
 
 
+-- | A pack of evaluated argument values with positional/keyword
+-- origin.
+data ArgsPack = ArgsPack {
+        positional'args :: ![EdhValue]
+        , keyword'args :: !(Map.Map AttrName EdhValue)
+    }
+
+
+-- | calling stack frames at any point of Edh code execution
+data Context = Context {
+        contextWorld :: EdhWorld
+        , contextModu :: Module
+        , contextScope :: !Scope
+    }
+
+
 -- Especially note that Edh has no block scope as in C
 -- family languages, JavaScript neither does before ES6,
 -- Python neither does until now (2019).
@@ -100,46 +120,13 @@ data AttrKey = AttrByName AttrName | AttrBySym Symbol
 --  * if it is a methd procedure call, `thisObject` remains the
 --    same as previous stack frame.
 data Scope = Scope {
-        scopeStack :: ![Entity] -- a reversed stack for lexical scopes
+        -- | the entity of current scope, it's unique in a method procedure,
+        -- and is the underlying entity of 'thisObject' in a class procedure.
+        scopeEntity :: !Entity
         , thisObject :: Object -- `this` object of current scope
     }
 instance Eq Scope where
   Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
-
--- | calling stack frames at any point of Edh code execution
-data Context = Context {
-        contextWorld :: EdhWorld
-        , contextModu :: Module
-        , contextScope :: !Scope
-    }
-
--- | A pack of evaluated argument values with positional/keyword
--- origin.
-data ArgsPack = ArgsPack {
-        positional'args :: ![EdhValue]
-        , keyword'args :: !(Map.Map AttrName EdhValue)
-    }
-
-
--- | Pending evaluated statement, it can be later forced against a
--- target value in context.
---
--- Note: we rely on the 'CString' field (which is essentially a ptr),
---       for equality testing of thunks.
-data Thunk = Thunk {
-        thunkDescription :: CString
-        , thunkValuator :: EdhValue -> IO EdhValue
-    }
-instance Eq Thunk where
-  Thunk x'd _ == Thunk y'd _ = x'd == y'd
-instance Show Thunk where
-  show (Thunk d _) = "[thunk: " <> s <> "]"
-    where s = unsafePerformIO $ peekCString d
-mkThunk :: String -> (EdhValue -> IO EdhValue) -> IO Thunk
-mkThunk desc valuator = do
-  s <- newCString desc
-  addFinalizer s $ free s
-  return $ Thunk s valuator
 
 
 -- | An object views an entity, with inheritance relationship 
@@ -244,6 +231,27 @@ instance Show Iterator where
   show (Iterator _ _) = "[iterator]"
 
 
+-- | Pending evaluated statement, it can be later forced against a
+-- target value in context.
+--
+-- Note: we rely on the 'CString' field (which is essentially a ptr),
+--       for equality testing of thunks.
+data Thunk = Thunk {
+        thunkDescription :: CString
+        , thunkValuator :: EdhValue -> IO EdhValue
+    }
+instance Eq Thunk where
+  Thunk x'd _ == Thunk y'd _ = x'd == y'd
+instance Show Thunk where
+  show (Thunk d _) = "[thunk: " <> s <> "]"
+    where s = unsafePerformIO $ peekCString d
+mkThunk :: String -> (EdhValue -> IO EdhValue) -> IO Thunk
+mkThunk desc valuator = do
+  s <- newCString desc
+  addFinalizer s $ free s
+  return $ Thunk s valuator
+
+
 data EventStream = EventStream {
         evs'event :: !EdhValue -- nil should mean not an event
         , evs'next :: !(MVar EventStream)
@@ -265,13 +273,52 @@ data EdhWorld = EdhWorld {
     }
 
 
+-- | The monad for Edh program
+newtype EdhProg a = EdhProg { unEdhProg :: ReaderT EdhTxState IO a }
+    deriving (Functor, Applicative, Monad,
+        MonadReader EdhTxState,
+        MonadIO, MonadFail)
+
+
+-- | Transactional operations packed per entity basis
+type TxOpsPack = [(Entity, [(AttrKey, MVar EdhValue)])]
+-- todo seek better data structure to manage state of a tx.
+--      using list as is for pending ops is not optimal;
+--      simply using strict 'Map Entity [(,)]' may be better,
+--      but not trival as 'Entity' ('MVar' per se) lacks 'Ord' instance.
+--      anyway, neither above is cache friendly.
+_packTxOp :: Entity -> AttrKey -> MVar EdhValue -> TxOpsPack -> TxOpsPack
+_packTxOp ent key var = packTxOp' []
+ where
+  packTxOp' :: TxOpsPack -> TxOpsPack -> TxOpsPack
+  packTxOp' prefix []                     = (ent, [(key, var)]) : prefix
+  packTxOp' prefix (r@(ent', eos) : rest) = if ent' /= ent
+    then packTxOp' (r : prefix) rest
+    else (ent, (key, var) : eos) : prefix ++ rest
+
+
+-- | All operations per a transaction
+data EdhTxOps = EdhTxOps {
+    _edh'tx'reads :: !TxOpsPack
+    , _edh'tx'writes :: !TxOpsPack
+  }
+
+data EdhTxState = EdhTxState {
+    _edh'tx'master :: !ThreadId
+    -- | the op set still open for new ops to join
+    , _edh'tx'open :: !(MVar (IORef EdhTxOps))
+    -- | the op set submitted for execution
+    , _edh'tx'exec :: !(MVar EdhTxOps)
+  }
+
+
 -- | Type of host function that can be called from Edh code
 --
 -- Edh is not tracking whether such functions are pure (i.e.
 -- side-effect free) or impure (i.e. world-chaning), though
 -- writing only pure functions in the host language (especially
 -- as for Haskell) should be considered idiomatic).
-type EdhProcedure = Context -> ArgsSender -> Scope -> IO EdhValue
+type EdhProcedure = Context -> ArgsSender -> Scope -> EdhProg EdhValue
 
 
 -- | Type of the host procedure to be bound to an entity
