@@ -153,7 +153,16 @@ evalExpr ctx expr exit = case expr of
     , generatorProcedure   = pd
     }
 
-  -- AttrExpr addr -> 
+  AttrExpr addr -> case addr of
+    ThisRef         -> exit $ EdhObject this
+    SupersRef       -> exit $ EdhTuple $ EdhObject <$> objSupers this
+    DirectRef addr' -> case addr' of
+      NamedAttr attrName -> resolveEdhObjAttr scope attrName >>= \case
+        Just ent -> runEdhTx [((ent, AttrByName attrName), exit)] []
+        Nothing  -> throwEdh $ EvalError $ "Not in scope: " <> attrName
+      SymbolicAttr symName -> undefined
+    IndirectRef tgtExpr addr' -> undefined
+
   -- IndexExpr ixExpr tgtExpr ->
 
   CallExpr procExpr args -> eval' procExpr $ \case
