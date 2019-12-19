@@ -115,27 +115,30 @@ evalExpr ctx expr exit = case expr of
         <> T.pack (show v)
         <> " ❌"
 
-  -- DictExpr ps ->
-  --   let
-  --     evalPair :: (Expr, Expr) ->  ((ItemKey, EdhValue) -> EdhProg ()) -> EdhProg ()
-  --     evalPair (kExpr, vExpr) exit  = eval' vExpr $ \v -> eval' kExpr $ \case
-  --       EdhString  k -> exit (ItemByStr k, v)
-  --       EdhSymbol  k -> exit (ItemBySym k, v)
-  --       EdhDecimal k -> exit (ItemByNum k, v)
-  --       EdhBool    k -> exit (ItemByBool k, v)
-  --       k -> throwEdh $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
-  --   in
-  --     do
-  --       pl <- mapM evalPair ps
-  --       EdhDict <$> newIORef (Dict $ Map.fromList pl)
+  DictExpr ps ->
+    let
+      evalPair :: (Expr, Expr) -> EdhProg (MVar (ItemKey, EdhValue))
+      evalPair (kExpr, vExpr) = do
+        var <- liftIO newEmptyMVar
+        eval' vExpr $ \vVal -> eval' kExpr $ \kVal -> liftIO $ case kVal of
+          EdhString  k -> putMVar var (ItemByStr k, vVal)
+          EdhSymbol  k -> putMVar var (ItemBySym k, vVal)
+          EdhDecimal k -> putMVar var (ItemByNum k, vVal)
+          EdhBool    k -> putMVar var (ItemByBool k, vVal)
+          k -> throwIO $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
+        return var
+    in
+      runEdhTx (mapM evalPair ps) $ \pl -> do
+        pl' <- liftIO $ mapM readMVar pl
+        d   <- EdhDict <$> (liftIO . newIORef) (Dict $ Map.fromList pl')
+        exit d
 
   ListExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
     l' <- liftIO $ mapM readMVar l
     v  <- liftIO $ EdhList <$> newIORef l'
     exit v
 
-  TupleExpr vs -> do
-    l  <- mapM eval2 vs
+  TupleExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
     l' <- liftIO $ mapM readMVar l
     exit $ EdhTuple l'
 
@@ -190,7 +193,7 @@ evalExpr ctx expr exit = case expr of
   eval2 :: Expr -> EdhProg (MVar EdhValue)
   eval2 expr' = do
     var <- liftIO newEmptyMVar
-    evalExpr ctx expr' $ \val -> liftIO $ putMVar var val
+    eval' expr' $ \val -> liftIO $ putMVar var val
     return var
 
   evalSS = evalStmt ctx
