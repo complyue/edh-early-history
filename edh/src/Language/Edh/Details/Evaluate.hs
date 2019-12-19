@@ -65,7 +65,7 @@ evalStmt' ctx stmt exit = case stmt of
 
 
   VoidStmt -> exit nil
-  _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
+  _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
 
 
 evalExpr :: Context -> Expr -> (EdhValue -> EdhProg ()) -> EdhProg ()
@@ -159,7 +159,7 @@ evalExpr ctx expr exit = case expr of
     ThisRef         -> exit $ EdhObject this
     SupersRef       -> exit $ EdhTuple $ EdhObject <$> objSupers this
     DirectRef addr' -> case addr' of
-      NamedAttr attrName -> resolveEdhObjAttr scope attrName >>= \case
+      NamedAttr attrName -> resolveEdhCtxAttr scope attrName >>= \case
         Just ent -> edhReadAttr ent (AttrByName attrName) exit
         Nothing  -> throwEdh $ EvalError $ "Not in scope: " <> attrName
       SymbolicAttr symName -> undefined
@@ -386,23 +386,31 @@ resolveLexicalAttr (ent : outerEntities) attrName =
     then return (Just ent)
     else resolveLexicalAttr outerEntities attrName
 
+
+resolveEdhCtxAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Entity)
+resolveEdhCtxAttr scope attr = liftIO $ readMVar ent >>= \em ->
+  if Map.member (AttrByName attr) em
+    then return (Just ent)
+    else resolveLexicalAttr (classScope $ objClass obj) attr
+ where
+  ent = scopeEntity scope
+  obj = thisObject scope
+
+
+resolveEdhObjAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Entity)
+resolveEdhObjAttr scope attr = liftIO $ readMVar objEnt >>= \em ->
+  if Map.member (AttrByName attr) em
+    then return (Just objEnt)
+    else resolveEdhSuperAttr (objSupers obj) attr
+ where
+  obj    = thisObject scope
+  objEnt = objEntity obj
+
 resolveEdhSuperAttr :: MonadIO m => [Object] -> AttrName -> m (Maybe Entity)
 resolveEdhSuperAttr [] _ = return Nothing
 resolveEdhSuperAttr (super : restSupers) attr =
-  liftIO $ readMVar ent >>= \em -> if Map.member (AttrByName attr) em
-    then return (Just ent)
+  liftIO $ readMVar objEnt >>= \em -> if Map.member (AttrByName attr) em
+    then return (Just objEnt)
     else resolveEdhSuperAttr restSupers attr
-  where ent = objEntity super
-
-resolveEdhObjAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Entity)
-resolveEdhObjAttr scope attr = liftIO $ readMVar ent >>= \em ->
-  if Map.member (AttrByName attr) em
-    then return (Just ent)
-    else resolveEdhSuperAttr (objSupers obj) attr >>= \case
-      Just ent' -> return (Just ent')
-      Nothing   -> resolveLexicalAttr (classScope $ objClass obj) attr
- where
-  ent    = scopeEntity scope
-  obj    = thisObject scope
-  objEnt = objEntity obj
+  where objEnt = objEntity super
 

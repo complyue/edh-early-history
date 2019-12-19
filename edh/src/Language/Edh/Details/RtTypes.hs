@@ -123,7 +123,7 @@ data Scope = Scope {
         -- | the entity of current scope, it's unique in a method procedure,
         -- and is the underlying entity of 'thisObject' in a class procedure.
         scopeEntity :: !Entity
-        , thisObject :: Object -- `this` object of current scope
+        , thisObject :: Object -- ^ `this` object of current scope
     }
 instance Eq Scope where
   Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
@@ -178,7 +178,7 @@ instance Show Object where
       ++ "]"
 
 data Class = Class {
-        classScope :: ![Entity]
+        classScope :: ![Entity] -- ^ the scope this class procedure is defined
         , className :: !AttrName
         , classSourcePos :: !SourcePos
         , classProcedure :: !ProcDecl
