@@ -2,6 +2,7 @@
 module Language.Edh.Details.Evaluate where
 
 import           Prelude
+import           Debug.Trace
 
 import           Control.Exception
 import           Control.Monad.Except
@@ -128,8 +129,7 @@ evalExpr ctx expr exit = case expr of
   --       pl <- mapM evalPair ps
   --       EdhDict <$> newIORef (Dict $ Map.fromList pl)
 
-  ListExpr vs -> do
-    l  <- mapM eval2 vs
+  ListExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
     l' <- liftIO $ mapM readMVar l
     v  <- liftIO $ EdhList <$> newIORef l'
     exit v
@@ -137,8 +137,7 @@ evalExpr ctx expr exit = case expr of
   TupleExpr vs -> do
     l  <- mapM eval2 vs
     l' <- liftIO $ mapM readMVar l
-    v  <- return $ EdhTuple l'
-    exit v
+    exit $ EdhTuple l'
 
   -- TODO this should check for Thunk, and implement
   --      break/fallthrough semantics
@@ -191,7 +190,7 @@ evalExpr ctx expr exit = case expr of
   eval2 :: Expr -> EdhProg (MVar EdhValue)
   eval2 expr' = do
     var <- liftIO newEmptyMVar
-    evalExpr ctx expr' $ \v -> liftIO $ putMVar var v
+    evalExpr ctx expr' $ \val -> liftIO $ putMVar var val
     return var
 
   evalSS = evalStmt ctx

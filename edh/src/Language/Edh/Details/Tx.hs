@@ -6,10 +6,10 @@ module Language.Edh.Details.Tx
   ( EdhProg(..)
   , runEdhProg
   , cleanupEdhProg
-  , runEdhTx
   , edhReadAttr
   , edhWriteAttr
   , throwEdh
+  , runEdhTx
 
   -- , EdhTxState(..)
   -- , EdhTxOps(..)
@@ -76,13 +76,17 @@ data EdhTxState = EdhTxState {
     , _edh'tx'exec :: !(MVar EdhTxOps)
   }
 
-runEdhTx :: EdhProg () -> EdhProg ()
-runEdhTx tx = do
+runEdhTx :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
+runEdhTx initOps collectResult = do
   txs@(EdhTxState !masterThread !openOps !execOps) <- ask
-  liftIO $ asyncEdh masterThread $ do
-    newIORef (EdhTxOps [] []) >>= putMVar openOps
-    runReaderT (unEdhProg tx) txs
-    takeMVar openOps >>= readIORef >>= putMVar execOps
+  liftIO $ do
+    oops <- newIORef (EdhTxOps [] [])
+    v    <- bracket_ (putMVar openOps oops) (takeMVar openOps)
+      $ runReaderT (unEdhProg initOps) txs
+    oops' <- readIORef oops
+    asyncEdh masterThread $ do
+      putMVar execOps oops'
+      runReaderT (unEdhProg $ collectResult v) txs
 
 edhReadAttr :: Entity -> AttrKey -> (EdhValue -> EdhProg ()) -> EdhProg ()
 edhReadAttr ent key exit = do
@@ -92,13 +96,13 @@ edhReadAttr ent key exit = do
       -- not in tx, fast snapshot read alone
       Nothing  -> error "bug in attr resolution"
       Just val -> runReaderT (unEdhProg $ exit val) txs
-    Just openOps' -> do -- in tx, schedule the read to the open op set
+    Just oops -> do -- in tx, schedule the read to the open op set
       var <- newEmptyMVar
+      atomicModifyIORef' oops $ \(EdhTxOps rpck wpck) ->
+        (EdhTxOps (_packTxOp ent key var rpck) wpck, ())
       asyncEdh masterThread $ do
         val <- readMVar var
         runReaderT (unEdhProg $ exit val) txs
-      atomicModifyIORef' openOps' $ \(EdhTxOps rpck wpck) ->
-        (EdhTxOps (_packTxOp ent key var rpck) wpck, ())
 
 edhWriteAttr
   :: Entity -> AttrKey -> ((EdhValue -> EdhProg ()) -> EdhProg ()) -> EdhProg ()
@@ -109,12 +113,12 @@ edhWriteAttr ent key exit = do
       let writeVal :: EdhValue -> EdhProg ()
           writeVal val = liftIO $ modifyMVar_ ent $ return . Map.insert key val
       in  runReaderT (unEdhProg $ exit writeVal) txs
-    Just openOps' -> do -- in tx, schedule the write to the open op set
+    Just oops -> do -- in tx, schedule the write to the open op set
       var <- newEmptyMVar
+      atomicModifyIORef' oops $ \(EdhTxOps rpck wpck) ->
+        (EdhTxOps rpck (_packTxOp ent key var wpck), ())
       asyncEdh masterThread
         $ runReaderT (unEdhProg $ exit (liftIO . putMVar var)) txs
-      atomicModifyIORef' openOps' $ \(EdhTxOps rpck wpck) ->
-        (EdhTxOps rpck (_packTxOp ent key var wpck), ())
 
 
 -- | The transactional monad of Edh
@@ -146,9 +150,9 @@ cleanupEdhProg halt = ask >>= \(EdhTxState _ _ !execOps) -> liftIO $ do
 
 driveEdhTx :: ThreadId -> MVar () -> MVar EdhTxOps -> IO ()
 driveEdhTx masterThread halt execOps = do
-  -- block wait next tx to come
-  EdhTxOps !txrs !txws <- readMVar execOps
-  -- kickoff atomic reads&writes per entity
+  -- blocking wait next tx to come
+  EdhTxOps !txrs !txws <- takeMVar execOps
+  -- kickoff atomic reads/writes per entity
   launchTx txrs txws
   yield
   -- check halt 
