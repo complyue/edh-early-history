@@ -48,15 +48,15 @@ runEdhProgram' _   []    = return $ Right EdhNil
 runEdhProgram' ctx stmts = do
   halt  <- newEmptyMVar
   final <- newEmptyMVar
-  let finalize v = do
+  let finalize (_scope, v) = do
         cleanupEdhProg halt
         liftIO $ putMVar final v
   tryJust Just (runEdhProg halt (evalStmts stmts finalize) >> readMVar final)
 
  where
 
-  evalStmts :: SeqStmts -> (EdhValue -> EdhProg ()) -> EdhProg ()
-  evalStmts []       exit = exit nil
+  evalStmts :: SeqStmts -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
+  evalStmts []       exit = exit (contextScope ctx, nil)
   evalStmts [s     ] exit = evalStmt ctx s exit
   evalStmts (s : rs) exit = evalStmt ctx s (\_ -> evalStmts rs exit)
 

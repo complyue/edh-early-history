@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Details.Evaluate where
 
@@ -25,9 +26,10 @@ import           Language.Edh.Details.Tx
 import           Language.Edh.Details.Utils
 
 
-evalStmt :: Context -> StmtSrc -> (EdhValue -> EdhProg ()) -> EdhProg ()
+evalStmt
+  :: Context -> StmtSrc -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
 evalStmt ctx (StmtSrc (srcPos, stmt)) exit = do
-  tx <- ask
+  txs <- ask
   liftIO
     $ handleJust
         Just
@@ -37,56 +39,59 @@ evalStmt ctx (StmtSrc (srcPos, stmt)) exit = do
               (sourcePosPretty srcPos)
             )
           )
-          tx
+          txs
         )
-    $ runReaderT (unEdhProg (evalStmt' ctx stmt exit)) tx
+    $ runReaderT (unEdhProg (evalStmt' ctx stmt exit)) txs
 
 
-evalStmt' :: Context -> Stmt -> (EdhValue -> EdhProg ()) -> EdhProg ()
+evalStmt' :: Context -> Stmt -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
 evalStmt' ctx stmt exit = case stmt of
 
   ExprStmt expr             -> evalExpr ctx expr exit
 
   LetStmt argsRcvr argsSndr -> undefined
 
-  BreakStmt                 -> exit EdhBreak
-  ContinueStmt              -> exit EdhContinue
-  FallthroughStmt           -> exit EdhFallthrough
+  BreakStmt                 -> exit (scope, EdhBreak)
+  ContinueStmt              -> exit (scope, EdhContinue)
+  FallthroughStmt           -> exit (scope, EdhFallthrough)
   -- TODO impl. this
-  YieldStmt  asend          -> undefined -- EdhYield <$>  
-  ReturnStmt expr           -> evalExpr ctx expr $ \v -> exit $ EdhReturn v
+  YieldStmt asend           -> undefined -- EdhYield <$>  
+  ReturnStmt expr ->
+    evalExpr ctx expr $ \(scope', v) -> exit (scope', EdhReturn v)
 
 
-  ImportStmt ar srcExpr     -> case srcExpr of
+  ImportStmt ar srcExpr -> case srcExpr of
     LitExpr (StringLiteral moduPath) ->
-      exit $ EdhString $ "wana import " <> moduPath <> ".edh huh?"
+      exit (scope, EdhString $ "wana import " <> moduPath <> ".edh huh?")
     expr ->
       throwEdh $ EvalError $ "don't know how to import " <> T.pack (show expr)
 
 
-  VoidStmt -> exit nil
+  VoidStmt -> exit (scope, nil)
   _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
+  where scope = contextScope ctx
 
 
-evalExpr :: Context -> Expr -> (EdhValue -> EdhProg ()) -> EdhProg ()
+evalExpr :: Context -> Expr -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
 evalExpr ctx expr exit = case expr of
   LitExpr lit -> case lit of
-    DecLiteral    v -> exit $ EdhDecimal v
-    StringLiteral v -> exit $ EdhString v
-    BoolLiteral   v -> exit $ EdhBool v
-    NilLiteral      -> exit nil
-    TypeLiteral v   -> exit $ EdhType v
+    DecLiteral    v -> exit (scope, EdhDecimal v)
+    StringLiteral v -> exit (scope, EdhString v)
+    BoolLiteral   v -> exit (scope, EdhBool v)
+    NilLiteral      -> exit (scope, nil)
+    TypeLiteral v   -> exit (scope, EdhType v)
     -- TODO impl this
     SinkCtor        -> throwEdh $ EvalError "sink ctor not impl. yet"
 
   PrefixExpr prefix expr' -> case prefix of
     PrefixPlus  -> eval' expr' exit
     PrefixMinus -> eval' expr' $ \case
-      EdhDecimal v -> exit $ EdhDecimal (-v)
-      v -> throwEdh $ EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
+      (scope', EdhDecimal v) -> exit (scope', EdhDecimal (-v))
+      (_scope', v) ->
+        throwEdh $ EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
     Not -> eval' expr' $ \case
-      EdhBool v -> exit $ EdhBool $ not v
-      v ->
+      (scope', EdhBool v) -> exit (scope', EdhBool $ not v)
+      (_scope', v) ->
         throwEdh
           $  EvalError
           $  "Expect bool but got: "
@@ -104,64 +109,66 @@ evalExpr ctx expr exit = case expr of
     Defer -> throwEdh $ EvalError "defer scheduler not impl. yet"
 
   IfExpr cond cseq alt -> eval' cond $ \case
-    EdhBool True  -> evalSS cseq exit
-    EdhBool False -> case alt of
+    (_scope', EdhBool True ) -> evalSS cseq exit
+    (_scope', EdhBool False) -> case alt of
       Just elseClause -> evalSS elseClause exit
-      _               -> exit nil
-    v ->
-      throwEdh -- we are so strongly typed
-        $  EvalError
-        $  "Not a boolean value: "
-        <> T.pack (show v)
-        <> " ❌"
+      _               -> exit (scope, nil)
+    (_scope', v) ->
+      -- we are so strongly typed
+      throwEdh $ EvalError $ "Not a boolean value: " <> T.pack (show v) <> " ❌"
 
   DictExpr ps ->
     let
       evalPair :: (Expr, Expr) -> EdhProg (MVar (ItemKey, EdhValue))
       evalPair (kExpr, vExpr) = do
         var <- liftIO newEmptyMVar
-        eval' vExpr $ \vVal -> eval' kExpr $ \kVal -> liftIO $ case kVal of
-          EdhString  k -> putMVar var (ItemByStr k, vVal)
-          EdhSymbol  k -> putMVar var (ItemBySym k, vVal)
-          EdhDecimal k -> putMVar var (ItemByNum k, vVal)
-          EdhBool    k -> putMVar var (ItemByBool k, vVal)
-          k -> throwIO $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
+        eval' vExpr $ \(_scope'v, vVal) -> eval' kExpr $ \(_scope'k, kVal) ->
+          liftIO $ case kVal of
+            EdhString  k -> putMVar var (ItemByStr k, vVal)
+            EdhSymbol  k -> putMVar var (ItemBySym k, vVal)
+            EdhDecimal k -> putMVar var (ItemByNum k, vVal)
+            EdhBool    k -> putMVar var (ItemByBool k, vVal)
+            k ->
+              throwIO $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
         return var
     in
       runEdhTx (mapM evalPair ps) $ \pl -> do
         pl' <- liftIO $ mapM readMVar pl
         d   <- EdhDict <$> (liftIO . newIORef) (Dict $ Map.fromList pl')
-        exit d
+        exit (scope, d)
 
   ListExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
-    l' <- liftIO $ mapM readMVar l
+    l' <- liftIO $ mapM ((snd <$>) . readMVar) l
     v  <- liftIO $ EdhList <$> newIORef l'
-    exit v
+    exit (scope, v)
 
   TupleExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
-    l' <- liftIO $ mapM readMVar l
-    exit $ EdhTuple l'
+    l' <- liftIO $ mapM ((snd <$>) . readMVar) l
+    exit (scope, EdhTuple l')
 
   -- TODO this should check for Thunk, and implement
   --      break/fallthrough semantics
-  BlockExpr stmts     -> exit $ EdhBlock stmts
+  BlockExpr stmts     -> exit (scope, EdhBlock stmts)
 
   -- TODO impl this
   -- ForExpr ar iter todo -> undefined
 
-  GeneratorExpr sp pd -> exit $ EdhGenrDef $ GenrDef
-    { generatorOwnerObject = this
-    , generatorSourcePos   = sp
-    , generatorProcedure   = pd
-    }
+  GeneratorExpr sp pd -> exit
+    ( scope
+    , EdhGenrDef $ GenrDef { generatorOwnerObject = this
+                           , generatorSourcePos   = sp
+                           , generatorProcedure   = pd
+                           }
+    )
 
   AttrExpr addr -> case addr of
-    ThisRef         -> exit $ EdhObject this
-    SupersRef       -> exit $ EdhTuple $ EdhObject <$> objSupers this
+    ThisRef         -> exit (scope, EdhObject this)
+    SupersRef       -> exit (scope, EdhTuple $ EdhObject <$> objSupers this)
     DirectRef addr' -> case addr' of
       NamedAttr attrName -> resolveEdhCtxAttr scope attrName >>= \case
-        Just ent -> edhReadAttr ent (AttrByName attrName) exit
-        Nothing  -> throwEdh $ EvalError $ "Not in scope: " <> attrName
+        Just scope'@(Scope ent _obj) ->
+          edhReadAttr ent (AttrByName attrName) (exit . (scope', ))
+        Nothing -> throwEdh $ EvalError $ "Not in scope: " <> attrName
       SymbolicAttr symName -> undefined
     IndirectRef tgtExpr addr' -> undefined
 
@@ -172,9 +179,10 @@ evalExpr ctx expr exit = case expr of
       -- EdhMethod mthExpr -> 
       -- EdhGenrDef genrDef ->
 
-    EdhHostProc (HostProcedure _name proc) -> proc ctx args scope >>= exit
+    (scope', EdhHostProc (HostProcedure _name proc)) ->
+      proc ctx args scope' >>= exit . (scope, )
 
-    v ->
+    (_scope', v) ->
       throwEdh
         $  EvalError
         $  "Can not call: "
@@ -192,10 +200,10 @@ evalExpr ctx expr exit = case expr of
 
   eval' = evalExpr ctx
 
-  eval2 :: Expr -> EdhProg (MVar EdhValue)
+  eval2 :: Expr -> EdhProg (MVar (Scope, EdhValue))
   eval2 expr' = do
     var <- liftIO newEmptyMVar
-    eval' expr' $ \val -> liftIO $ putMVar var val
+    eval' expr' $ \sv -> liftIO $ putMVar var sv
     return var
 
   evalSS = evalStmt ctx
@@ -379,38 +387,38 @@ evalExpr ctx expr exit = case expr of
 --           <> T.pack (show v)
 
 
-resolveLexicalAttr :: MonadIO m => [Scope] -> AttrName -> m (Maybe Entity)
+resolveLexicalAttr :: MonadIO m => [Scope] -> AttrName -> m (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (Scope ent _obj : outerEntities) attrName =
+resolveLexicalAttr (scope@(Scope ent _obj) : outerEntities) attrName =
   liftIO $ readMVar ent >>= \em -> if Map.member (AttrByName attrName) em
-    then return (Just ent)
+    then return (Just scope)
     else resolveLexicalAttr outerEntities attrName
 
 
-resolveEdhCtxAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Entity)
+resolveEdhCtxAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Scope)
 resolveEdhCtxAttr scope attr = liftIO $ readMVar ent >>= \em ->
   if Map.member (AttrByName attr) em
-    then return (Just ent)
+    then return (Just scope)
     else resolveLexicalAttr (classScope $ objClass obj) attr
  where
   ent = scopeEntity scope
   obj = thisObject scope
 
 
-resolveEdhObjAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Entity)
+resolveEdhObjAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Scope)
 resolveEdhObjAttr scope attr = liftIO $ readMVar objEnt >>= \em ->
   if Map.member (AttrByName attr) em
-    then return (Just objEnt)
+    then return (Just scope)
     else resolveEdhSuperAttr (objSupers obj) attr
  where
   obj    = thisObject scope
   objEnt = objEntity obj
 
-resolveEdhSuperAttr :: MonadIO m => [Object] -> AttrName -> m (Maybe Entity)
+resolveEdhSuperAttr :: MonadIO m => [Object] -> AttrName -> m (Maybe Scope)
 resolveEdhSuperAttr [] _ = return Nothing
 resolveEdhSuperAttr (super : restSupers) attr =
   liftIO $ readMVar objEnt >>= \em -> if Map.member (AttrByName attr) em
-    then return (Just objEnt)
+    then return (Just (Scope objEnt super))
     else resolveEdhSuperAttr restSupers attr
   where objEnt = objEntity super
 
