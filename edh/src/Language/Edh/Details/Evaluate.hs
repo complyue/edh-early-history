@@ -80,22 +80,17 @@ evalExpr ctx expr exit = case expr of
 
   PrefixExpr prefix expr' -> case prefix of
     PrefixPlus  -> eval' expr' exit
-    PrefixMinus -> eval'
-      expr'
-      \case
-        EdhDecimal v -> exit $ EdhDecimal (-v)
-        v ->
-          throwEdh $ EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
-    Not -> eval'
-      expr'
-      \case
-        EdhBool v -> exit $ EdhBool $ not v
-        v ->
-          throwEdh
-            $  EvalError
-            $  "Expect bool but got: "
-            <> T.pack (show v)
-            <> " ❌"
+    PrefixMinus -> eval' expr' $ \case
+      EdhDecimal v -> exit $ EdhDecimal (-v)
+      v -> throwEdh $ EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
+    Not -> eval' expr' $ \case
+      EdhBool v -> exit $ EdhBool $ not v
+      v ->
+        throwEdh
+          $  EvalError
+          $  "Expect bool but got: "
+          <> T.pack (show v)
+          <> " ❌"
 
     -- TODO this should probably create Thunk instead, but mind to
     --      cooperate with the branch operator (->), find a way to
@@ -107,19 +102,17 @@ evalExpr ctx expr exit = case expr of
     Go    -> throwEdh $ EvalError "goroutine starter not impl. yet"
     Defer -> throwEdh $ EvalError "defer scheduler not impl. yet"
 
-  IfExpr cond cseq alt -> eval'
-    cond
-    \case
-      EdhBool True  -> evalSS cseq exit
-      EdhBool False -> case alt of
-        Just elseClause -> evalSS elseClause exit
-        _               -> exit nil
-      v ->
-        throwEdh -- we are so strongly typed
-          $  EvalError
-          $  "Not a boolean value: "
-          <> T.pack (show v)
-          <> " ❌"
+  IfExpr cond cseq alt -> eval' cond $ \case
+    EdhBool True  -> evalSS cseq exit
+    EdhBool False -> case alt of
+      Just elseClause -> evalSS elseClause exit
+      _               -> exit nil
+    v ->
+      throwEdh -- we are so strongly typed
+        $  EvalError
+        $  "Not a boolean value: "
+        <> T.pack (show v)
+        <> " ❌"
 
   -- DictExpr ps ->
   --   let
@@ -141,16 +134,20 @@ evalExpr ctx expr exit = case expr of
     v  <- liftIO $ EdhList <$> newIORef l'
     exit v
 
-  -- TupleExpr vs         -> EdhTuple <$> mapM eval' vs
+  TupleExpr vs -> do
+    l  <- mapM eval2 vs
+    l' <- liftIO $ mapM readMVar l
+    v  <- return $ EdhTuple l'
+    exit v
 
   -- TODO this should check for Thunk, and implement
   --      break/fallthrough semantics
-  BlockExpr stmts      -> exit $ EdhBlock stmts
+  BlockExpr stmts     -> exit $ EdhBlock stmts
 
   -- TODO impl this
-  ForExpr ar iter todo -> undefined
+  -- ForExpr ar iter todo -> undefined
 
-  GeneratorExpr sp pd  -> exit $ EdhGenrDef $ GenrDef
+  GeneratorExpr sp pd -> exit $ EdhGenrDef $ GenrDef
     { generatorOwnerObject = this
     , generatorSourcePos   = sp
     , generatorProcedure   = pd
@@ -159,20 +156,18 @@ evalExpr ctx expr exit = case expr of
   -- AttrExpr addr -> 
   -- IndexExpr ixExpr tgtExpr ->
 
-  CallExpr procExpr args -> eval'
-    procExpr
-    \case
+  CallExpr procExpr args -> eval' procExpr $ \case
       -- EdhClass classDef -> 
       -- EdhMethod mthExpr -> 
       -- EdhGenrDef genrDef ->
 
-      v ->
-        throwEdh
-          $  EvalError
-          $  "Can not call: "
-          <> T.pack (show v)
-          <> " ❌ expressed with: "
-          <> T.pack (show procExpr)
+    v ->
+      throwEdh
+        $  EvalError
+        $  "Can not call: "
+        <> T.pack (show v)
+        <> " ❌ expressed with: "
+        <> T.pack (show procExpr)
 
 
   -- InfixExpr op lhExpr rhExpr -> 
@@ -182,14 +177,15 @@ evalExpr ctx expr exit = case expr of
   this  = thisObject scope
   scope = contextScope ctx
 
-  eval' expr' exit' = evalExpr ctx expr' exit'
+  eval' = evalExpr ctx
+
   eval2 :: Expr -> EdhProg (MVar EdhValue)
   eval2 expr' = do
-    vv <- liftIO newEmptyMVar
-    evalExpr ctx expr' $ \v -> liftIO $ putMVar vv v
-    return vv
+    var <- liftIO newEmptyMVar
+    evalExpr ctx expr' $ \v -> liftIO $ putMVar var v
+    return var
 
-  evalSS stmt' exit' = evalStmt ctx stmt' exit'
+  evalSS = evalStmt ctx
 
 
 -- The Edh call convention is so called call-by-repacking, i.e. a new pack of
