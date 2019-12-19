@@ -379,9 +379,9 @@ evalExpr ctx expr exit = case expr of
 --           <> T.pack (show v)
 
 
-resolveLexicalAttr :: MonadIO m => [Entity] -> AttrName -> m (Maybe Entity)
+resolveLexicalAttr :: MonadIO m => [Scope] -> AttrName -> m (Maybe Entity)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (ent : outerEntities) attrName =
+resolveLexicalAttr (Scope ent _obj : outerEntities) attrName =
   liftIO $ readMVar ent >>= \em -> if Map.member (AttrByName attrName) em
     then return (Just ent)
     else resolveLexicalAttr outerEntities attrName

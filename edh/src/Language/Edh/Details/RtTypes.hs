@@ -178,7 +178,7 @@ instance Show Object where
       ++ "]"
 
 data Class = Class {
-        classScope :: ![Entity] -- ^ the scope this class procedure is defined
+        classScope :: ![Scope] -- ^ the scope this class procedure is defined
         , className :: !AttrName
         , classSourcePos :: !SourcePos
         , classProcedure :: !ProcDecl
@@ -518,29 +518,28 @@ false = EdhBool False
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
   worldEntity <- newMVar Map.empty
-  let !srcPos = SourcePos { sourceName   = "<Genesis>"
-                          , sourceLine   = mkPos 1
-                          , sourceColumn = mkPos 1
-                          }
-      !worldClass = Class
-        { classScope     = []
-        , className      = "<world>"
-        , classSourcePos = srcPos
-        , classProcedure = ProcDecl
-                             { procedure'args = WildReceiver
-                             , procedure'body = StmtSrc (srcPos, VoidStmt)
-                             }
-        }
+  let
+    !srcPos = SourcePos { sourceName   = "<Genesis>"
+                        , sourceLine   = mkPos 1
+                        , sourceColumn = mkPos 1
+                        }
+    !worldClass = Class
+      { classScope     = []
+      , className      = "<world>"
+      , classSourcePos = srcPos
+      , classProcedure = ProcDecl { procedure'args = WildReceiver
+                                  , procedure'body = StmtSrc (srcPos, VoidStmt)
+                                  }
+      }
+    !root =
+      Object { objEntity = worldEntity, objClass = worldClass, objSupers = [] }
   opPD  <- newIORef Map.empty
   modus <- newIORef Map.empty
   return $ EdhWorld
-    { worldRoot      = Object { objEntity = worldEntity
-                              , objClass  = worldClass
-                              , objSupers = []
-                              }
+    { worldRoot      = root
     , moduleClass    =
       Class
-        { classScope     = [worldEntity]
+        { classScope     = [Scope worldEntity root]
         , className      = "<module>"
         , classSourcePos = srcPos
         , classProcedure = ProcDecl
