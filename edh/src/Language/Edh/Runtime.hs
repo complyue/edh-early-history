@@ -34,13 +34,15 @@ runEdhProgram w m rs = liftIO $ runEdhProgram' ctx rs
 
 
 moduleContext :: EdhWorld -> Module -> Context
-moduleContext w m = ctx
+moduleContext w m = Context { contextWorld = w
+                            , contextModu  = m
+                            , contextScope = scope
+                            }
  where
   mo    = moduleObject m
   scope = Scope { scopeStack = objEntity mo : (classScope . objClass) mo
                 , thisObject = mo
                 }
-  ctx = Context { contextWorld = w, contextModu = m, contextScope = scope }
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
@@ -51,9 +53,15 @@ runEdhProgram' ctx stmts = do
   let finalize v = liftIO $ do
         putMVar halt  ()
         putMVar final v
-  tryJust Just (runEdhProg halt (evalStmts stmts finalize) >> readMVar final)
+  tryJust Just (runEdhProg halt (ensureHalt stmts finalize) >> readMVar final)
 
  where
+
+  ensureHalt :: SeqStmts -> (EdhValue -> EdhProg ()) -> EdhProg ()
+  ensureHalt stmts' fin = do
+    evalStmts stmts' fin
+    -- fire an empty transaction, making sure the tx driver check halt
+    runEdhTx [] []
 
   evalStmts :: SeqStmts -> (EdhValue -> EdhProg ()) -> EdhProg ()
   evalStmts []       exit = exit nil

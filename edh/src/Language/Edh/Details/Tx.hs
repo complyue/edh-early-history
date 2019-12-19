@@ -5,11 +5,15 @@
 module Language.Edh.Details.Tx
   ( EdhTxAddr
   , EdhProg(..)
-  , edhTxRead
-  , edhTxWrite
-  , throwEdh
-  -- , throwEdhTx
   , runEdhProg
+  , runEdhTx
+  , EdhAttrRead
+  , EdhAttrWrite
+  , throwEdh
+  , EdhTxState(..)
+  , EdhTxOps(..)
+  , EdhOpsPack
+  , asyncEdh
   )
 where
 
@@ -22,26 +26,10 @@ import           Control.Monad.Fail
 import           Control.Monad.Reader
 import           Control.Concurrent
 
-
 import qualified Data.Map.Strict               as Map
 
 import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Utils
-
-
--- | A resolved attribute addressor
-type EdhTxAddr = (Entity, AttrKey)
-
--- | The pending reads within a transaction
-type EdhTxReads = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
--- | The pending writes within a transaction
-type EdhTxWrites = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
-
--- todo seek better data structure to manage state of a tx
---      using list as is for pending ops is not optimal;
---      simply using strict 'Map Entity [(,)]' may be better,
---      but not trival as 'Entity' ('MVar' per se) lacks 'Ord' instance.
---      anyway, neither above is cache friendly.
 
 
 throwEdh :: Exception e => e -> EdhProg a
@@ -53,102 +41,117 @@ asyncEdh masterThread f = void $ forkIO $ void $ handle onExc f
   onExc :: SomeException -> IO ()
   onExc e = throwTo masterThread e >> throwIO ThreadKilled
 
+
+-- | A resolved attribute addressor
+type EdhTxAddr = (Entity, AttrKey)
+
+
+-- | Transactional operations packed per entity basis
+type EdhOpsPack = [(Entity, [(AttrKey, MVar EdhValue)])]
+-- todo seek better data structure to manage state of a tx.
+--      using list as is for pending ops is not optimal;
+--      simply using strict 'Map Entity [(,)]' may be better,
+--      but not trival as 'Entity' ('MVar' per se) lacks 'Ord' instance.
+--      anyway, neither above is cache friendly.
+_packTxOp :: EdhTxAddr -> MVar EdhValue -> EdhOpsPack -> EdhOpsPack
+_packTxOp (ent, key) var = packTxOp' []
+ where
+  packTxOp' :: EdhOpsPack -> EdhOpsPack -> EdhOpsPack
+  packTxOp' prefix []                     = (ent, [(key, var)]) : prefix
+  packTxOp' prefix (r@(ent', eos) : rest) = if ent' /= ent
+    then packTxOp' (r : prefix) rest
+    else (ent, (key, var) : eos) : prefix ++ rest
+
+
+-- | All operations per a transaction
+data EdhTxOps = EdhTxOps {
+    edh'tx'reads :: !EdhOpsPack
+    , edh'tx'writes :: !EdhOpsPack
+  }
+
+data EdhTxState = EdhTxState {
+    edh'tx'master :: !ThreadId
+    , edh'tx'ops :: !(MVar EdhTxOps)
+  }
+
 -- | The transactional monad of Edh
-newtype EdhProg a = EdhProg { unEdhProg :: ReaderT (ThreadId, EdhTxReads, EdhTxWrites) IO a }
+newtype EdhProg a = EdhProg { unEdhProg :: ReaderT EdhTxState IO a }
     deriving (Functor, Applicative, Monad,
-        MonadReader (ThreadId, EdhTxReads, EdhTxWrites),
+        MonadReader EdhTxState,
         MonadIO, MonadFail)
 
 
 runEdhProg :: MVar () -> EdhProg () -> IO ()
-runEdhProg halt tx = do
-  txReads      <- newMVar []
-  txWrites     <- newMVar []
+runEdhProg halt prog = do
   masterThread <- myThreadId
-  runReaderT (unEdhProg tx) (masterThread, txReads, txWrites)
-  driveEdhTx halt txReads txWrites
+  txOps        <- newEmptyMVar
+  runReaderT (unEdhProg prog) (EdhTxState masterThread txOps)
+  driveEdhTx masterThread halt txOps
 
 
-edhTxRead :: EdhTxAddr -> (EdhValue -> EdhProg ()) -> EdhProg ()
-edhTxRead addr r = ask >>= liftIO . schdRead
- where
-  schdRead :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
-  schdRead tx@(masterThread, txReads, _txWrites) = do
-    p <- newEmptyMVar
-    modifyMVar_ txReads $ edhTxEnqOp addr p
-    asyncEdh masterThread $ liftIO $ do
-      v <- readMVar p
-      runReaderT (unEdhProg $ r v) tx
+type EdhAttrRead = (EdhTxAddr, EdhValue -> EdhProg ())
+type EdhAttrWrite = (EdhTxAddr, MVar EdhValue -> EdhProg ())
+
+runEdhTx :: [EdhAttrRead] -> [EdhAttrWrite] -> EdhProg ()
+runEdhTx attrReads attrWrites = do
+  txs@(EdhTxState masterThread txOps) <- ask
+  let schedTx :: IO ()
+      schedTx = do
+        readPack  <- foldM packRead [] attrReads
+        writePack <- foldM packWrite [] attrWrites
+        putMVar txOps $ EdhTxOps readPack writePack
+
+      packRead :: EdhOpsPack -> EdhAttrRead -> IO EdhOpsPack
+      packRead pck (addr, rdr) = do
+        var <- newEmptyMVar
+        let pck' = _packTxOp addr var pck
+        asyncEdh masterThread $ do
+          v <- readMVar var
+          runReaderT (unEdhProg $ rdr v) txs
+        return pck'
+
+      packWrite :: EdhOpsPack -> EdhAttrWrite -> IO EdhOpsPack
+      packWrite pck (addr, wtr) = do
+        var <- newEmptyMVar
+        let pck' = _packTxOp addr var pck
+        asyncEdh masterThread $ runReaderT (unEdhProg $ wtr var) txs
+        return pck'
+
+  liftIO schedTx
 
 
-edhTxWrite :: EdhTxAddr -> (MVar EdhValue -> EdhProg ()) -> EdhProg ()
-edhTxWrite addr w = ask >>= liftIO . schdWrite
- where
-  schdWrite :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
-  schdWrite tx@(masterThread, _txReads, txWrites) = do
-    p <- newEmptyMVar
-    modifyMVar_ txWrites $ edhTxEnqOp addr p
-    asyncEdh masterThread $ liftIO $ runReaderT (unEdhProg $ w p) tx
-
-
-edhTxEnqOp
-  :: EdhTxAddr
-  -> MVar EdhValue
-  -> [(Entity, MVar [(AttrKey, MVar EdhValue)])]
-  -> IO [(Entity, MVar [(AttrKey, MVar EdhValue)])]
-edhTxEnqOp (ent, key) p rs = edhTxEnqOp' rs
- where
-  edhTxEnqOp'
-    :: [(Entity, MVar [(AttrKey, MVar EdhValue)])]
-    -> IO [(Entity, MVar [(AttrKey, MVar EdhValue)])]
-  edhTxEnqOp' [] = do
-    ps <- newMVar [(key, p)]
-    return $ (ent, ps) : rs
-  edhTxEnqOp' ((ent', ops) : rest) = if ent' /= ent
-    then edhTxEnqOp' rest
-    else do
-      modifyMVar_ ops $ \ps -> return $ (key, p) : ps
-      return rs
-
-
-driveEdhTx :: MVar () -> EdhTxReads -> EdhTxWrites -> IO ()
-driveEdhTx halt txReads txWrites = isEmptyMVar halt >>= \case
-  False -> return ()
-  True  -> do
-    txrs <- takeMVar txReads
-    txws <- takeMVar txWrites
-    -- kickoff atomic reads&writes per entity
-    scanEntities txrs txws
-    -- allow current running tx ops to register further ops
-    putMVar txReads  []
-    putMVar txWrites []
+driveEdhTx :: ThreadId -> MVar () -> MVar EdhTxOps -> IO ()
+driveEdhTx masterThread halt txOps = do
+  -- block wait next tx to come
+  EdhTxOps txrs txws <- readMVar txOps
+  -- kickoff atomic reads&writes per entity
+  launchTx txrs txws
+  yield
+  -- check halt 
+  isEmptyMVar halt >>= \case
+    -- shall halt
+    False -> return ()
     -- loop another iteration
-    yield
-    driveEdhTx halt txReads txWrites
+    True  -> driveEdhTx masterThread halt txOps
 
  where
 
-  scanEntities
-    :: [(Entity, MVar [(AttrKey, MVar EdhValue)])]
-    -> [(Entity, MVar [(AttrKey, MVar EdhValue)])]
+  launchTx
+    :: [(Entity, [(AttrKey, MVar EdhValue)])]
+    -> [(Entity, [(AttrKey, MVar EdhValue)])]
     -> IO ()
-  scanEntities []                  [] = return ()
-  scanEntities ((ent, ers) : txrs) [] = do
-    ers' <- readMVar ers
-    void $ forkIO $ perEntity ent ers' []
-    scanEntities txrs []
-  scanEntities [] ((ent, ews) : txws) = do
-    ews' <- readMVar ews
-    void $ forkIO $ perEntity ent [] ews'
-    scanEntities [] txws
-  scanEntities ((ent, ers) : txrs) txws@(_ : _) = do
-    ers' <- readMVar ers
+  launchTx []                  [] = return ()
+  launchTx ((ent, ers) : txrs) [] = do
+    asyncEdh masterThread $ perEntity ent ers []
+    launchTx txrs []
+  launchTx [] ((ent, ews) : txws) = do
+    asyncEdh masterThread $ perEntity ent [] ews
+    launchTx [] txws
+  launchTx ((ent, ers) : txrs) txws@(_ : _) = do
     case w of
-      Nothing          -> void $ forkIO $ perEntity ent ers' []
-      Just (_ent, ews) -> do
-        ews' <- readMVar ews
-        void $ forkIO $ perEntity ent ers' ews'
-    scanEntities txrs txws'
+      Nothing          -> asyncEdh masterThread $ perEntity ent ers []
+      Just (_ent, ews) -> asyncEdh masterThread $ perEntity ent ers ews
+    launchTx txrs txws'
     where (w, txws') = takeOutFromList ((== ent) . fst) txws
 
   perEntity
@@ -158,7 +161,7 @@ driveEdhTx halt txReads txWrites = isEmptyMVar halt >>= \case
     -> IO ()
   perEntity ent ers ews = modifyMVar_ ent $ \e -> do
     forM_ ers $ \(key, vv) -> case Map.lookup key e of
-      Nothing -> error "bug"
+      Nothing -> error "bug in attr resolution"
       Just v  -> putMVar vv v
     flip Map.union e . Map.fromList <$> forM
       ews
