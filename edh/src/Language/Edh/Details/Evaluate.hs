@@ -169,8 +169,50 @@ evalExpr ctx expr exit = case expr of
         Just scope'@(Scope ent _obj) ->
           edhReadAttr ent (AttrByName attrName) (exit . (scope', ))
         Nothing -> throwEdh $ EvalError $ "Not in scope: " <> attrName
-      SymbolicAttr symName -> undefined
-    IndirectRef tgtExpr addr' -> undefined
+      SymbolicAttr _symName ->
+        throwEdh $ EvalError "Symbolic attribute not impl. yet"
+    IndirectRef tgtExpr addr' -> case tgtExpr of
+      -- allow symbol value to be addressed off this reference 
+      AttrExpr ThisRef -> case addr' of
+        NamedAttr attrName -> resolveEdhObjAttr scope attrName >>= \case
+          Just scope''@(Scope _ent obj') -> edhReadAttr (objEntity obj')
+                                                        (AttrByName attrName)
+                                                        (exit . (scope'', ))
+          Nothing ->
+            throwEdh
+              $  EvalError
+              $  "No attribute "
+              <> attrName
+              <> " from this "
+              <> T.pack (show this)
+        SymbolicAttr _symName ->
+          throwEdh $ EvalError "Symbolic attribute not impl. yet"
+      -- forbid symbol value to be addressed off non-this reference
+      _ -> eval' tgtExpr $ \case
+        (scope', EdhObject obj) -> case addr' of
+          NamedAttr attrName -> resolveEdhObjAttr scope' attrName >>= \case
+            Just scope''@(Scope _ent obj') ->
+              edhReadAttr (objEntity obj') (AttrByName attrName) $ \val ->
+                case val of
+                  EdhSymbol sym ->
+                    throwEdh
+                      $  EvalError
+                      $  "Symbol "
+                      <> T.pack (show sym)
+                      <> " can not be accessed"
+                  _ -> exit (scope'', val)
+            Nothing ->
+              throwEdh
+                $  EvalError
+                $  "No attribute "
+                <> attrName
+                <> " from "
+                <> T.pack (show obj)
+          SymbolicAttr _symName ->
+            throwEdh $ EvalError "Symbolic attribute not impl. yet"
+        (_scope', val) ->
+          throwEdh $ EvalError $ "Not an object: " <> T.pack (show val)
+
 
   -- IndexExpr ixExpr tgtExpr ->
 
