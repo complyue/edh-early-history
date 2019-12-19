@@ -50,18 +50,12 @@ runEdhProgram' _   []    = return $ Right EdhNil
 runEdhProgram' ctx stmts = do
   halt  <- newEmptyMVar
   final <- newEmptyMVar
-  let finalize v = liftIO $ do
-        putMVar halt  ()
-        putMVar final v
-  tryJust Just (runEdhProg halt (ensureHalt stmts finalize) >> readMVar final)
+  let finalize v = do
+        cleanupEdhProg halt
+        liftIO $ putMVar final v
+  tryJust Just (runEdhProg halt (evalStmts stmts finalize) >> readMVar final)
 
  where
-
-  ensureHalt :: SeqStmts -> (EdhValue -> EdhProg ()) -> EdhProg ()
-  ensureHalt stmts' fin = do
-    evalStmts stmts' fin
-    -- fire an empty transaction, making sure the tx driver check halt
-    runEdhTx [] []
 
   evalStmts :: SeqStmts -> (EdhValue -> EdhProg ()) -> EdhProg ()
   evalStmts []       exit = exit nil
