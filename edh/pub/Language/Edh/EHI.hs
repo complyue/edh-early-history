@@ -20,7 +20,7 @@ module Language.Edh.EHI
     -- ** Session entry point
   , runEdhSession
     -- ** The eval function
-  , edhEval
+  , evalEdh
 
     -- ** Exceptions
   , InterpretError(..)
@@ -77,8 +77,8 @@ import           Language.Edh.Runtime
 import           Language.Edh.AST
 
 
-edhEval :: Text -> EdhSession EdhValue
-edhEval code = do
+evalEdh :: Text -> EdhSession EdhValue
+evalEdh code = do
   (world, modu) <- ask
   liftIO $ evalEdhSource world modu code >>= \case
     Left  err -> throwIO err
