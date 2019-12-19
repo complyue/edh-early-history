@@ -51,11 +51,11 @@ runEdhProgram' ctx stmts = do
   let finalize v = liftIO $ do
         putMVar halt  ()
         putMVar final v
-  tryJust Just (runEdhTx halt (evalStmts stmts finalize) >> readMVar final)
+  tryJust Just (runEdhProg halt (evalStmts stmts finalize) >> readMVar final)
 
  where
 
-  evalStmts :: SeqStmts -> (EdhValue -> EdhTx ()) -> EdhTx ()
+  evalStmts :: SeqStmts -> (EdhValue -> EdhProg ()) -> EdhProg ()
   evalStmts []       exit = exit nil
   evalStmts [s     ] exit = evalStmt ctx s exit
   evalStmts (s : rs) exit = evalStmt ctx s (\_ -> evalStmts rs exit)

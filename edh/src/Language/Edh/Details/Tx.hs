@@ -4,12 +4,12 @@
 
 module Language.Edh.Details.Tx
   ( EdhTxAddr
-  , EdhTx(..)
+  , EdhProg(..)
   , edhTxRead
   , edhTxWrite
   , throwEdh
   -- , throwEdhTx
-  , runEdhTx
+  , runEdhProg
   )
 where
 
@@ -44,62 +44,51 @@ type EdhTxWrites = MVar [(Entity, MVar [(AttrKey, MVar EdhValue)])]
 --      anyway, neither above is cache friendly.
 
 
-throwEdh :: Exception e => e -> EdhTx a
+throwEdh :: Exception e => e -> EdhProg a
 throwEdh e = liftIO $ throwIO e
 
--- throwEdhTx :: Exception e => e -> EdhTx a
--- throwEdhTx e = ask >>= \(masterThread, _, _) -> liftIO $ do
---   throwTo masterThread e
---   throwIO ThreadKilled
+asyncEdh :: ThreadId -> IO () -> IO ()
+asyncEdh masterThread f = void $ forkIO $ void $ handle onExc f
+ where
+  onExc :: SomeException -> IO ()
+  onExc e = throwTo masterThread e >> throwIO ThreadKilled
 
 -- | The transactional monad of Edh
-newtype EdhTx a = EdhTx { unEdhTx :: ReaderT (ThreadId, EdhTxReads, EdhTxWrites) IO a }
+newtype EdhProg a = EdhProg { unEdhProg :: ReaderT (ThreadId, EdhTxReads, EdhTxWrites) IO a }
     deriving (Functor, Applicative, Monad,
         MonadReader (ThreadId, EdhTxReads, EdhTxWrites),
         MonadIO, MonadFail)
 
 
-runEdhTx :: MVar () -> EdhTx () -> IO ()
-runEdhTx halt tx = do
+runEdhProg :: MVar () -> EdhProg () -> IO ()
+runEdhProg halt tx = do
   txReads      <- newMVar []
   txWrites     <- newMVar []
   masterThread <- myThreadId
-  runReaderT (unEdhTx tx) (masterThread, txReads, txWrites)
+  runReaderT (unEdhProg tx) (masterThread, txReads, txWrites)
   driveEdhTx halt txReads txWrites
 
 
-edhTxRead :: EdhTxAddr -> (EdhValue -> EdhTx ()) -> EdhTx ()
+edhTxRead :: EdhTxAddr -> (EdhValue -> EdhProg ()) -> EdhProg ()
 edhTxRead addr r = ask >>= liftIO . schdRead
  where
   schdRead :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
   schdRead tx@(masterThread, txReads, _txWrites) = do
     p <- newEmptyMVar
     modifyMVar_ txReads $ edhTxEnqOp addr p
-    void
-      $ forkIO
-      $ handle
-          (\(e :: SomeException) ->
-            throwTo masterThread e >> throwIO ThreadKilled
-          )
-      $ do
-          v <- readMVar p
-          runReaderT (unEdhTx $ r v) tx
+    asyncEdh masterThread $ liftIO $ do
+      v <- readMVar p
+      runReaderT (unEdhProg $ r v) tx
 
 
-edhTxWrite :: EdhTxAddr -> (MVar EdhValue -> EdhTx ()) -> EdhTx ()
+edhTxWrite :: EdhTxAddr -> (MVar EdhValue -> EdhProg ()) -> EdhProg ()
 edhTxWrite addr w = ask >>= liftIO . schdWrite
  where
   schdWrite :: (ThreadId, EdhTxReads, EdhTxWrites) -> IO ()
   schdWrite tx@(masterThread, _txReads, txWrites) = do
     p <- newEmptyMVar
     modifyMVar_ txWrites $ edhTxEnqOp addr p
-    void
-      $ forkIO
-      $ handle
-          (\(e :: SomeException) ->
-            throwTo masterThread e >> throwIO ThreadKilled
-          )
-      $ runReaderT (unEdhTx $ w p) tx
+    asyncEdh masterThread $ liftIO $ runReaderT (unEdhProg $ w p) tx
 
 
 edhTxEnqOp

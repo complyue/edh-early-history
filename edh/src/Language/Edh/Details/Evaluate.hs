@@ -24,24 +24,24 @@ import           Language.Edh.Details.Tx
 import           Language.Edh.Details.Utils
 
 
-evalStmt :: Context -> StmtSrc -> (EdhValue -> EdhTx ()) -> EdhTx ()
+evalStmt :: Context -> StmtSrc -> (EdhValue -> EdhProg ()) -> EdhProg ()
 evalStmt ctx (StmtSrc (srcPos, stmt)) exit = do
   tx <- ask
   liftIO
     $ handleJust
         Just
         (\(EvalError msg) -> runReaderT
-          (unEdhTx
+          (unEdhProg
             (throwEdh $ EvalError $ msg <> "\nℹ️ " <> T.pack
               (sourcePosPretty srcPos)
             )
           )
           tx
         )
-    $ runReaderT (unEdhTx (evalStmt' ctx stmt exit)) tx
+    $ runReaderT (unEdhProg (evalStmt' ctx stmt exit)) tx
 
 
-evalStmt' :: Context -> Stmt -> (EdhValue -> EdhTx ()) -> EdhTx ()
+evalStmt' :: Context -> Stmt -> (EdhValue -> EdhProg ()) -> EdhProg ()
 evalStmt' ctx stmt exit = case stmt of
 
   ExprStmt expr             -> evalExpr ctx expr exit
@@ -67,7 +67,7 @@ evalStmt' ctx stmt exit = case stmt of
   _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> (T.pack $ show stmt)
 
 
-evalExpr :: Context -> Expr -> (EdhValue -> EdhTx ()) -> EdhTx ()
+evalExpr :: Context -> Expr -> (EdhValue -> EdhProg ()) -> EdhProg ()
 evalExpr ctx expr exit = case expr of
   LitExpr lit -> case lit of
     DecLiteral    v -> exit $ EdhDecimal v
@@ -123,7 +123,7 @@ evalExpr ctx expr exit = case expr of
 
   -- DictExpr ps ->
   --   let
-  --     evalPair :: (Expr, Expr) ->  ((ItemKey, EdhValue) -> EdhTx ()) -> EdhTx ()
+  --     evalPair :: (Expr, Expr) ->  ((ItemKey, EdhValue) -> EdhProg ()) -> EdhProg ()
   --     evalPair (kExpr, vExpr) exit  = eval' vExpr $ \v -> eval' kExpr $ \case
   --       EdhString  k -> exit (ItemByStr k, v)
   --       EdhSymbol  k -> exit (ItemBySym k, v)
@@ -183,7 +183,7 @@ evalExpr ctx expr exit = case expr of
   scope = contextScope ctx
 
   eval' expr' exit' = evalExpr ctx expr' exit'
-  eval2 :: Expr -> EdhTx (MVar EdhValue)
+  eval2 :: Expr -> EdhProg (MVar EdhValue)
   eval2 expr' = do
     vv <- liftIO newEmptyMVar
     evalExpr ctx expr' $ \v -> liftIO $ putMVar vv v
@@ -299,7 +299,7 @@ evalExpr ctx expr exit = case expr of
 --         Just argVal -> return (argVal, posArgs', kwArgs'')
 
 
--- packEdhArgs :: Context -> ArgsSender -> (ArgsPack -> EdhTx ()) -> EdhTx ()
+-- packEdhArgs :: Context -> ArgsSender -> (ArgsPack -> EdhProg ()) -> EdhProg ()
 -- packEdhArgs ctx argsSender exit = case argsSender of
 --   PackSender packSender -> do
 --     (ArgsPack posArgs kwArgs) <- foldM fillPack
@@ -346,7 +346,7 @@ evalExpr ctx expr exit = case expr of
 
 --   scope = contextScope ctx
 
---   resolveAddr :: AttrAddressor -> (AttrKey -> EdhTx ()) -> EdhTx ()
+--   resolveAddr :: AttrAddressor -> (AttrKey -> EdhProg ()) -> EdhProg ()
 --   resolveAddr (NamedAttr attrName) exit = exit (AttrByName attrName)
 --   resolveAddr (SymbolicAttr symName) exit =
 --     resolveEdhObjAttr scope symName >>= \case
