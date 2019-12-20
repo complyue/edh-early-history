@@ -31,6 +31,7 @@ library
                         BlockArguments BangPatterns
     build-depends:
         base >=4.12 && <5,
+        stm >=2.5,
         lossless-decimal -any,
         edh-internal -any,
         text -any,
@@ -43,6 +44,7 @@ library edh-internal
         Language.Edh.Interpreter
         Language.Edh.Batteries
         Language.Edh.Runtime
+        Language.Edh.Event
         Language.Edh.AST
         Language.Edh.Parser
         Language.Edh.Details.RtTypes
@@ -60,14 +62,15 @@ library edh-internal
     build-depends:
         ghc >=8.6.5,
         base >=4.12 && <5,
-        text -any,
+        stm >=2.5,
         scientific >=0.3.6,
+        megaparsec >=8.0,
+        lossless-decimal -any,
+        text -any,
         vector -any,
         containers -any,
         mtl -any,
-        transformers -any,
-        megaparsec >=8.0,
-        lossless-decimal -any
+        transformers -any
 
 executable edhi
     main-is: Main.hs
@@ -80,6 +83,6 @@ executable edhi
     build-depends:
         edh-internal -any,
         base >=4.12 && <5,
-        text -any,
         megaparsec >=8.0,
+        text -any,
         haskeline -any

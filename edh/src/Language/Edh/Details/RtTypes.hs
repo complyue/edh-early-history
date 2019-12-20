@@ -5,11 +5,15 @@ module Language.Edh.Details.RtTypes where
 import           Prelude
 
 import           Control.Exception
+
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Fail
 import           Control.Monad.Reader
+
 import           Control.Concurrent
+import           Control.Concurrent.STM
+import           Control.Monad.STM
 
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
@@ -29,16 +33,21 @@ import           Language.Edh.Control
 import           Language.Edh.AST
 
 
--- | A dict in Edh is not an object, a dict has items associated
--- by 'ItemKey'.
-newtype Dict = Dict (Map.Map ItemKey EdhValue)
-    deriving (Eq)
+-- | A dict in Edh is neither an object nor an entity, but just a
+-- mutable associative map.
+--
+-- A dict has items associated by 'ItemKey'.
+newtype Dict = Dict (TVar DictStore)
+  deriving (Eq)
+type DictStore = Map.Map ItemKey EdhValue
 instance Show Dict where
-    -- advocate trailing comma here
-  show (Dict d) =
-    "{"
-      ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList d ]
+  show (Dict d) = if Map.null dm
+    then "{,}" -- make it obvious this is an empty dict
+    else -- advocate trailing comma here
+      "{"
+      ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList dm ]
       ++ "}"
+    where dm = unsafePerformIO $ readTVarIO d
 data ItemKey = ItemByType EdhTypeValue
         | ItemByStr Text | ItemBySym Symbol
         | ItemByNum Decimal | ItemByBool Bool
@@ -50,6 +59,15 @@ instance Show ItemKey where
   show (ItemByNum  k) = showDecimal k
   show (ItemByBool k) = show $ EdhBool k
 
+
+-- | An entity in Edh is the backing storage for a scope, with
+-- possibly an object viewing this entity.
+--
+-- An entity has attributes associated by 'AttrKey'.
+type Entity = TVar EntityStore
+type EntityStore = Map.Map AttrKey EdhValue
+data AttrKey = AttrByName AttrName | AttrBySym Symbol
+    deriving (Eq, Ord, Show)
 
 -- | A symbol can stand in place of an alphanumeric name, used to
 -- address an attribute from an entity object, but symbols are 
@@ -77,12 +95,15 @@ mkSymbol d = do
   addFinalizer s $ free s
   return $ Symbol s
 
--- | An entity in Edh is the backing storage for a scope, with
--- possibly an object viewing this entity, an entity has attributes
--- associated by 'AttrKey'.
-type Entity = MVar (Map.Map AttrKey EdhValue)
-data AttrKey = AttrByName AttrName | AttrBySym Symbol
-    deriving (Eq, Ord, Show)
+
+-- | A list in Edh is a multable, singly-linked, prepend list.
+newtype List = List (TVar [EdhValue])
+  deriving (Eq)
+instance Show List where
+  show (List l) = if null ll
+    then "[]"
+    else "[" ++ concat [ show i ++ ", " | i <- ll ] ++ "]"
+    where ll = unsafePerformIO $ readTVarIO l
 
 
 -- | A pack of evaluated argument values with positional/keyword
@@ -253,76 +274,67 @@ mkThunk desc valuator = do
   return $ Thunk s valuator
 
 
-data EventStream = EventStream {
-        evs'event :: !EdhValue -- nil should mean not an event
-        , evs'next :: !(MVar EventStream)
-    } deriving Eq
-instance Show EventStream where
-  show (EventStream e _) = "[event: " ++ show e ++ "]"
-
--- | An event sink is similar to a Go channel, but is broadcast
--- in nature, in contrast to the Go channel's unicast nature.
-type EventSink = IORef EventStream
-
-
+-- | A world for Edh programs to change
 data EdhWorld = EdhWorld {
-        worldRoot :: !Object
+    worldRoot :: !Object
     -- all module objects in this world belong to this class
-        , moduleClass :: !Class
-        , worldOperators :: !(IORef OpPrecDict)
-        , worldModules :: !(IORef (Map.Map ModuleId Module))
-    }
+    , moduleClass :: !Class
+    , worldOperators :: !(IORef OpPrecDict)
+    , worldModules :: !(IORef (Map.Map ModuleId Module))
+  }
 
 
--- | The monad for Edh program
+-- | The monad for transactional running of an Edh program
 newtype EdhProg a = EdhProg { unEdhProg :: ReaderT EdhTxState IO a }
-    deriving (Functor, Applicative, Monad,
-        MonadReader EdhTxState,
-        MonadIO, MonadFail)
+  deriving (Functor, Applicative, Monad, MonadReader EdhTxState,
+            MonadIO, MonadFail)
 
-
--- | Transactional operations packed per entity basis
-type TxOpsPack = [(Entity, [(AttrKey, MVar EdhValue)])]
--- todo seek better data structure to manage state of a tx.
---      using list as is for pending ops is not optimal;
---      simply using strict 'Map Entity [(,)]' may be better,
---      but not trival as 'Entity' ('MVar' per se) lacks 'Ord' instance.
---      anyway, neither above is cache friendly.
-_packTxOp :: Entity -> AttrKey -> MVar EdhValue -> TxOpsPack -> TxOpsPack
-_packTxOp ent key var = packTxOp' []
- where
-  packTxOp' :: TxOpsPack -> TxOpsPack -> TxOpsPack
-  packTxOp' prefix []                     = (ent, [(key, var)]) : prefix
-  packTxOp' prefix (r@(ent', eos) : rest) = if ent' /= ent
-    then packTxOp' (r : prefix) rest
-    else (ent, (key, var) : eos) : prefix ++ rest
-
+-- | The states of a transaction
+data EdhTxState = EdhTxState {
+    edh'tx'master :: !ThreadId
+    -- | the stub for an open op set collecting more ops into current tx
+    , edh'tx'open :: !(MVar (IORef EdhTxOps))
+    -- | the stub an op set is submitted into for execution
+    , edh'tx'exec :: !(MVar EdhTxOps)
+  }
 
 -- | All operations per a transaction
 data EdhTxOps = EdhTxOps {
-    _edh'tx'reads :: !TxOpsPack
-    , _edh'tx'writes :: !TxOpsPack
+    edh'tx'reads :: !TxReadOps
+    , edh'tx'writes :: !TxWriteOps
   }
+type TxReadOps
+  = [ ( Entity
+      , AttrKey
+      , EdhValue -> EdhProg ()
+      , TMVar EdhValue
+      , IORef (Maybe ThreadId)
+      )
+    ]
+type TxWriteOps
+  = [ ( Entity
+      , AttrKey
+      , TMVar EdhValue -> EdhProg ()
+      , TMVar EdhValue
+      , IORef (Maybe ThreadId)
+      )
+    ]
 
-data EdhTxState = EdhTxState {
-    _edh'tx'master :: !ThreadId
-    -- | the op set still open for new ops to join
-    , _edh'tx'open :: !(MVar (IORef EdhTxOps))
-    -- | the op set submitted for execution
-    , _edh'tx'exec :: !(MVar EdhTxOps)
-  }
 
-
--- | Type of host function that can be called from Edh code
+-- | Type of a procedure that can be called by Edh code.
 --
--- Edh is not tracking whether such functions are pure (i.e.
--- side-effect free) or impure (i.e. world-chaning), though
--- writing only pure functions in the host language (especially
--- as for Haskell) should be considered idiomatic).
-type EdhProcedure = Context -> ArgsSender -> Scope -> EdhProg EdhValue
+-- Edh is not tracking whether such procedures are pure (i.e. side-effect
+-- free) or impure (i.e. world-changing), though writing only pure functions
+-- conforming to this procedual interface in the host language (Haskell)
+-- should be considered idiomatic).
+type EdhProcedure -- ^ the procedure serving as the callee when applied
+  =  Context -- ^ the caller's context
+  -> ArgsSender -- ^ the manifestation of how the caller wills to send args
+  -> Scope -- ^ the scope from which the callee is addressed off
+  -> EdhProg EdhValue -- ^ the value the callee can synchronously return
 
 
--- | Type of the host procedure to be bound to an entity
+-- | Type of procedures to be implemented in the host language (Haskell).
 --
 -- Note: we rely on the 'CString' field (which is essentially a ptr),
 --       for equality testing of host procedures.
@@ -342,9 +354,21 @@ mkHostProc d p = do
   return $ HostProcedure { hostProc'name = s, hostProc'proc = p }
 
 
--- Atop Haskell, most types in Edh, as to organize information,
--- are immutable values, the only mutable data structure in Edh,
--- is the entity, an **entity** is a set of mutable attributes.
+-- | An event sink is similar to a Go channel, but is broadcast
+-- in nature, in contrast to the Go channel's unicast nature.
+data EventSink = EventSink {
+        evs'mrv :: !(TVar EdhValue) -- most recent value, initially nil
+        , evs'chan :: !(TChan EdhValue) -- 
+    } deriving Eq
+instance Show EventSink where
+  show (EventSink e _) =
+    "[sink: " ++ show (unsafePerformIO (readTVarIO e)) ++ "]"
+
+
+-- Atop Haskell, most types in Edh the surface language, are for
+-- immutable values, besides dict and list, the only other mutable
+-- data structure in Edh, is the entity, an **entity** is a set of
+-- mutable attributes.
 --
 -- After applied a set of rules/constraints about how attributes
 -- of an entity can be retrived and altered, it becomes an object.
@@ -371,8 +395,8 @@ data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
         | EdhModule !Module
 
     -- * mutable containers
-        | EdhDict !(IORef Dict)
-        | EdhList !(IORef [EdhValue])
+        | EdhDict !Dict
+        | EdhList !List
 
     -- * immutable containers
     --   the elements may still pointer to mutable data
@@ -417,20 +441,13 @@ instance Show EdhValue where
   show (EdhObject  v) = show v
   show (EdhModule  v) = show v
 
--- advocate trailing comma here
-  show (EdhDict v) =
-    let d@(Dict m) = unsafePerformIO (readIORef v)
-    in  if Map.null m
-          then "{,}" -- make it obvious this is an empty dict
-          else show d
-  show (EdhList v) =
-    let l = unsafePerformIO (readIORef v)
-    in  if null l
-          then "[]"
-          else "[" ++ concat [ show i ++ ", " | i <- l ] ++ "]"
-  show (EdhTuple v) = if null v
-    then "(,)" -- the denotation of empty tuple is same as Python
-    else "(" ++ concat [ show i ++ ", " | i <- v ] ++ ")"
+  show (EdhDict    v) = show v
+  show (EdhList    v) = show v
+
+  show (EdhTuple   v) = if null v
+    then "(,)" -- mimic the denotation of empty tuple in Python
+    else -- advocate trailing comma here
+         "(" ++ concat [ show i ++ ", " | i <- v ] ++ ")"
 
   show (EdhBlock v) = if null v
     then "{;}" -- make it obvious this is an empty block
@@ -452,9 +469,17 @@ instance Show EdhValue where
   show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
   show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
 
-  show (EdhSink     _)  = "[sink]"
+  show (EdhSink     v)  = show v
 
   show (EdhProxy    v)  = "[proxy: " ++ show v ++ "]"
+
+-- Note:
+--
+-- here is identity-wise equality i.e. pointer equality if mutable,
+-- or value equality if immutable.
+--
+-- the semantics are different from value-wise equality especially
+-- for types of:  object/dict/list
 
 instance Eq EdhValue where
   EdhType x       == EdhType y       = x == y
@@ -514,84 +539,4 @@ true = EdhBool True
 
 false :: EdhValue
 false = EdhBool False
-
-
-createEdhWorld :: MonadIO m => m EdhWorld
-createEdhWorld = liftIO $ do
-  worldEntity <- newMVar Map.empty
-  let
-    !srcPos = SourcePos { sourceName   = "<Genesis>"
-                        , sourceLine   = mkPos 1
-                        , sourceColumn = mkPos 1
-                        }
-    !worldClass = Class
-      { classScope     = []
-      , className      = "<world>"
-      , classSourcePos = srcPos
-      , classProcedure = ProcDecl { procedure'args = WildReceiver
-                                  , procedure'body = StmtSrc (srcPos, VoidStmt)
-                                  }
-      }
-    !root =
-      Object { objEntity = worldEntity, objClass = worldClass, objSupers = [] }
-  opPD  <- newIORef Map.empty
-  modus <- newIORef Map.empty
-  return $ EdhWorld
-    { worldRoot      = root
-    , moduleClass    =
-      Class
-        { classScope     = [Scope worldEntity root]
-        , className      = "<module>"
-        , classSourcePos = srcPos
-        , classProcedure = ProcDecl
-                             { procedure'args = WildReceiver
-                             , procedure'body = StmtSrc (srcPos, VoidStmt)
-                             }
-        }
-    , worldOperators = opPD
-    , worldModules   = modus
-    }
-
-declareEdhOperators
-  :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
-declareEdhOperators world declLoc opps = liftIO
-  $ atomicModifyIORef' (worldOperators world) declarePrecedence
- where
-  declarePrecedence :: OpPrecDict -> (OpPrecDict, ())
-  declarePrecedence opPD =
-    flip (,) ()
-      $ Map.unionWithKey chkCompatible opPD
-      $ Map.fromList
-      $ flip map opps
-      $ \(op, p) -> (op, (p, declLoc))
-  chkCompatible
-    :: OpSymbol
-    -> (Precedence, Text)
-    -> (Precedence, Text)
-    -> (Precedence, Text)
-  chkCompatible op (prevPrec, prevDeclLoc) (newPrec, newDeclLoc) =
-    if prevPrec /= newPrec
-      then throw $ EvalError
-        (  "precedence change from "
-        <> T.pack (show prevPrec)
-        <> " (declared "
-        <> prevDeclLoc
-        <> ") to "
-        <> T.pack (show newPrec)
-        <> " (declared "
-        <> T.pack (show newDeclLoc)
-        <> ") for operator: "
-        <> op
-        )
-      else (prevPrec, prevDeclLoc)
-
-
-putEdhAttr :: MonadIO m => Entity -> AttrKey -> EdhValue -> m ()
-putEdhAttr e k v =
-  liftIO $ void $ modifyMVar_ e $ \e0 -> return (Map.insert k v e0)
-
-putEdhAttrs :: MonadIO m => Entity -> [(AttrKey, EdhValue)] -> m ()
-putEdhAttrs e as = liftIO $ void $ modifyMVar_ e $ \e0 ->
-  return (Map.union ad e0)
-  where ad = Map.fromList as
 

@@ -9,8 +9,9 @@ import           Control.Monad.IO.Class
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
-import           Language.Edh.Runtime
 import           Language.Edh.AST
+import           Language.Edh.Runtime
+import           Language.Edh.Event
 
 
 installEdhBatteries :: MonadIO m => EdhWorld -> m ()
@@ -48,12 +49,19 @@ installEdhBatteries world = liftIO $ do
       , 8
       )
   -- comparations
+    , ( "~="
+      , 4
+      ) -- value-wise equality test
+    , ( "=="
+      , 4
+      ) -- identity-wise equality test
+    , ( "!="
+      , 4
+      ) -- C style here, as (/=) is used for inplace division
     , (">" , 4)
     , (">=", 4)
     , ("<" , 4)
-    , ("<=", 4)
-    , ("==", 4)
-    , ( "!=" -- C style here, as (/=) is used for inplace division
+    , ( "<="
       , 4
       )
   -- logical arithmetic
