@@ -138,8 +138,9 @@ data Object = Object {
 
         -- | the class (a.k.a constructor procedure) of an object
         --
-        -- this serves information purpose only, not participanting
-        -- in attribute resolution anyway.
+        -- this serves information purpose in the class hierarchy,
+        -- not participanting in object attribute resolution, but
+        -- serves lexical attribute resolution.
         --
         -- TODO not sure whether referential transparency (GHC)
         -- works to reduce ram overhead of this field to cost a
