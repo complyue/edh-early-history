@@ -330,24 +330,32 @@ parseStmt = do
     <*  trailingColon
 
 
+-- Notes:
+--  * (+)/(-) prefix should have highest precedence
+--  * (not) should have a precedence slightly higher than (&&) (||)
+--  * guard (|) should have a precedence no smaller than the branch op (->)
+--  * (ai) should have lowest precedence
+--  * (go)/(defer) can apply only to a call or loop
+
 parsePrefixExpr :: Parser Expr
 parsePrefixExpr = choice
-  [ PrefixExpr PrefixPlus <$> (symbol "+" *> parseExpr)
-  , PrefixExpr PrefixMinus <$> (symbol "-" *> parseExpr)
-  , PrefixExpr Not <$> (symbol "not" >> parseExpr)
-    -- guard precedence should be no smaller than the branch op (->)
+  [ (symbol "+" >> parseExprPrec 9 (PrefixExpr PrefixPlus))
+  , (symbol "-" >> parseExprPrec 9 (PrefixExpr PrefixMinus))
+  , (symbol "not" >> parseExprPrec 4 (PrefixExpr Not))
   , (symbol "|" >> parseExprPrec 1 (PrefixExpr Guard))
-  , PrefixExpr Go <$> (symbol "go" >> requireCallOrForLoop)
-  , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrForLoop)
+  , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
+  , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
+  , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
   ]
  where
-  requireCallOrForLoop = do
+  requireCallOrLoop = do
     o <- getOffset
     e <- parseExpr
     case e of
       ce@(CallExpr _ _ ) -> return ce
-      se@(ForExpr _ _ _) -> return se
+      le@(ForExpr _ _ _) -> return le
       _                  -> setOffset o >> fail "a call/for required here"
+
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do

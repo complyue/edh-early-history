@@ -90,6 +90,7 @@ data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
 
 data Prefix = PrefixPlus | PrefixMinus | Not
         | Guard -- similar to guard in Haskell
+        | AtoIso -- atomically isolated
         | Go | Defer -- similar to goroutine in Go
     deriving (Show)
 
