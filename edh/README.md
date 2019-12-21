@@ -243,25 +243,23 @@ class E () {
 
 ### ES6 style symbol for better encapsulation
 
-You can control the access to an object's attribute by binding it using
-a symbol instead of an alphanumeric name. The symbol value can be defined
-at the module level, so all procedures in the module have access; or
-defined as an instance level value, so only procedures belonging to the
-same object have access. Further more, the symbol value can be given to
-a friend procedure to grant the access.
+You can control the access to an object's attribute by binding it using a
+symbol instead of an alphanumeric name.
 
 ```javascript
-class C () {
-    name = Symbol('name')
+name = Symbol('name')
 
+class C () {
     method getName() this.@name
     method setName(name as this.@name) pass
 }
 ```
 
-symbols are normally obtained from current scope, or a direct reference
-after `this` reference. Other attempts to dereference for a symbol
-value are always prohibited.
+A symbol value is normally defined at the module level, so all procedures
+in the module have access. And symbols are always resolved from lexical
+scope, so foreign code can never obtain it from an object via attribute
+reference. While a symbol can be passed to a _friend_ method procedure, to
+grant it access.
 
 ```js
 c = C()
@@ -270,12 +268,11 @@ c = C()
 // bound to it as an attribute named `name`.
 c.@name
 
-// this is prohibited as `name` on a class `C` instance is a symbol value
+// a C object doesn't possess an alphanumeric attribute named `name`,
+// this is illegal code:
 c.name
-// so this can never succeed to get the `name` property off a `C` object
-c.@(c.name)
 
-// TODO add repl session log demonstrating the relevant errors
+// TODO add repl session example
 ```
 
 ### list/dict/tuple comprehension

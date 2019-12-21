@@ -73,6 +73,13 @@ evalStmt' ctx stmt exit = case stmt of
   where scope = contextScope ctx
 
 
+evalExprToVar :: Context -> Expr -> EdhProg (TMVar (Scope, EdhValue))
+evalExprToVar ctx expr = do
+  var <- liftIO newEmptyTMVarIO
+  evalExpr ctx expr $ \sv -> liftIO $ atomically $ putTMVar var sv
+  return var
+
+
 evalExpr :: Context -> Expr -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
 evalExpr ctx expr exit = case expr of
   LitExpr lit -> case lit of
@@ -165,54 +172,25 @@ evalExpr ctx expr exit = case expr of
   AttrExpr addr -> case addr of
     ThisRef         -> exit (scope, EdhObject this)
     SupersRef       -> exit (scope, EdhTuple $ EdhObject <$> objSupers this)
-    DirectRef addr' -> case addr' of
-      NamedAttr attrName -> resolveEdhCtxAttr scope attrName >>= \case
-        Just scope'@(Scope ent _obj) ->
-          edhReadAttr ent (AttrByName attrName) (exit . (scope', ))
-        Nothing -> throwEdh $ EvalError $ "Not in scope: " <> attrName
-      SymbolicAttr _symName ->
-        throwEdh $ EvalError "Symbolic attribute not impl. yet"
-    IndirectRef tgtExpr addr' -> case tgtExpr of
-      -- allow symbol value to be addressed off this reference 
-      AttrExpr ThisRef -> case addr' of
-        NamedAttr attrName -> resolveEdhObjAttr scope attrName >>= \case
-          Just scope''@(Scope _ent obj') -> edhReadAttr (objEntity obj')
-                                                        (AttrByName attrName)
-                                                        (exit . (scope'', ))
-          Nothing ->
-            throwEdh
-              $  EvalError
-              $  "No attribute "
-              <> attrName
-              <> " from this "
-              <> T.pack (show this)
-        SymbolicAttr _symName ->
-          throwEdh $ EvalError "Symbolic attribute not impl. yet"
-      -- forbid symbol value to be addressed off non-this reference
-      _ -> eval' tgtExpr $ \case
-        (scope', EdhObject obj) -> case addr' of
-          NamedAttr attrName -> resolveEdhObjAttr scope' attrName >>= \case
-            Just scope''@(Scope _ent obj') ->
-              edhReadAttr (objEntity obj') (AttrByName attrName) $ \val ->
-                case val of
-                  EdhSymbol sym ->
-                    throwEdh
-                      $  EvalError
-                      $  "Symbol "
-                      <> T.pack (show sym)
-                      <> " can not be accessed"
-                  _ -> exit (scope'', val)
+    DirectRef addr' -> resolveAddr scope addr' $ \key ->
+      resolveEdhCtxAttr scope key >>= \case
+        Nothing ->
+          throwEdh $ EvalError $ "Not in scope: " <> T.pack (show addr')
+        Just scope'@(Scope ent _obj) -> edhReadAttr ent key (exit . (scope', ))
+    IndirectRef tgtExpr addr' -> resolveAddr scope addr' $ \key ->
+      eval' tgtExpr $ \case
+        (_, EdhObject obj) ->
+          resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
             Nothing ->
               throwEdh
                 $  EvalError
-                $  "No attribute "
-                <> attrName
+                $  "No such attribute "
+                <> T.pack (show key)
                 <> " from "
                 <> T.pack (show obj)
-          SymbolicAttr _symName ->
-            throwEdh $ EvalError "Symbolic attribute not impl. yet"
-        (_scope', val) ->
-          throwEdh $ EvalError $ "Not an object: " <> T.pack (show val)
+            Just scope''@(Scope ent _obj) ->
+              edhReadAttr ent key (exit . (scope'', ))
+        (_, v) -> throwEdh $ EvalError $ "Not an object: " <> T.pack (show v)
 
 
   -- IndexExpr ixExpr tgtExpr ->
@@ -238,17 +216,11 @@ evalExpr ctx expr exit = case expr of
 
   _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
  where
-  this  = thisObject scope
-  scope = contextScope ctx
+  this   = thisObject scope
+  scope  = contextScope ctx
 
-  eval' = evalExpr ctx
-
-  eval2 :: Expr -> EdhProg (TMVar (Scope, EdhValue))
-  eval2 expr' = do
-    var <- liftIO newEmptyTMVarIO
-    eval' expr' $ \sv -> liftIO $ atomically $ putTMVar var sv
-    return var
-
+  eval'  = evalExpr ctx
+  eval2  = evalExprToVar ctx
   evalSS = evalStmt ctx
 
 
@@ -359,109 +331,119 @@ evalExpr ctx expr exit = case expr of
 --         Just argVal -> return (argVal, posArgs', kwArgs'')
 
 
--- packEdhArgs :: Context -> ArgsSender -> (ArgsPack -> EdhProg ()) -> EdhProg ()
--- packEdhArgs ctx argsSender exit = case argsSender of
---   PackSender packSender -> do
---     (ArgsPack posArgs kwArgs) <- foldM fillPack
---                                        (ArgsPack [] Map.empty)
---                                        packSender
---     -- fillPack have posArgs filled right-to-left, reverse needed
---     exit $ ArgsPack (reverse posArgs) kwArgs
---   SingleSender argSender -> fillPack (ArgsPack [] Map.empty) argSender
---  where
+packEdhArgs :: Context -> ArgsSender -> (ArgsPack -> EdhProg ()) -> EdhProg ()
+packEdhArgs ctx argsSender exit = case argsSender of
+  PackSender packSender ->
+    foldM fillPack exit packSender >>= ($ ArgsPack [] Map.empty)
+  SingleSender argSender ->
+    fillPack exit argSender >>= ($ ArgsPack [] Map.empty)
+ where
+  eval' = evalExpr ctx
 
---   fillPack :: ArgsPack -> ArgSender -> EdhProg ArgsPack
---   fillPack (ArgsPack posArgs kwArgs) argSender = case argSender of
---     UnpackPosArgs listExpr -> eval' listExpr >>= \case
---       EdhList listRef -> do
---         listVal <- readIORef listRef
---         return $ ArgsPack (posArgs ++ listVal) kwArgs
---       v -> throwIO $ EvalError $ "Can not unpack posargs from: " <> T.pack
---         (show v)
---     UnpackKwArgs dictExpr -> eval' dictExpr >>= \case
---       EdhDict dictRef -> do
---         Dict dictVal <- readIORef dictRef
---         return $ ArgsPack posArgs
---                           (Map.union (Map.mapKeys dictKey2Kw dictVal) kwArgs)
---       v -> throwIO $ EvalError $ "Can not unpack kwargs from: " <> T.pack
---         (show v)
---     SendPosArg argExpr -> do
---       argVal <- eval' argExpr
---       return $ ArgsPack (argVal : posArgs) kwArgs
---     SendKwArg kw argExpr -> do
---       argVal <- eval' argExpr
---       return $ ArgsPack posArgs $ Map.insert kw argVal kwArgs
+  fillPack
+    :: (ArgsPack -> EdhProg ()) -> ArgSender -> EdhProg (ArgsPack -> EdhProg ())
+  fillPack exit' argSender = return $ \(ArgsPack posArgs kwArgs) ->
+    case argSender of
+      UnpackPosArgs listExpr -> eval' listExpr $ \case
+        (_scope, EdhList (List listVar)) -> do
+          listVal <- liftIO $ readTVarIO listVar
+          exit' $ ArgsPack (listVal ++ posArgs) kwArgs
+        (_scope, v) ->
+          throwEdh $ EvalError $ "Can not unpack args from: " <> T.pack
+            (show v)
+      UnpackKwArgs dictExpr -> eval' dictExpr $ \case
+        (_scope, EdhDict (Dict dictVar)) -> do
+          dictVal   <- liftIO $ readTVarIO dictVar
+          kwAscList <- forM (Map.toAscList dictVal)
+            $ \(k, v) -> (, v) <$> dictKey2Kw k
+          -- let kwMap = Map.fromAscList kwAscList
+          -- kwMap   <-
+          --   Map.fromAscList <$> forM (Map.toAscList dictVal) $ \(k, v) ->
+          --     (, v) <$> dictKey2Kw k
+          -- kwArgs appear later, give them higher priority
+          exit'
+            $ ArgsPack posArgs (Map.union kwArgs $ Map.fromAscList kwAscList)
+        (_scope, v) ->
+          throwEdh $ EvalError $ "Can not unpack kwargs from: " <> T.pack
+            (show v)
+      SendPosArg argExpr -> eval' argExpr
+        $ \(_scope, argVal) -> exit' $ ArgsPack (argVal : posArgs) kwArgs
+      SendKwArg kw argExpr -> eval' argExpr $ \(_scope, argVal) ->
+        -- kwArgs appear later, give them higher priority
+        exit' $ ArgsPack posArgs $ Map.alter
+          (\case
+            Nothing  -> Just argVal
+            Just val -> Just val
+          )
+          kw
+          kwArgs
 
---   dictKey2Kw :: ItemKey -> AttrName
---   dictKey2Kw = \case
---     ItemByStr name -> name
---     k ->
---       unsafePerformIO
---         $  throwIO
---         $  EvalError
---         $  "Invalid argument keyword from dict key: "
---         <> T.pack (show k)
-
---   eval' = evalExpr ctx
-
---   scope = contextScope ctx
-
---   resolveAddr :: AttrAddressor -> (AttrKey -> EdhProg ()) -> EdhProg ()
---   resolveAddr (NamedAttr attrName) exit = exit (AttrByName attrName)
---   resolveAddr (SymbolicAttr symName) exit =
---     resolveEdhObjAttr scope symName >>= \case
---       Just ent -> edhTxRead
---         (ent, AttrByName symName)
---         \case
---           (EdhSymbol symVal) -> exit (AttrBySym symVal)
---           v -> throwEdh $ EvalError $ "Not a symbol: " <> T.pack (show v)
---       Nothing ->
---         throwEdh
---           $  EvalError
---           $  "No symbol named "
---           <> T.pack (show symName)
---           <> " available"
---       Just v ->
---         throwEdh
---           $  EvalError
---           $  "Expect a symbol named "
---           <> T.pack (show symName)
---           <> " but got: "
---           <> T.pack (show v)
+  dictKey2Kw :: ItemKey -> EdhProg AttrName
+  dictKey2Kw = \case
+    ItemByStr name -> return name
+    k ->
+      throwEdh
+        $  EvalError
+        $  "Invalid argument keyword from dict key: "
+        <> T.pack (show k)
 
 
-resolveLexicalAttr :: MonadIO m => [Scope] -> AttrName -> m (Maybe Scope)
+resolveAddr :: Scope -> AttrAddressor -> (AttrKey -> EdhProg ()) -> EdhProg ()
+resolveAddr _ (NamedAttr attrName) exit = exit (AttrByName attrName)
+resolveAddr scope (SymbolicAttr symName) exit =
+  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
+    Just scope' ->
+      edhReadAttr (scopeEntity scope') (AttrByName symName) $ \case
+        (EdhSymbol symVal) -> exit (AttrBySym symVal)
+        v ->
+          throwEdh
+            $  EvalError
+            $  "Not a symbol: "
+            <> T.pack (show v)
+            <> " as "
+            <> symName
+            <> " from "
+            <> T.pack (show $ thisObject scope') -- TODO this correct ?
+    Nothing ->
+      throwEdh
+        $  EvalError
+        $  "No symbol named "
+        <> T.pack (show symName)
+        <> " available"
+
+
+resolveLexicalAttr :: MonadIO m => [Scope] -> AttrKey -> m (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (scope@(Scope ent _obj) : outerEntities) attrName =
-  liftIO $ readTVarIO ent >>= \em -> if Map.member (AttrByName attrName) em
+resolveLexicalAttr (scope@(Scope ent _obj) : outerEntities) addr =
+  liftIO $ readTVarIO ent >>= \em -> if Map.member addr em
     then return (Just scope)
-    else resolveLexicalAttr outerEntities attrName
+    else resolveLexicalAttr outerEntities addr
 
 
-resolveEdhCtxAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Scope)
-resolveEdhCtxAttr scope attr = liftIO $ readTVarIO ent >>= \em ->
-  if Map.member (AttrByName attr) em
+resolveEdhCtxAttr :: MonadIO m => Scope -> AttrKey -> m (Maybe Scope)
+resolveEdhCtxAttr scope addr = liftIO $ readTVarIO ent >>= \em ->
+  if Map.member addr em
     then return (Just scope)
-    else resolveLexicalAttr (classScope $ objClass obj) attr
+    else resolveLexicalAttr (classScope $ objClass obj) addr
  where
   ent = scopeEntity scope
   obj = thisObject scope
 
 
-resolveEdhObjAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Scope)
-resolveEdhObjAttr scope attr = liftIO $ readTVarIO objEnt >>= \em ->
-  if Map.member (AttrByName attr) em
+resolveEdhObjAttr :: MonadIO m => Scope -> AttrKey -> m (Maybe Scope)
+resolveEdhObjAttr scope addr = liftIO $ readTVarIO objEnt >>= \em ->
+  if Map.member addr em
     then return (Just scope)
-    else resolveEdhSuperAttr (objSupers obj) attr
+    else resolveEdhSuperAttr (objSupers obj) addr
  where
   obj    = thisObject scope
   objEnt = objEntity obj
 
-resolveEdhSuperAttr :: MonadIO m => [Object] -> AttrName -> m (Maybe Scope)
+resolveEdhSuperAttr :: MonadIO m => [Object] -> AttrKey -> m (Maybe Scope)
 resolveEdhSuperAttr [] _ = return Nothing
-resolveEdhSuperAttr (super : restSupers) attr =
-  liftIO $ readTVarIO objEnt >>= \em -> if Map.member (AttrByName attr) em
+resolveEdhSuperAttr (super : restSupers) addr =
+  liftIO $ readTVarIO objEnt >>= \em -> if Map.member addr em
     then return (Just (Scope objEnt super))
-    else resolveEdhSuperAttr restSupers attr
+    else resolveEdhSuperAttr restSupers addr
   where objEnt = objEntity super
 
