@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Runtime
   ( createEdhWorld
@@ -118,7 +119,7 @@ declareEdhOperators world declLoc opps = liftIO
  where
   declarePrecedence :: OpPrecDict -> (OpPrecDict, ())
   declarePrecedence opPD =
-    flip (,) ()
+    (, ())
       $ Map.unionWithKey chkCompatible opPD
       $ Map.fromList
       $ flip map opps
