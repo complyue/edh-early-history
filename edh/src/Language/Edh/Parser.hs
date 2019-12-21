@@ -83,9 +83,7 @@ parsePackReceiver :: Parser ArgsReceiver
 parsePackReceiver = between
   (symbol "(")
   (symbol ")")
-  do
-    argRs <- parseArgRecvs [] False False
-    return $ PackReceiver $ reverse argRs
+  (parseArgRecvs [] False False >>= return . PackReceiver . reverse)
 
 parseArgRecvs :: [ArgReceiver] -> Bool -> Bool -> Parser [ArgReceiver]
 parseArgRecvs rs kwConsumed posConsumed =
@@ -180,9 +178,7 @@ parsePackSender :: Parser ArgsSender
 parsePackSender = between
   (symbol "(")
   (symbol ")")
-  do
-    argSs <- parseArgSends []
-    return $ PackSender $ reverse argSs
+  (parseArgSends [] >>= return . PackSender . reverse)
 
 parseArgSends :: [ArgSender] -> Parser [ArgSender]
 parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
@@ -200,14 +196,12 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
     expr <- parseExpr
     return $ UnpackPosArgs expr
   parseKwSend :: Parser ArgSender
-  parseKwSend = do
-    p1 <- parseExpr
-    optional parseArgLetExpr >>= \case
-      Nothing      -> return $ SendPosArg p1
-      Just valExpr -> case p1 of
-        AttrExpr (DirectRef (NamedAttr aname)) ->
-          return $ SendKwArg aname valExpr
-        _ -> fail $ "invalid argument name: " <> show p1
+  parseKwSend = parseExpr >>= \case
+    InfixExpr "=" nExpr vExpr -> case nExpr of
+      AttrExpr (DirectRef (NamedAttr attrName)) ->
+        return $ SendKwArg attrName vExpr
+      _ -> fail $ "invalid argument name: " <> show nExpr
+    vExpr -> return $ SendPosArg vExpr
 
 
 parseClassStmt :: Parser Stmt

@@ -7,6 +7,16 @@ import           Debug.Trace
 import           Control.Concurrent.STM
 import           Control.Monad.IO.Class
 
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as T
+import qualified Data.Map.Strict               as Map
+
+import           Data.IORef
+import           Foreign.C.String
+import           Foreign.Marshal.Alloc
+import           System.Mem.Weak
+import           System.IO.Unsafe
+
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
@@ -129,6 +139,7 @@ installEdhBatteries world = liftIO $ do
   assignHP <- mkHostProc "=" assignProc
   concatHP <- mkHostProc "++" concatProc
   typeHP   <- mkHostProc "type" typeProc
+  dictHP   <- mkHostProc "dict" dictProc
 
   atomically $ putEdhAttrs
     rootEntity
@@ -144,6 +155,11 @@ installEdhBatteries world = liftIO $ do
       , EdhHostProc typeHP
       )
 
+  -- utility
+    , ( AttrByName "dict"
+      , EdhHostProc dictHP
+      )
+
   -- math constants
   -- todo figure out proper ways to make these really **constant**,
   --      i.e. not rebindable to other values
@@ -156,12 +172,44 @@ installEdhBatteries world = liftIO $ do
 
 
 assignProc :: EdhProcedure
-assignProc ctx aSender scope = undefined
+assignProc callerCtx argsSender procScope exit = undefined
 
 concatProc :: EdhProcedure
-concatProc ctx aSender scope = undefined
+concatProc callerCtx argsSender procScope exit = undefined
+
 
 typeProc :: EdhProcedure
-typeProc ctx aSender scope = trace " ** type() called." $ return nil
+typeProc callerCtx argsSender procScope exit =
+  packEdhArgs callerCtx argsSender $ \(ArgsPack !args !kwargs) ->
+    let argsType = map edhTypeOf args
+        kwargsType =
+            Map.fromList $ flip map (Map.toAscList kwargs) $ \(attrName, val) ->
+              (ItemByStr attrName, edhTypeOf val)
+    in  if null kwargs
+          then case argsType of
+            [t] -> exit (procScope, t)
+            _   -> do
+              l <- liftIO $ newTVarIO argsType
+              exit (procScope, EdhList (List l))
+          else do
+            d <- liftIO $ newTVarIO $ Map.union kwargsType $ Map.fromAscList
+              [ (ItemByNum (fromIntegral i), t)
+              | (i, t) <- zip [(0 :: Int) ..] argsType
+              ]
+            exit (procScope, EdhDict (Dict d))
 
+
+dictProc :: EdhProcedure
+dictProc callerCtx argsSender procScope exit =
+  packEdhArgs callerCtx argsSender $ \(ArgsPack !args !kwargs) ->
+    let kwDict =
+            Map.fromAscList
+              $ flip map (Map.toAscList kwargs)
+              $ \(attrName, val) -> (ItemByStr attrName, val)
+    in  do
+          d <- liftIO $ newTVarIO $ Map.union kwDict $ Map.fromAscList
+            [ (ItemByNum (fromIntegral i), t)
+            | (i, t) <- zip [(0 :: Int) ..] args
+            ]
+          exit (procScope, EdhDict (Dict d))
 

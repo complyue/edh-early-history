@@ -238,13 +238,13 @@ evalExpr ctx expr exit = case expr of
       -- EdhGenrDef genrDef ->
 
     (scope', EdhHostProc (HostProcedure _name proc)) ->
-      proc ctx args scope' >>= exit . (scope, )
+      proc ctx args scope' exit
 
-    (_scope', v) ->
+    (_scope', val) ->
       throwEdh
         $  EvalError
         $  "Can not call: "
-        <> T.pack (show v)
+        <> T.pack (show val)
         <> " ❌ expressed with: "
         <> T.pack (show procExpr)
 

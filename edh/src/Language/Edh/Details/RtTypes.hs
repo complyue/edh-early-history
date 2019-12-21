@@ -103,14 +103,6 @@ instance Show List where
     where ll = unsafePerformIO $ readTVarIO l
 
 
--- | A pack of evaluated argument values with positional/keyword
--- origin.
-data ArgsPack = ArgsPack {
-        positional'args :: ![EdhValue]
-        , keyword'args :: !(Map.Map AttrName EdhValue)
-    }
-
-
 -- | calling stack frames at any point of Edh code execution
 data Context = Context {
         contextWorld :: !EdhWorld
@@ -318,17 +310,25 @@ type TxWriteOps
     ]
 
 
--- | Type of a procedure that can be called by Edh code.
+-- | Type of a procedure in host language that can be called from Edh code.
 --
 -- Edh is not tracking whether such procedures are pure (i.e. side-effect
 -- free) or impure (i.e. world-changing), though writing only pure functions
 -- conforming to this procedual interface in the host language (Haskell)
 -- should be considered idiomatic).
-type EdhProcedure -- ^ the procedure serving as the callee when applied
+type EdhProcedure -- such a procedure servs as the callee
   =  Context -- ^ the caller's context
   -> ArgsSender -- ^ the manifestation of how the caller wills to send args
   -> Scope -- ^ the scope from which the callee is addressed off
-  -> EdhProg EdhValue -- ^ the value the callee can synchronously return
+  -> ((Scope, EdhValue) -> EdhProg ()) -- ^ the CPS exit for return value
+  -> EdhProg ()
+
+-- | A pack of evaluated argument values with positional/keyword origin,
+-- normally obtained by invoking `packEdhArgs ctx argsSender`.
+data ArgsPack = ArgsPack {
+        positional'args :: ![EdhValue]
+        , keyword'args :: !(Map.Map AttrName EdhValue)
+    }
 
 
 -- | Type of procedures to be implemented in the host language (Haskell).
@@ -536,4 +536,37 @@ true = EdhBool True
 
 false :: EdhValue
 false = EdhBool False
+
+
+edhTypeOf :: EdhValue -> EdhValue
+
+edhTypeOf EdhNil           = nil
+edhTypeOf (EdhDecimal  _)  = EdhType DecimalType
+edhTypeOf (EdhBool     _)  = EdhType BoolType
+edhTypeOf (EdhString   _)  = EdhType StringType
+edhTypeOf (EdhSymbol   _)  = EdhType SymbolType
+edhTypeOf (EdhObject   _)  = EdhType ObjectType
+edhTypeOf (EdhModule   _)  = EdhType ModuleType
+edhTypeOf (EdhDict     _)  = EdhType DictType
+edhTypeOf (EdhList     _)  = EdhType ListType
+edhTypeOf (EdhTuple    _)  = EdhType TupleType
+edhTypeOf (EdhBlock    _)  = EdhType BlockType
+edhTypeOf (EdhThunk    _)  = EdhType ThunkType
+edhTypeOf (EdhHostProc _)  = EdhType HostProcType
+edhTypeOf (EdhClass    _)  = EdhType ClassType
+edhTypeOf (EdhMethod   _)  = EdhType MethodType
+edhTypeOf (EdhGenrDef  _)  = EdhType GeneratorType
+
+edhTypeOf EdhBreak         = EdhType FlowCtrlType
+edhTypeOf EdhContinue      = EdhType FlowCtrlType
+edhTypeOf (EdhCaseClose _) = EdhType FlowCtrlType
+edhTypeOf EdhFallthrough   = EdhType FlowCtrlType
+edhTypeOf (EdhIterator _)  = EdhType FlowCtrlType
+edhTypeOf (EdhYield    _)  = EdhType FlowCtrlType
+edhTypeOf (EdhReturn   _)  = EdhType FlowCtrlType
+
+edhTypeOf (EdhSink     _)  = EdhType SinkType
+edhTypeOf (EdhProxy    _)  = EdhType ProxyType
+
+edhTypeOf (EdhType     _)  = EdhType TypeType
 
