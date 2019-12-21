@@ -9,6 +9,7 @@ import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Concurrent.MVar
+import           Control.Concurrent.STM
 
 import           Data.IORef
 import           Foreign.C.String
@@ -132,17 +133,17 @@ evalExpr ctx expr exit = case expr of
               throwIO $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
         return var
     in
-      runEdhTx (mapM evalPair ps) $ \pl -> do
+      withEdhTx (mapM evalPair ps) $ \pl -> do
         pl' <- liftIO $ mapM readMVar pl
-        d   <- EdhDict <$> (liftIO . newIORef) (Dict $ Map.fromList pl')
+        d   <- EdhDict . Dict <$> (liftIO . newTVarIO) (Map.fromList pl')
         exit (scope, d)
 
-  ListExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
+  ListExpr vs -> withEdhTx (mapM eval2 vs) $ \l -> do
     l' <- liftIO $ mapM ((snd <$>) . readMVar) l
-    v  <- liftIO $ EdhList <$> newIORef l'
+    v  <- liftIO $ EdhList . List <$> newTVarIO l'
     exit (scope, v)
 
-  TupleExpr vs -> runEdhTx (mapM eval2 vs) $ \l -> do
+  TupleExpr vs -> withEdhTx (mapM eval2 vs) $ \l -> do
     l' <- liftIO $ mapM ((snd <$>) . readMVar) l
     exit (scope, EdhTuple l')
 
@@ -432,13 +433,13 @@ evalExpr ctx expr exit = case expr of
 resolveLexicalAttr :: MonadIO m => [Scope] -> AttrName -> m (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
 resolveLexicalAttr (scope@(Scope ent _obj) : outerEntities) attrName =
-  liftIO $ readMVar ent >>= \em -> if Map.member (AttrByName attrName) em
+  liftIO $ readTVarIO ent >>= \em -> if Map.member (AttrByName attrName) em
     then return (Just scope)
     else resolveLexicalAttr outerEntities attrName
 
 
 resolveEdhCtxAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Scope)
-resolveEdhCtxAttr scope attr = liftIO $ readMVar ent >>= \em ->
+resolveEdhCtxAttr scope attr = liftIO $ readTVarIO ent >>= \em ->
   if Map.member (AttrByName attr) em
     then return (Just scope)
     else resolveLexicalAttr (classScope $ objClass obj) attr
@@ -448,7 +449,7 @@ resolveEdhCtxAttr scope attr = liftIO $ readMVar ent >>= \em ->
 
 
 resolveEdhObjAttr :: MonadIO m => Scope -> AttrName -> m (Maybe Scope)
-resolveEdhObjAttr scope attr = liftIO $ readMVar objEnt >>= \em ->
+resolveEdhObjAttr scope attr = liftIO $ readTVarIO objEnt >>= \em ->
   if Map.member (AttrByName attr) em
     then return (Just scope)
     else resolveEdhSuperAttr (objSupers obj) attr
@@ -459,7 +460,7 @@ resolveEdhObjAttr scope attr = liftIO $ readMVar objEnt >>= \em ->
 resolveEdhSuperAttr :: MonadIO m => [Object] -> AttrName -> m (Maybe Scope)
 resolveEdhSuperAttr [] _ = return Nothing
 resolveEdhSuperAttr (super : restSupers) attr =
-  liftIO $ readMVar objEnt >>= \em -> if Map.member (AttrByName attr) em
+  liftIO $ readTVarIO objEnt >>= \em -> if Map.member (AttrByName attr) em
     then return (Just (Scope objEnt super))
     else resolveEdhSuperAttr restSupers attr
   where objEnt = objEntity super

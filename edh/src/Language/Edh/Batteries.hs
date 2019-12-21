@@ -4,6 +4,7 @@ module Language.Edh.Batteries where
 import           Prelude
 import           Debug.Trace
 
+import           Control.Concurrent.STM
 import           Control.Monad.IO.Class
 
 import           Data.Lossless.Decimal         as D
@@ -129,7 +130,7 @@ installEdhBatteries world = liftIO $ do
   concatHP <- mkHostProc "++" concatProc
   typeHP   <- mkHostProc "type" typeProc
 
-  putEdhAttrs
+  atomically $ putEdhAttrs
     rootEntity
     [
   -- operators

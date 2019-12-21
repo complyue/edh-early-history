@@ -19,6 +19,15 @@ import           Prelude
 import           Control.Exception
 import           Control.Monad.Except
 import           Control.Concurrent
+import           Control.Concurrent.STM
+
+import           Data.IORef
+
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as T
+import qualified Data.Map.Strict               as Map
+
+import           Text.Megaparsec
 
 import           Language.Edh.Control
 import           Language.Edh.AST

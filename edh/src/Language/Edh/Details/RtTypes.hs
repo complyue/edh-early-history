@@ -4,16 +4,13 @@ module Language.Edh.Details.RtTypes where
 
 import           Prelude
 
-import           Control.Exception
 
-import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Fail
 import           Control.Monad.Reader
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
-import           Control.Monad.STM
 
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
@@ -293,7 +290,7 @@ newtype EdhProg a = EdhProg { unEdhProg :: ReaderT EdhTxState IO a }
 data EdhTxState = EdhTxState {
     edh'tx'master :: !ThreadId
     -- | the stub for an open op set collecting more ops into current tx
-    , edh'tx'open :: !(MVar (IORef EdhTxOps))
+    , edh'tx'open :: !(MVar (Maybe (IORef EdhTxOps)))
     -- | the stub an op set is submitted into for execution
     , edh'tx'exec :: !(MVar EdhTxOps)
   }
@@ -314,7 +311,7 @@ type TxReadOps
 type TxWriteOps
   = [ ( Entity
       , AttrKey
-      , TMVar EdhValue -> EdhProg ()
+      , (EdhValue -> EdhProg ()) -> EdhProg ()
       , TMVar EdhValue
       , IORef (Maybe ThreadId)
       )

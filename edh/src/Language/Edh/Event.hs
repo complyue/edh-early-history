@@ -3,8 +3,9 @@ module Language.Edh.Event where
 
 import           Prelude
 
+import           Control.Monad.IO.Class
+
 import           Control.Concurrent.STM
-import           Control.Monad.STM
 
 import           Language.Edh.Details.RtTypes
 

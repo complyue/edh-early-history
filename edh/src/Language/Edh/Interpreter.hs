@@ -7,7 +7,7 @@ import           Prelude
 
 import           Control.Monad.IO.Class
 import           Control.Monad.State.Strict
-import           Control.Concurrent.MVar
+import           Control.Concurrent.STM
 
 import           Data.IORef
 import           Data.Text                      ( Text )
@@ -37,7 +37,7 @@ runEdhModule world moduId moduSource = liftIO $ do
     Left  err   -> return $ Left $ EdhParseError err
     Right stmts -> do
       let moduIdAttrVal = EdhString $ T.pack moduId
-      entity <- newMVar $ Map.fromList
+      entity <- newTVarIO $ Map.fromList
         [ (AttrByName "__name__", moduIdAttrVal)
         , (AttrByName "__file__", EdhString "<adhoc>")
         ]
