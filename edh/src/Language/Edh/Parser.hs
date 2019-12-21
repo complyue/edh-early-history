@@ -510,14 +510,22 @@ parseDict = symbol "{" *> parseDictRest []
       _ -> fail $ "Invalid dict entry: " <> show kvExpr
 
 
-parseTuple :: Parser Expr
-parseTuple = symbol "(" *> parseTupleRest []
+parseTupleOrParen :: Parser Expr
+parseTupleOrParen = symbol "(" *> parseTupleRest False []
  where
-  parseTupleRest :: [Expr] -> Parser Expr
-  parseTupleRest t = (optional $ symbol ",") *> choice
-    [ (symbol ")") *> (return $ TupleExpr (reverse t))
-    , parseExpr >>= \e -> parseTupleRest $ e : t
-    ]
+  parseTupleRest :: Bool -> [Expr] -> Parser Expr
+  parseTupleRest mustTuple t = do
+    mustTuple' <- (optional $ symbol ",") >>= \case
+      Nothing -> return mustTuple
+      _       -> return True
+    choice
+      [ (symbol ")")
+        *> (case t of
+             [singleExpr] | not mustTuple' -> return $ ParenExpr singleExpr
+             _                             -> return $ TupleExpr (reverse t)
+           )
+      , parseExpr >>= \e -> parseTupleRest mustTuple' $ e : t
+      ]
 
 
 parseExpr :: Parser Expr
@@ -553,7 +561,7 @@ parseIdxNonCallPrec prec leftCtor = do
     [ -- possibly indexable, non-callable exprs
       AttrExpr <$> parseSupersRef
     , parseListExpr
-    , parseTuple
+    , parseTupleOrParen
     , parseBlockOrDict
     ]
   optional parseIndexExpr >>= \case

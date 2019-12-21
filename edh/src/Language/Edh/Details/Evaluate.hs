@@ -145,14 +145,16 @@ evalExpr ctx expr exit = case expr of
         d   <- EdhDict . Dict <$> (liftIO . newTVarIO) (Map.fromList pl')
         exit (scope, d)
 
-  ListExpr vs -> mapM eval2 vs >>= \l -> do
+  ListExpr xs -> mapM eval2 xs >>= \l -> do
     l' <- liftIO $ mapM ((snd <$>) . (atomically . readTMVar)) l
     v  <- liftIO $ EdhList . List <$> newTVarIO l'
     exit (scope, v)
 
-  TupleExpr vs -> mapM eval2 vs >>= \l -> do
+  TupleExpr xs -> mapM eval2 xs >>= \l -> do
     l' <- liftIO $ mapM ((snd <$>) . (atomically . readTMVar)) l
     exit (scope, EdhTuple l')
+
+  ParenExpr x         -> eval' x exit
 
   -- TODO this should check for Thunk, and implement
   --      break/fallthrough semantics

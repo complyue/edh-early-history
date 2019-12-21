@@ -103,6 +103,7 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
         | DictExpr ![(Expr, Expr)]
         | ListExpr ![Expr]
         | TupleExpr ![Expr]
+        | ParenExpr !Expr
 
         -- a block is an expression in Edh, instead of a statement as in
         -- a C family language. it evaluates to the value of last expr
