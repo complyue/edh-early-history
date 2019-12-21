@@ -196,12 +196,16 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
     expr <- parseExpr
     return $ UnpackPosArgs expr
   parseKwSend :: Parser ArgSender
-  parseKwSend = parseExpr >>= \case
-    InfixExpr "=" nExpr vExpr -> case nExpr of
-      AttrExpr (DirectRef (NamedAttr attrName)) ->
-        return $ SendKwArg attrName vExpr
-      _ -> fail $ "invalid argument name: " <> show nExpr
-    vExpr -> return $ SendPosArg vExpr
+  parseKwSend = do
+    o <- getOffset
+    parseExpr >>= \case
+      InfixExpr "=" nExpr vExpr -> case nExpr of
+        AttrExpr (DirectRef (NamedAttr attrName)) ->
+          return $ SendKwArg attrName vExpr
+        _ -> do
+          setOffset o
+          fail $ "invalid argument name: " <> show nExpr
+      vExpr -> return $ SendPosArg vExpr
 
 
 parseClassStmt :: Parser Stmt
