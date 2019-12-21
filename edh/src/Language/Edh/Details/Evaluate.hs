@@ -3,7 +3,7 @@
 module Language.Edh.Details.Evaluate where
 
 import           Prelude
-import           Debug.Trace
+-- import           Debug.Trace
 
 import           Control.Exception
 import           Control.Monad.Except
@@ -110,7 +110,10 @@ evalExpr ctx expr exit = case expr of
     --      cooperate with the branch operator (->), find a way to
     --      tell it that this is guarded value, don't compare with
     --      thunk target value. but how ?
-    Guard -> eval' expr' exit
+    Guard  -> eval' expr' exit
+
+    AtoIso -> withEdhTx (eval2 expr')
+      $ \var -> (liftIO $ atomically $ readTMVar var) >>= exit
 
     -- TODO impl these
     Go    -> throwEdh $ EvalError "goroutine starter not impl. yet"
@@ -127,32 +130,63 @@ evalExpr ctx expr exit = case expr of
 
   DictExpr ps ->
     let
-      evalPair :: (Expr, Expr) -> EdhProg (TMVar (ItemKey, EdhValue))
-      evalPair (kExpr, vExpr) = do
-        var <- liftIO newEmptyTMVarIO
-        eval' vExpr $ \(_scope'v, vVal) -> eval' kExpr $ \(_scope'k, kVal) ->
-          liftIO $ case kVal of
-            EdhString  k -> atomically $ putTMVar var (ItemByStr k, vVal)
-            EdhSymbol  k -> atomically $ putTMVar var (ItemBySym k, vVal)
-            EdhDecimal k -> atomically $ putTMVar var (ItemByNum k, vVal)
-            EdhBool    k -> atomically $ putTMVar var (ItemByBool k, vVal)
-            k ->
-              throwIO $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
-        return var
+      gatherDict
+        :: (DictStore -> EdhProg ())
+        -> (Expr, Expr)
+        -> EdhProg (DictStore -> EdhProg ())
+      gatherDict exit' (!kExpr, !vExpr) = return $ \ds ->
+        eval' vExpr $ \(!_scope'v, !vVal) ->
+          eval' kExpr $ \(!_scope'k, !kVal) -> do
+            key <- case kVal of
+              EdhString  k -> return $ ItemByStr k
+              EdhSymbol  k -> return $ ItemBySym k
+              EdhDecimal k -> return $ ItemByNum k
+              EdhBool    k -> return $ ItemByBool k
+              k ->
+                throwEdh
+                  $  EvalError
+                  $  "Invalid key: "
+                  <> T.pack (show k)
+                  <> " ❌"
+            exit' $ Map.alter
+              (\case -- give later entries higher priority
+                Nothing  -> Just vVal
+                Just val -> Just val
+              )
+              key
+              ds
     in
-      mapM evalPair ps >>= \pl -> do
-        pl' <- liftIO $ mapM (atomically . readTMVar) pl
-        d   <- EdhDict . Dict <$> (liftIO . newTVarIO) (Map.fromList pl')
-        exit (scope, d)
+      foldM
+          gatherDict
+          (\ds ->
+            (liftIO $ EdhDict . Dict <$> newTVarIO ds) >>= (exit . (scope, ))
+          )
+          ps
+        >>= ($ Map.empty)
 
-  ListExpr xs -> mapM eval2 xs >>= \l -> do
-    l' <- liftIO $ mapM ((snd <$>) . (atomically . readTMVar)) l
-    v  <- liftIO $ EdhList . List <$> newTVarIO l'
-    exit (scope, v)
+  ListExpr xs ->
+    let gatherValues
+          :: ([EdhValue] -> EdhProg ())
+          -> Expr
+          -> EdhProg ([EdhValue] -> EdhProg ())
+        gatherValues exit' expr' =
+            return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
+    in  foldM
+            gatherValues
+            (\vs ->
+              (liftIO $ EdhList . List <$> newTVarIO vs) >>= (exit . (scope, ))
+            )
+            xs
+          >>= ($ [])
 
-  TupleExpr xs -> mapM eval2 xs >>= \l -> do
-    l' <- liftIO $ mapM ((snd <$>) . (atomically . readTMVar)) l
-    exit (scope, EdhTuple l')
+  TupleExpr xs ->
+    let gatherValues
+          :: ([EdhValue] -> EdhProg ())
+          -> Expr
+          -> EdhProg ([EdhValue] -> EdhProg ())
+        gatherValues exit' expr' =
+            return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
+    in  foldM gatherValues (\vs -> exit (scope, EdhTuple vs)) xs >>= ($ [])
 
   ParenExpr x         -> eval' x exit
 
@@ -178,10 +212,11 @@ evalExpr ctx expr exit = case expr of
       resolveEdhCtxAttr scope key >>= \case
         Nothing ->
           throwEdh $ EvalError $ "Not in scope: " <> T.pack (show addr')
-        Just scope'@(Scope ent _obj) -> edhReadAttr ent key (exit . (scope', ))
+        Just scope'@(Scope !ent !_obj) ->
+          edhReadAttr ent key (exit . (scope', ))
     IndirectRef tgtExpr addr' -> resolveAddr scope addr' $ \key ->
       eval' tgtExpr $ \case
-        (_, EdhObject obj) ->
+        (_, EdhObject !obj) ->
           resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
             Nothing ->
               throwEdh
@@ -190,7 +225,7 @@ evalExpr ctx expr exit = case expr of
                 <> T.pack (show key)
                 <> " from "
                 <> T.pack (show obj)
-            Just scope''@(Scope ent _obj) ->
+            Just scope''@(Scope !ent !_obj) ->
               edhReadAttr ent key (exit . (scope'', ))
         (_, v) -> throwEdh $ EvalError $ "Not an object: " <> T.pack (show v)
 

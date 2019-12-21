@@ -45,9 +45,9 @@ instance Show Dict where
       ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList dm ]
       ++ "}"
     where dm = unsafePerformIO $ readTVarIO d
-data ItemKey = ItemByType EdhTypeValue
-        | ItemByStr Text | ItemBySym Symbol
-        | ItemByNum Decimal | ItemByBool Bool
+data ItemKey = ItemByType !EdhTypeValue
+        | ItemByStr !Text | ItemBySym !Symbol
+        | ItemByNum !Decimal | ItemByBool !Bool
     deriving (Eq, Ord)
 instance Show ItemKey where
   show (ItemByType k) = show k
@@ -63,7 +63,7 @@ instance Show ItemKey where
 -- An entity has attributes associated by 'AttrKey'.
 type Entity = TVar EntityStore
 type EntityStore = Map.Map AttrKey EdhValue
-data AttrKey = AttrByName AttrName | AttrBySym Symbol
+data AttrKey = AttrByName !AttrName | AttrBySym !Symbol
     deriving (Eq, Ord, Show)
 
 -- | A symbol can stand in place of an alphanumeric name, used to
@@ -113,8 +113,8 @@ data ArgsPack = ArgsPack {
 
 -- | calling stack frames at any point of Edh code execution
 data Context = Context {
-        contextWorld :: EdhWorld
-        , contextModu :: Module
+        contextWorld :: !EdhWorld
+        , contextModu :: !Module
         , contextScope :: !Scope
     }
 
@@ -141,7 +141,7 @@ data Scope = Scope {
         -- | the entity of current scope, it's unique in a method procedure,
         -- and is the underlying entity of 'thisObject' in a class procedure.
         scopeEntity :: !Entity
-        , thisObject :: Object -- ^ `this` object of current scope
+        , thisObject :: !Object -- ^ `this` object of current scope
     }
 instance Eq Scope where
   Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
@@ -256,8 +256,8 @@ instance Show Iterator where
 -- Note: we rely on the 'CString' field (which is essentially a ptr),
 --       for equality testing of thunks.
 data Thunk = Thunk {
-        thunkDescription :: CString
-        , thunkValuator :: EdhValue -> IO EdhValue
+        thunkDescription :: !CString
+        , thunkValuator :: !(EdhValue -> IO EdhValue)
     }
 instance Eq Thunk where
   Thunk x'd _ == Thunk y'd _ = x'd == y'd
@@ -336,8 +336,8 @@ type EdhProcedure -- ^ the procedure serving as the callee when applied
 -- Note: we rely on the 'CString' field (which is essentially a ptr),
 --       for equality testing of host procedures.
 data HostProcedure = HostProcedure {
-        hostProc'name :: CString
-        , hostProc'proc :: EdhProcedure
+        hostProc'name :: !CString
+        , hostProc'proc :: !EdhProcedure
     }
 instance Eq HostProcedure where
   HostProcedure x'n _ == HostProcedure y'n _ = x'n == y'n
@@ -379,7 +379,7 @@ instance Show EventSink where
 -- attribute or the like.
 
 -- | the type for a value
-data EdhValue = EdhType EdhTypeValue -- ^ type itself is a kind of value
+data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     -- * immutable values
         | EdhNil
         | EdhDecimal !Decimal
