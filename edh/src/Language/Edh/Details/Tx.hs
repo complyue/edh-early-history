@@ -38,31 +38,29 @@ throwEdh e = liftIO $ throwIO e
 -- | Run an action in a separate thread, with all kinds of exceptions
 -- re-thrown to master thread, unless it is itself getting killed.
 asyncEdh :: ThreadId -> IO () -> IO ThreadId
-asyncEdh masterThread f = forkIO $ catch f onExc
+asyncEdh masterTh f = forkIO $ catch f onExc
  where
   onExc :: SomeException -> IO ()
   onExc e = case asyncExceptionFromException e of
-    Nothing -> throwTo masterThread e >> throwIO ThreadKilled
+    Nothing -> throwTo masterTh e >> throwIO ThreadKilled
     Just ae -> case ae of
       ThreadKilled -> return ()
       -- TODO is this right ?
-      _            -> throwTo masterThread e
+      _            -> throwTo masterTh e
 
 
 withEdhTx :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
 withEdhTx initOps collectResult = do
-  txs@(EdhTxState !masterThread !openOps !_execOps) <- ask
-  let
-    sureOpenTx :: IO (IORef EdhTxOps, IO ())
-    sureOpenTx = modifyMVar openOps $ \case
-      Nothing -> do
-        oops' <- newIORef (EdhTxOps [] [])
-        return
-          (Just oops', (oops', modifyMVar_ openOps (const $ return Nothing)))
-      Just oops' -> return (Just oops', (oops', return ()))
+  txs@(EdhTxState !masterTh !openOps !_execOps) <- ask
+  let ensureOpenTx :: IO (IO ())
+      ensureOpenTx = modifyMVar openOps $ \case
+        Nothing -> do
+          oops' <- newIORef (EdhTxOps [] [])
+          return (Just oops', modifyMVar_ openOps (const $ return Nothing))
+        Just oops' -> return (Just oops', return ())
   liftIO $ do
-    v <- bracket sureOpenTx snd $ const $ runReaderT (unEdhProg initOps) txs
-    void $ asyncEdh masterThread $ runReaderT (unEdhProg $ collectResult v) txs
+    v <- bracket ensureOpenTx id $ const $ runReaderT (unEdhProg initOps) txs
+    void $ asyncEdh masterTh $ runReaderT (unEdhProg $ collectResult v) txs
 
 
 edhReadAttr :: Entity -> AttrKey -> (EdhValue -> EdhProg ()) -> EdhProg ()
@@ -109,10 +107,10 @@ cleanupEdhProg halt = ask >>= \(EdhTxState _ _ !execOps) -> liftIO $ do
 runEdhProg :: MVar () -> EdhProg () -> IO ()
 runEdhProg halt prog = do
   -- prepare transactional state
-  !masterThread <- myThreadId
-  !openOps      <- newEmptyMVar
-  !execOps      <- newEmptyMVar
-  let !txs = (EdhTxState masterThread openOps execOps)
+  !masterTh <- myThreadId
+  !openOps  <- newMVar Nothing
+  !execOps  <- newEmptyMVar
+  let !txs = EdhTxState masterTh openOps execOps
   -- launch the program
   runReaderT (unEdhProg prog) txs
   -- drive transaction executions from the master thread
@@ -135,26 +133,24 @@ runEdhProg halt prog = do
       True -> driveEdhProg txs
    where
     crunchTx :: EdhTxState -> EdhTxOps -> IO ()
-    crunchTx (EdhTxState masterThread _ _) txOps@(EdhTxOps txReads txWrites) =
-      do
+    crunchTx (EdhTxState masterTh _ _) txOps@(EdhTxOps txReads txWrites) = do
         -- drive ops from the program
-        forM_ txReads $ \(_ent, _key, exit, var, tid) ->
-          atomicWriteIORef tid
-            .   Just
-            =<< (asyncEdh masterThread $ do
-                  val <- atomically $ readTMVar var
-                  runReaderT (unEdhProg $ exit val) txs
-                )
-        forM_ txWrites $ \(_ent, _key, exit, var, tid) ->
-          atomicWriteIORef tid
-            .   Just
-            =<< (asyncEdh masterThread $ runReaderT
-                  (unEdhProg $ exit (liftIO . atomically . putTMVar var))
-                  txs
-                )
-        -- auto cycling on STM retry
-        join $ atomically $ stmTx `orElse` return
-          (resetAll >> crunchTx txs txOps)
+      forM_ txReads $ \(_ent, _key, exit, var, tid) ->
+        atomicWriteIORef tid
+          .   Just
+          =<< (asyncEdh masterTh $ do
+                val <- atomically $ readTMVar var
+                runReaderT (unEdhProg $ exit val) txs
+              )
+      forM_ txWrites $ \(_ent, _key, exit, var, tid) ->
+        atomicWriteIORef tid
+          .   Just
+          =<< (asyncEdh masterTh $ runReaderT
+                (unEdhProg $ exit (liftIO . atomically . putTMVar var))
+                txs
+              )
+      -- auto cycling on STM retry
+      join $ atomically $ stmTx `orElse` return (resetAll >> crunchTx txs txOps)
      where
       stmTx :: STM (IO ())
       stmTx = do

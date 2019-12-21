@@ -120,31 +120,31 @@ evalExpr ctx expr exit = case expr of
 
   DictExpr ps ->
     let
-      evalPair :: (Expr, Expr) -> EdhProg (MVar (ItemKey, EdhValue))
+      evalPair :: (Expr, Expr) -> EdhProg (TMVar (ItemKey, EdhValue))
       evalPair (kExpr, vExpr) = do
-        var <- liftIO newEmptyMVar
+        var <- liftIO newEmptyTMVarIO
         eval' vExpr $ \(_scope'v, vVal) -> eval' kExpr $ \(_scope'k, kVal) ->
           liftIO $ case kVal of
-            EdhString  k -> putMVar var (ItemByStr k, vVal)
-            EdhSymbol  k -> putMVar var (ItemBySym k, vVal)
-            EdhDecimal k -> putMVar var (ItemByNum k, vVal)
-            EdhBool    k -> putMVar var (ItemByBool k, vVal)
+            EdhString  k -> atomically $ putTMVar var (ItemByStr k, vVal)
+            EdhSymbol  k -> atomically $ putTMVar var (ItemBySym k, vVal)
+            EdhDecimal k -> atomically $ putTMVar var (ItemByNum k, vVal)
+            EdhBool    k -> atomically $ putTMVar var (ItemByBool k, vVal)
             k ->
               throwIO $ EvalError $ "Invalid key: " <> T.pack (show k) <> " ❌"
         return var
     in
-      withEdhTx (mapM evalPair ps) $ \pl -> do
-        pl' <- liftIO $ mapM readMVar pl
+      mapM evalPair ps >>= \pl -> do
+        pl' <- liftIO $ mapM (atomically . readTMVar) pl
         d   <- EdhDict . Dict <$> (liftIO . newTVarIO) (Map.fromList pl')
         exit (scope, d)
 
-  ListExpr vs -> withEdhTx (mapM eval2 vs) $ \l -> do
-    l' <- liftIO $ mapM ((snd <$>) . readMVar) l
+  ListExpr vs -> mapM eval2 vs >>= \l -> do
+    l' <- liftIO $ mapM ((snd <$>) . (atomically . readTMVar)) l
     v  <- liftIO $ EdhList . List <$> newTVarIO l'
     exit (scope, v)
 
-  TupleExpr vs -> withEdhTx (mapM eval2 vs) $ \l -> do
-    l' <- liftIO $ mapM ((snd <$>) . readMVar) l
+  TupleExpr vs -> mapM eval2 vs >>= \l -> do
+    l' <- liftIO $ mapM ((snd <$>) . (atomically . readTMVar)) l
     exit (scope, EdhTuple l')
 
   -- TODO this should check for Thunk, and implement
@@ -243,10 +243,10 @@ evalExpr ctx expr exit = case expr of
 
   eval' = evalExpr ctx
 
-  eval2 :: Expr -> EdhProg (MVar (Scope, EdhValue))
+  eval2 :: Expr -> EdhProg (TMVar (Scope, EdhValue))
   eval2 expr' = do
-    var <- liftIO newEmptyMVar
-    eval' expr' $ \sv -> liftIO $ putMVar var sv
+    var <- liftIO newEmptyTMVarIO
+    eval' expr' $ \sv -> liftIO $ atomically $ putTMVar var sv
     return var
 
   evalSS = evalStmt ctx
