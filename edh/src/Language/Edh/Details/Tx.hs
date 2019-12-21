@@ -25,6 +25,8 @@ import           Control.Monad.Reader
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
+import qualified Data.Text                     as T
+
 import           Data.IORef
 import qualified Data.Map.Strict               as Map
 
@@ -130,9 +132,18 @@ runEdhProg !halt !prog = do
     -- check halt 
     isEmptyMVar halt >>= \case
       -- shall halt
-      False -> isEmptyMVar execOps >>= \case
-        False -> throwIO $ EvalError "Edh program halted with tx pending"
-        True  -> return ()
+      False -> (tryReadMVar execOps) >>= \case
+        Nothing                            -> return ()
+        Just (EdhTxOps !txReads !txWrites) -> if null txReads && null txWrites
+          then return ()
+          else
+            throwIO
+            $  EvalError
+            $  "Edh program halted with "
+            <> T.pack (show $ length txReads)
+            <> "/"
+            <> T.pack (show $ length txWrites)
+            <> " r/w ops pending"
       -- loop another iteration
       True -> driveEdhProg txs
    where
