@@ -45,11 +45,11 @@ evalStmt ctx (StmtSrc (srcPos, stmt)) exit = do
 
 
 evalBlock :: Context -> [StmtSrc] -> EdhProcExit -> EdhProg ()
-evalBlock ctx []   exit = exit (contextScope ctx, nil)
-evalBlock ctx [ss] exit = evalStmt ctx ss $ \case
+evalBlock !ctx []    !exit = exit (contextScope ctx, nil)
+evalBlock !ctx [!ss] !exit = evalStmt ctx ss $ \case
   (!scope', EdhCaseClose !val) -> exit (scope', val)
   result                       -> exit result
-evalBlock ctx (ss : rest) exit = do
+evalBlock !ctx !(ss : rest) exit = do
   evalStmt ctx ss $ \case
     (!scope', EdhCaseClose !val) -> exit (scope', val)
     brk@(!_, EdhBreak) -> exit brk
