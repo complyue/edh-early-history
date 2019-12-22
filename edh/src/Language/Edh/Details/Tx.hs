@@ -24,12 +24,10 @@ import           Control.Monad.Reader
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
-import qualified Data.Text                     as T
 
 import           Data.IORef
 import qualified Data.Map.Strict               as Map
 
-import           Language.Edh.Control
 import           Language.Edh.Details.RtTypes
 
 
@@ -178,24 +176,63 @@ runEdhProg !prog = do
         join $ atomically $ stmTx `orElse` return
           (resetAll >> crunchTx (retryCntr + 1) txs txOps)
      where
+      -- pump values within a single STM transaction
       stmTx :: STM (IO ())
       stmTx = do
-        -- pump values within a single STM transaction
-        forM_ txReads $ \(!ent, !key, !_exit, !var, !_tid) -> do
-          -- TODO good idea to group reads by entity ?
-          !em <- readTVar ent
+        -- grouped reads per entity
+        readPerEnt [] txReads []
+        -- grouped writes per entity
+        writePerEnt [] txWrites []
+        -- return nop to break the loop on success
+        return (return ())
+
+      readPerEnt
+        :: [TxReadOp] -- ^ queue
+        -> [TxReadOp] -- ^ candidates
+        -> [TxReadOp] -- ^ backlog
+        -> STM ()
+      readPerEnt [] []          []      = return ()
+      readPerEnt [] (op : rest) backlog = readPerEnt [op] rest backlog
+      readPerEnt queue@((!te, _, _, _, _) : _) (op@(!ce, _, _, _, _) : rest) backlog
+        = if ce == te
+          then readPerEnt (op : queue) rest backlog
+          else readPerEnt queue rest (op : backlog)
+      readPerEnt queue@((!ent, _, _, _, _) : _) [] backlog = do
+        !em <- readTVar ent
+        forM_ queue $ \(_, !key, !_exit, !var, !_tid) -> do
           case Map.lookup key em of
             Nothing ->
               -- in Edh, an attribute can not be **deleted** from an entity once
               -- set, no op like `delete` in JavaScript or `del` in Python.
               error "bug in attr resolution"
             Just val -> putTMVar var val
-        forM_ txWrites $ \(ent, key, _exit, var, _tid) -> do
-          !val <- readTMVar var
-          -- TODO good idea to group writes by entity ?
-          modifyTVar' ent $ \em -> Map.insert key val em
-        -- return nop to break the loop on success
-        return (return ())
+
+        readPerEnt [] backlog []
+      readPerEnt _ _ _ = error "bug"
+
+      writePerEnt
+        :: [TxWriteOp] -- ^ queue
+        -> [TxWriteOp] -- ^ candidates
+        -> [TxWriteOp] -- ^ backlog
+        -> STM ()
+      writePerEnt [] []          []      = return ()
+      writePerEnt [] (op : rest) backlog = writePerEnt [op] rest backlog
+      writePerEnt queue@((!te, _, _, _, _) : _) (op@(!ce, _, _, _, _) : rest) backlog
+        = if ce == te
+          then writePerEnt (op : queue) rest backlog
+          else writePerEnt queue rest (op : backlog)
+      writePerEnt queue@((!ent, _, _, _, _) : _) [] backlog = do
+        !um <- Map.fromList <$> forM
+          queue
+          (\(_, key, _exit, var, _tid) -> do
+            !val <- readTMVar var
+            return (key, val)
+          )
+        modifyTVar' ent $ \em -> Map.union um em
+
+        writePerEnt [] backlog []
+      writePerEnt _ _ _ = error "bug"
+
       resetAll :: IO ()
       resetAll = do
         when (retryCntr >= 3)

@@ -293,25 +293,23 @@ data EdhTxState = EdhTxState {
 
 -- | All operations per a transaction
 data EdhTxOps = EdhTxOps {
-    edh'tx'reads :: !TxReadOps
-    , edh'tx'writes :: !TxWriteOps
+    edh'tx'reads :: ! [TxReadOp]
+    , edh'tx'writes :: ![TxWriteOp]
   }
-type TxReadOps
-  = [ ( Entity
-      , AttrKey
-      , EdhValue -> EdhProg ()
-      , TMVar EdhValue
-      , IORef (Maybe ThreadId)
-      )
-    ]
-type TxWriteOps
-  = [ ( Entity
-      , AttrKey
-      , (EdhValue -> EdhProg ()) -> EdhProg ()
-      , TMVar EdhValue
-      , IORef (Maybe ThreadId)
-      )
-    ]
+type TxReadOp
+  = ( Entity
+    , AttrKey
+    , EdhValue -> EdhProg ()
+    , TMVar EdhValue
+    , IORef (Maybe ThreadId)
+    )
+type TxWriteOp
+  = ( Entity
+    , AttrKey
+    , (EdhValue -> EdhProg ()) -> EdhProg ()
+    , TMVar EdhValue
+    , IORef (Maybe ThreadId)
+    )
 
 
 -- | Type of a procedure in host language that can be called from Edh code.
