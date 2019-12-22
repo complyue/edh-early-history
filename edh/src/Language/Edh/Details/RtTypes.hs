@@ -77,12 +77,14 @@ data AttrKey = AttrByName !AttrName | AttrBySym !Symbol
 -- defined in the module, and a symbol bound within a class procedure
 -- is available to all its methods as well as nested classes.
 --
--- Note: we rely on the 'CString' field (which is essentially a ptr),
---       for equality testing of symbols.
+-- Note: we rely on the 'Ord' instance of 'CString' field (which is
+--       essentially a ptr), for trivial implementation of 'Symbol'
+--       's 'Ord' instance, so it can be used as attribut key on an
+--       entity (the underlying 'Map.Map' storage per se).
 newtype Symbol = Symbol {
-        -- TODO remember to default the description to the source pos
-        symbol'description :: CString
-    } deriving (Eq, Ord)
+    -- TODO remember to default the description to the source pos
+    symbol'description :: CString
+  } deriving (Eq, Ord)
 instance Show Symbol where
   show (Symbol dp) = "[@" <> sd <> "]"
     where sd = unsafePerformIO $ peekCString dp
@@ -248,9 +250,9 @@ instance Show Iterator where
 -- Note: we rely on the 'CString' field (which is essentially a ptr),
 --       for equality testing of thunks.
 data Thunk = Thunk {
-        thunkDescription :: !CString
-        , thunkValuator :: !(EdhValue -> IO EdhValue)
-    }
+    thunkDescription :: !CString
+    , thunkValuator :: !(EdhValue -> IO EdhValue)
+  }
 instance Eq Thunk where
   Thunk x'd _ == Thunk y'd _ = x'd == y'd
 instance Show Thunk where
@@ -320,25 +322,28 @@ type EdhProcedure -- such a procedure servs as the callee
   =  Context -- ^ the caller's context
   -> ArgsSender -- ^ the manifestation of how the caller wills to send args
   -> Scope -- ^ the scope from which the callee is addressed off
-  -> ((Scope, EdhValue) -> EdhProg ()) -- ^ the CPS exit for return value
+  -> EdhProcExit -- ^ the CPS exit to return a value from this procedure
   -> EdhProg ()
+
+-- | The type for an Edh procedure's return, in continuation passing style.
+type EdhProcExit = (Scope, EdhValue) -> EdhProg ()
 
 -- | A pack of evaluated argument values with positional/keyword origin,
 -- normally obtained by invoking `packEdhArgs ctx argsSender`.
 data ArgsPack = ArgsPack {
-        positional'args :: ![EdhValue]
-        , keyword'args :: !(Map.Map AttrName EdhValue)
-    }
+    positional'args :: ![EdhValue]
+    , keyword'args :: !(Map.Map AttrName EdhValue)
+  }
 
 
--- | Type of procedures to be implemented in the host language (Haskell).
+-- | Type of procedures implemented in the host language (Haskell).
 --
 -- Note: we rely on the 'CString' field (which is essentially a ptr),
 --       for equality testing of host procedures.
 data HostProcedure = HostProcedure {
-        hostProc'name :: !CString
-        , hostProc'proc :: !EdhProcedure
-    }
+    hostProc'name :: !CString
+    , hostProc'proc :: !EdhProcedure
+  }
 instance Eq HostProcedure where
   HostProcedure x'n _ == HostProcedure y'n _ = x'n == y'n
 instance Show HostProcedure where

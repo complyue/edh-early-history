@@ -27,8 +27,7 @@ import           Language.Edh.Details.Tx
 import           Language.Edh.Details.Utils
 
 
-evalStmt
-  :: Context -> StmtSrc -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
+evalStmt :: Context -> StmtSrc -> EdhProcExit -> EdhProg ()
 evalStmt ctx (StmtSrc (srcPos, stmt)) exit = do
   txs <- ask
   liftIO
@@ -45,7 +44,23 @@ evalStmt ctx (StmtSrc (srcPos, stmt)) exit = do
     $ runReaderT (unEdhProg (evalStmt' ctx stmt exit)) txs
 
 
-evalStmt' :: Context -> Stmt -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
+evalBlock :: Context -> [StmtSrc] -> EdhProcExit -> EdhProg ()
+evalBlock ctx []   exit = exit (contextScope ctx, nil)
+evalBlock ctx [ss] exit = evalStmt ctx ss $ \case
+  (!scope', EdhCaseClose !val) -> exit (scope', val)
+  result                       -> exit result
+evalBlock ctx (ss : rest) exit = do
+  evalStmt ctx ss $ \case
+    (!scope', EdhCaseClose !val) -> exit (scope', val)
+    brk@(!_, EdhBreak) -> exit brk
+    ctn@(!_, EdhContinue) -> exit ctn
+    rtn@(!_, EdhReturn !_) -> exit rtn
+    yld@(!_, EdhYield !_) -> exit yld
+    (!_, EdhFallthrough) -> evalBlock ctx rest exit
+    _ -> evalBlock ctx rest exit
+
+
+evalStmt' :: Context -> Stmt -> EdhProcExit -> EdhProg ()
 evalStmt' ctx stmt exit = case stmt of
 
   ExprStmt expr             -> evalExpr ctx expr exit
@@ -56,31 +71,24 @@ evalStmt' ctx stmt exit = case stmt of
   ContinueStmt              -> exit (scope, EdhContinue)
   FallthroughStmt           -> exit (scope, EdhFallthrough)
   -- TODO impl. this
-  YieldStmt asend           -> undefined -- EdhYield <$>  
+  YieldStmt argsSndr        -> undefined -- EdhYield <$>  
   ReturnStmt expr ->
-    evalExpr ctx expr $ \(scope', v) -> exit (scope', EdhReturn v)
+    evalExpr ctx expr $ \(!scope', !val) -> exit (scope', EdhReturn val)
 
-
-  ImportStmt ar srcExpr -> case srcExpr of
+  ImportStmt argsRcvr srcExpr -> case srcExpr of
     LitExpr (StringLiteral moduPath) ->
       exit (scope, EdhString $ "wana import " <> moduPath <> ".edh huh?")
     expr ->
       throwEdh $ EvalError $ "don't know how to import " <> T.pack (show expr)
 
-
   VoidStmt -> exit (scope, nil)
+
   _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
+ -- TODO comment out above line once `case stmt` get total
   where scope = contextScope ctx
 
 
-evalExprToVar :: Context -> Expr -> EdhProg (TMVar (Scope, EdhValue))
-evalExprToVar ctx expr = do
-  var <- liftIO newEmptyTMVarIO
-  evalExpr ctx expr $ \sv -> liftIO $ atomically $ putTMVar var sv
-  return var
-
-
-evalExpr :: Context -> Expr -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
+evalExpr :: Context -> Expr -> EdhProcExit -> EdhProg ()
 evalExpr ctx expr exit = case expr of
   LitExpr lit -> case lit of
     DecLiteral    v -> exit (scope, EdhDecimal v)
@@ -112,12 +120,14 @@ evalExpr ctx expr exit = case expr of
     --      thunk target value. but how ?
     Guard  -> eval' expr' exit
 
-    AtoIso -> withEdhTx' (eval2 expr')
-      $ \var -> (liftIO $ atomically $ readTMVar var) >>= exit
+    AtoIso -> withEdhTx $ eval' expr' exit
+    -- TODO better to do like below ?
+    -- AtoIso -> withEdhTx' (evalExprToVar ctx expr')
+    --   $ \var -> (liftIO $ atomically $ readTMVar var) >>= exit
 
     -- TODO impl these
-    Go    -> throwEdh $ EvalError "goroutine starter not impl. yet"
-    Defer -> throwEdh $ EvalError "defer scheduler not impl. yet"
+    Go     -> throwEdh $ EvalError "goroutine starter not impl. yet"
+    Defer  -> throwEdh $ EvalError "defer scheduler not impl. yet"
 
   IfExpr cond cseq alt -> eval' cond $ \case
     (_scope', EdhBool True ) -> evalSS cseq exit
@@ -195,7 +205,7 @@ evalExpr ctx expr exit = case expr of
 
   -- TODO this should check for Thunk, and implement
   --      break/fallthrough semantics
-  BlockExpr stmts     -> exit (scope, EdhBlock stmts)
+  BlockExpr stmts     -> evalBlock ctx stmts exit
 
   -- TODO impl this
   -- ForExpr ar iter todo -> undefined
@@ -276,9 +286,15 @@ evalExpr ctx expr exit = case expr of
   !this  = thisObject scope
   !scope = contextScope ctx
 
-  eval'  = evalExpr ctx
-  eval2  = evalExprToVar ctx
   evalSS = evalStmt ctx
+  eval'  = evalExpr ctx
+
+
+evalExprToVar :: Context -> Expr -> EdhProg (TMVar (Scope, EdhValue))
+evalExprToVar ctx expr = do
+  var <- liftIO newEmptyTMVarIO
+  evalExpr ctx expr $ \sv -> liftIO $ atomically $ putTMVar var sv
+  return var
 
 
 -- The Edh call convention is so called call-by-repacking, i.e. a new pack of
