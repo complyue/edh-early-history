@@ -89,10 +89,11 @@ instance Show Symbol where
   show (Symbol dp) = "[@" <> sd <> "]"
     where sd = unsafePerformIO $ peekCString dp
 mkSymbol :: String -> IO Symbol
-mkSymbol d = do
-  s <- newCString d
-  addFinalizer s $ free s
-  return $ Symbol s
+mkSymbol !d = do
+  !s <- newCString d
+  let !sym = Symbol s
+  addFinalizer sym $ free s
+  return sym
 
 
 -- | A list in Edh is a multable, singly-linked, prepend list.
@@ -259,10 +260,11 @@ instance Show Thunk where
   show (Thunk d _) = "[thunk: " <> s <> "]"
     where s = unsafePerformIO $ peekCString d
 mkThunk :: String -> (EdhValue -> IO EdhValue) -> IO Thunk
-mkThunk desc valuator = do
-  s <- newCString desc
-  addFinalizer s $ free s
-  return $ Thunk s valuator
+mkThunk !desc !valuator = do
+  !s <- newCString desc
+  let !thk = Thunk s valuator
+  addFinalizer thk $ free s
+  return thk
 
 
 -- | A world for Edh programs to change
@@ -350,10 +352,11 @@ instance Show HostProcedure where
   show (HostProcedure pn _) = "[hostproc: " ++ nm ++ "]"
     where nm = unsafePerformIO $ peekCString pn
 mkHostProc :: String -> EdhProcedure -> IO HostProcedure
-mkHostProc d p = do
-  s <- newCString d
-  addFinalizer s $ free s
-  return $ HostProcedure { hostProc'name = s, hostProc'proc = p }
+mkHostProc !d !p = do
+  !s <- newCString d
+  let !hp = HostProcedure { hostProc'name = s, hostProc'proc = p }
+  addFinalizer hp $ free s
+  return hp
 
 
 -- | An event sink is similar to a Go channel, but is broadcast
