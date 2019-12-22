@@ -201,8 +201,10 @@ assignProc callerCtx (PackSender [SendPosArg lhExpr, SendPosArg rhExpr]) _ exit
       ThisRef   -> throwEdh $ EvalError "Can not assign to this"
       SupersRef -> throwEdh $ EvalError "Can not assign to supers"
     x ->
-      throwEdh $ EvalError $ "Invalid left hand expr for assignment: " <> T.pack
-        (show x)
+      throwEdh
+        $  EvalError
+        $  "Invalid left hand value for assignment: "
+        <> T.pack (show x)
  where
   thisEnt                      = objEntity this
   callerScope@(Scope ent this) = contextScope callerCtx

@@ -217,7 +217,7 @@ evalExpr ctx expr exit = case expr of
           throwEdh $ EvalError $ "Not in scope: " <> T.pack (show addr')
         Just scope'@(Scope !ent !_obj) ->
           edhReadAttr ent key (exit . (scope', ))
-    IndirectRef tgtExpr addr' -> resolveAddr scope addr' $ \key ->
+    IndirectRef !tgtExpr !addr' -> resolveAddr scope addr' $ \key ->
       eval' tgtExpr $ \case
         (_, EdhObject !obj) ->
           resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
@@ -273,8 +273,8 @@ evalExpr ctx expr exit = case expr of
 
   _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
  where
-  this   = thisObject scope
-  scope  = contextScope ctx
+  !this  = thisObject scope
+  !scope = contextScope ctx
 
   eval'  = evalExpr ctx
   eval2  = evalExprToVar ctx

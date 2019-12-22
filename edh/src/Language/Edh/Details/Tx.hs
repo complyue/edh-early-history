@@ -54,7 +54,19 @@ asyncEdh !masterTh !f = forkIO $ catch f onExc
 
 
 withEdhTx :: EdhProg () -> EdhProg ()
-withEdhTx !initOps = withEdhTx' initOps return
+withEdhTx !initOps = do
+  txs@(EdhTxState !_ !openOps !execOps) <- ask
+  let ensureOpenTx :: IO (IO ())
+      ensureOpenTx = modifyMVar openOps $ \case
+        Nothing -> do
+          oops' <- newIORef (EdhTxOps [] [])
+          let submitTx = do
+                modifyMVar_ openOps (const $ return Nothing)
+                !oops'' <- readIORef oops'
+                putMVar execOps oops''
+          return (Just oops', submitTx)
+        Just !oops' -> return (Just oops', return ())
+  liftIO $ bracket ensureOpenTx id $ const $ runReaderT (unEdhProg initOps) txs
 
 withEdhTx' :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
 withEdhTx' !initOps !collectResult = do
@@ -137,7 +149,7 @@ runEdhProg !halt !prog = do
     -- check halt 
     isEmptyMVar halt >>= \case
       -- shall halt
-      False -> (tryReadMVar execOps) >>= \case
+      False -> (tryTakeMVar execOps) >>= \case
         Nothing                            -> return ()
         Just (EdhTxOps !txReads !txWrites) -> if null txReads && null txWrites
           then return ()
