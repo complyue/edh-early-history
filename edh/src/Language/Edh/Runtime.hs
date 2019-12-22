@@ -19,7 +19,6 @@ import           Prelude
 
 import           Control.Exception
 import           Control.Monad.Except
-import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import           Data.IORef
@@ -60,12 +59,12 @@ moduleContext w m = Context { contextWorld = w
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
 runEdhProgram' _   []    = return $ Right EdhNil
 runEdhProgram' ctx stmts = do
-  halt  <- newEmptyMVar
-  final <- newEmptyMVar
-  let finalize (_scope, v) = do
-        cleanupEdhProg halt
-        liftIO $ putMVar final v
-  tryJust Just (runEdhProg halt (evalStmts stmts finalize) >> readMVar final)
+  final <- newEmptyTMVarIO
+  let finalize (_scope, val) = do
+        liftIO $ atomically $ putTMVar final val
+  tryJust Just
+    $  runEdhProg (evalStmts stmts finalize)
+    >> (atomically $ readTMVar final)
 
  where
 

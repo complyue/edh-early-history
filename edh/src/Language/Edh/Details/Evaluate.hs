@@ -48,7 +48,7 @@ evalBlock :: Context -> [StmtSrc] -> EdhProcExit -> EdhProg ()
 evalBlock !ctx []    !exit = exit (contextScope ctx, nil)
 evalBlock !ctx [!ss] !exit = evalStmt ctx ss $ \case
   (!scope', EdhCaseClose !val) -> exit (scope', val)
-  result                       -> exit result
+  !result                      -> exit result
 evalBlock !ctx !(ss : rest) exit = do
   evalStmt ctx ss $ \case
     (!scope', EdhCaseClose !val) -> exit (scope', val)
@@ -226,7 +226,7 @@ evalExpr ctx expr exit = case expr of
         Nothing ->
           throwEdh $ EvalError $ "Not in scope: " <> T.pack (show addr')
         Just scope'@(Scope !ent !_obj) ->
-          edhReadAttr ent key (exit . (scope', ))
+          readEdhAttr ent key (exit . (scope', ))
     IndirectRef !tgtExpr !addr' -> resolveAddr scope addr' $ \key ->
       eval' tgtExpr $ \case
         (_, EdhObject !obj) ->
@@ -239,7 +239,7 @@ evalExpr ctx expr exit = case expr of
                 <> " from "
                 <> T.pack (show obj)
             Just scope''@(Scope !ent !_obj) ->
-              edhReadAttr ent key (exit . (scope'', ))
+              readEdhAttr ent key (exit . (scope'', ))
         (_, v) -> throwEdh $ EvalError $ "Not an object: " <> T.pack (show v)
 
 
@@ -271,7 +271,7 @@ evalExpr ctx expr exit = case expr of
           <> T.pack (show opSym)
           <> ") not in scope"
       Just scope'@(Scope !ent !_obj) ->
-        edhReadAttr ent (AttrByName opSym) $ \case
+        readEdhAttr ent (AttrByName opSym) $ \case
           EdhHostProc (HostProcedure !_name !proc) -> proc
             ctx
             (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
@@ -466,7 +466,7 @@ resolveAddr _ (NamedAttr attrName) exit = exit (AttrByName attrName)
 resolveAddr scope (SymbolicAttr symName) exit =
   resolveEdhCtxAttr scope (AttrByName symName) >>= \case
     Just scope' ->
-      edhReadAttr (scopeEntity scope') (AttrByName symName) $ \case
+      readEdhAttr (scopeEntity scope') (AttrByName symName) $ \case
         (EdhSymbol symVal) -> exit (AttrBySym symVal)
         v ->
           throwEdh

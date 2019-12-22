@@ -172,17 +172,37 @@ installEdhBatteries world = liftIO $ do
 
 
 assignProc :: EdhProcedure
-assignProc callerCtx (PackSender [SendPosArg lhExpr, SendPosArg rhExpr]) _ exit
+assignProc !callerCtx (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit
   = case lhExpr of
     AttrExpr !addr -> case addr of
-      DirectRef !addr' -> resolveAddr callerScope addr' $ \key ->
+      DirectRef !addr' -> resolveAddr callerScope addr' $ \key -> do
+        var <- liftIO newEmptyTMVarIO
         withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
-          edhWriteAttr ent key $ \wtr -> wtr val
-          exit result
+          trace
+              (  " ** plan assign "
+              <> show key
+              <> " = "
+              <> show val
+              <> " to "
+              <> show this
+              )
+            $ return ()
+          writeEdhAttr ent key $ \wtr ->
+            trace
+                (  " *** try assign "
+                <> show key
+                <> " = "
+                <> show val
+                <> " to "
+                <> show this
+                )
+              $ wtr val
+          liftIO $ atomically $ putTMVar var result
+        asyncEdh ((liftIO $ atomically $ readTMVar var) >>= exit)
       IndirectRef !expr !addr' -> case expr of
         AttrExpr (ThisRef) -> resolveAddr callerScope addr' $ \key ->
           withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
-            edhWriteAttr thisEnt key $ \wtr -> wtr val
+            writeEdhAttr thisEnt key $ \wtr -> wtr val
             exit result
         AttrExpr (SupersRef) ->
           throwEdh $ EvalError "Can not assign an attribute to supers"
@@ -190,7 +210,7 @@ assignProc callerCtx (PackSender [SendPosArg lhExpr, SendPosArg rhExpr]) _ exit
           withEdhTx $ eval' expr $ \(_, !tgt) -> case tgt of
             EdhObject (Object !tgtEnt _ _) ->
               eval' rhExpr $ \result@(_, !val) -> do
-                edhWriteAttr tgtEnt key $ \wtr -> wtr val
+                writeEdhAttr tgtEnt key $ \wtr -> wtr val
                 exit result
             tgtVal ->
               throwEdh $ EvalError $ "Invalid assignment target: " <> T.pack
@@ -203,10 +223,10 @@ assignProc callerCtx (PackSender [SendPosArg lhExpr, SendPosArg rhExpr]) _ exit
         $  "Invalid left hand value for assignment: "
         <> T.pack (show x)
  where
-  thisEnt                      = objEntity this
-  callerScope@(Scope ent this) = contextScope callerCtx
-  eval'                        = evalExpr callerCtx
-assignProc _ argsSender _ _ =
+  !thisEnt                        = objEntity this
+  !callerScope@(Scope !ent !this) = contextScope callerCtx
+  eval'                           = evalExpr callerCtx
+assignProc _ !argsSender _ _ =
   throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
     (show argsSender)
 

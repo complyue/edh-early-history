@@ -3,20 +3,17 @@
 
 module Language.Edh.Details.Tx
   ( runEdhProg
-  , cleanupEdhProg
-  , edhReadAttr
-  , edhWriteAttr
+  , readEdhAttr
+  , writeEdhAttr
   , throwEdh
   , withEdhTx
   , withEdhTx'
-
-  -- TODO expose this to other modules ?
-  -- , asyncEdh
+  , asyncEdh
   )
 where
 
 import           Prelude
--- import           Debug.Trace
+import           Debug.Trace
 
 import           Control.Exception
 
@@ -39,10 +36,18 @@ import           Language.Edh.Details.RtTypes
 throwEdh :: Exception e => e -> EdhProg a
 throwEdh !e = liftIO $ throwIO e
 
+-- | Run an Edh sub-program in a separate thread, with all kinds of
+-- exceptions re-thrown to master thread, unless it is itself getting
+-- killed.
+asyncEdh :: EdhProg () -> EdhProg ()
+asyncEdh f = do
+  txs@(EdhTxState !masterTh _ _) <- ask
+  void $ liftIO $ asyncEdh' masterTh $ runReaderT (unEdhProg f) txs
+
 -- | Run an action in a separate thread, with all kinds of exceptions
 -- re-thrown to master thread, unless it is itself getting killed.
-asyncEdh :: ThreadId -> IO () -> IO ThreadId
-asyncEdh !masterTh !f = forkIO $ catch f onExc
+asyncEdh' :: ThreadId -> IO () -> IO ThreadId
+asyncEdh' !masterTh !f = forkIO $ catch f onExc
  where
   onExc :: SomeException -> IO ()
   onExc e = case asyncExceptionFromException e of
@@ -83,11 +88,11 @@ withEdhTx' !initOps !collectResult = do
         Just !oops' -> return (Just oops', return ())
   liftIO $ do
     v <- bracket ensureOpenTx id $ const $ runReaderT (unEdhProg initOps) txs
-    void $ asyncEdh masterTh $ runReaderT (unEdhProg $ collectResult v) txs
+    void $ asyncEdh' masterTh $ runReaderT (unEdhProg $ collectResult v) txs
 
 
-edhReadAttr :: Entity -> AttrKey -> (EdhValue -> EdhProg ()) -> EdhProg ()
-edhReadAttr !ent !key !exit = do
+readEdhAttr :: Entity -> AttrKey -> (EdhValue -> EdhProg ()) -> EdhProg ()
+readEdhAttr !ent !key !exit = do
   txs@(EdhTxState _ !openOps !_execOps) <- ask
   liftIO $ readMVar openOps >>= \case
     -- not in tx, fast read through
@@ -101,9 +106,9 @@ edhReadAttr !ent !key !exit = do
       atomicModifyIORef' oops $ \(EdhTxOps rOps wOps) ->
         (EdhTxOps ((ent, key, exit, var, tid) : rOps) wOps, ())
 
-edhWriteAttr
+writeEdhAttr
   :: Entity -> AttrKey -> ((EdhValue -> EdhProg ()) -> EdhProg ()) -> EdhProg ()
-edhWriteAttr !ent !key !exit = do
+writeEdhAttr !ent !key !exit = do
   txs@(EdhTxState _ !openOps !_execOps) <- ask
   liftIO $ readMVar openOps >>= \case
     -- not in tx, fast write through
@@ -120,15 +125,8 @@ edhWriteAttr !ent !key !exit = do
         (EdhTxOps rOps ((ent, key, exit, var, tid) : wOps), ())
 
 
-cleanupEdhProg :: MVar () -> EdhProg ()
-cleanupEdhProg !halt = ask >>= \(EdhTxState _ _ !execOps) -> liftIO $ do
-  -- make sure halt is signaled
-  void $ tryPutMVar halt ()
-  -- notify the driver from blocking wait to check halt
-  void $ tryPutMVar execOps (EdhTxOps [] [])
-
-runEdhProg :: MVar () -> EdhProg () -> IO ()
-runEdhProg !halt !prog = do
+runEdhProg :: EdhProg () -> IO ()
+runEdhProg !prog = do
   -- prepare transactional state
   !masterTh <- myThreadId
   !openOps  <- newMVar Nothing
@@ -136,49 +134,43 @@ runEdhProg !halt !prog = do
   let !txs = EdhTxState masterTh openOps execOps
   -- launch the program
   runReaderT (unEdhProg prog) txs
-  -- drive transaction executions from the master thread
-  driveEdhProg txs
+  -- check synchronous result
+  liftIO $ isEmptyMVar execOps >>= \case
+    True  -> return () -- program finished synchronously without tx submitted 
+    False -> do -- there're transactions submitted, drive the executions
+-- drive transaction executions from the master thread.
+-- exceptions occurred in all threads started by this program will be re-thrown
+-- asynchronously to this thread, causing the whole program to abort.
+      driveEdhProg txs
  where
   driveEdhProg :: EdhTxState -> IO ()
-  driveEdhProg txs@(EdhTxState !_ !_ !execOps) = do
-    -- blocking wait next tx to come
-    !txOps <- takeMVar execOps
-    -- drive this tx
-    crunchTx txs txOps
-    yield
-    -- check halt 
-    isEmptyMVar halt >>= \case
-      -- shall halt
-      False -> (tryTakeMVar execOps) >>= \case
-        Nothing                            -> return ()
-        Just (EdhTxOps !txReads !txWrites) -> if null txReads && null txWrites
-          then return ()
-          else
-            throwIO
-            $  EvalError
-            $  "Edh program halted with "
-            <> T.pack (show $ length txReads)
-            <> "/"
-            <> T.pack (show $ length txWrites)
-            <> " r/w ops pending"
-      -- loop another iteration
-      True -> driveEdhProg txs
+  driveEdhProg txs@(EdhTxState _ _ !execOps) = do
+    -- check next tx
+    tryTakeMVar execOps >>= \case
+      Nothing     -> return () -- no more tx to execute
+      Just !txOps -> do
+        -- drive this tx
+        crunchTx txs txOps
+        -- take a breath
+        yield
+        -- start another iteration
+        driveEdhProg txs
    where
     crunchTx :: EdhTxState -> EdhTxOps -> IO ()
-    crunchTx (EdhTxState !masterTh !_ !_) txOps@(EdhTxOps !txReads !txWrites) =
+    crunchTx (EdhTxState !masterTh _ _) txOps@(EdhTxOps !txReads !txWrites) =
       do
-        -- drive ops from the program
+        -- asynchronously launch all tx ops submitted by the program
         forM_ txReads $ \(!_ent, !_key, !exit, !var, !tid) ->
           atomicWriteIORef tid
             .   Just
-            =<< (asyncEdh masterTh $ do
+            =<< (asyncEdh' masterTh $ do
                   !val <- atomically $ readTMVar var
                   runReaderT (unEdhProg $ exit val) txs
                 )
         forM_ txWrites $ \(!_ent, !_key, !exit, !var, !tid) ->
           atomicWriteIORef tid
             .   Just
-            =<< (asyncEdh masterTh $ runReaderT
+            =<< (asyncEdh' masterTh $ runReaderT
                   (unEdhProg $ exit (liftIO . atomically . putTMVar var))
                   txs
                 )
@@ -206,6 +198,7 @@ runEdhProg !halt !prog = do
         return (return ())
       resetAll :: IO ()
       resetAll = do
+        trace (" -*- retrying tx") $ return ()
         forM_ txReads $ \(_ent, _key, _exit, var, tid) -> do
           atomicModifyIORef' tid (Nothing, ) >>= \case
             Nothing    -> return ()
