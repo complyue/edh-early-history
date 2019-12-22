@@ -41,7 +41,7 @@ instance Show Dict where
   show (Dict d) = if Map.null dm
     then "{,}" -- make it obvious this is an empty dict
     else -- advocate trailing comma here
-      "{"
+      "{ "
       ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList dm ]
       ++ "}"
     where dm = unsafePerformIO $ readTVarIO d
@@ -99,7 +99,7 @@ newtype List = List (TVar [EdhValue])
 instance Show List where
   show (List l) = if null ll
     then "[]"
-    else "[" ++ concat [ show i ++ ", " | i <- ll ] ++ "]"
+    else "[ " ++ concat [ show i ++ ", " | i <- ll ] ++ "]"
     where ll = unsafePerformIO $ readTVarIO l
 
 
@@ -444,11 +444,11 @@ instance Show EdhValue where
   show (EdhTuple   v) = if null v
     then "(,)" -- mimic the denotation of empty tuple in Python
     else -- advocate trailing comma here
-         "(" ++ concat [ show i ++ ", " | i <- v ] ++ ")"
+         "( " ++ concat [ show i ++ ", " | i <- v ] ++ ")"
 
   show (EdhBlock v) = if null v
     then "{;}" -- make it obvious this is an empty block
-    else "{" ++ concat [ show i ++ "; " | i <- v ] ++ "}"
+    else "{ " ++ concat [ show i ++ "; " | i <- v ] ++ "}"
 
   show (EdhThunk    v)  = show v
 

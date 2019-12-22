@@ -128,6 +128,7 @@ evalExpr ctx expr exit = case expr of
       -- we are so strongly typed
       throwEdh $ EvalError $ "Not a boolean value: " <> T.pack (show v) <> " ❌"
 
+  -- TODO this eval from right to left ? correct it if so
   DictExpr ps ->
     let
       gatherDict
@@ -164,6 +165,7 @@ evalExpr ctx expr exit = case expr of
           ps
         >>= ($ Map.empty)
 
+  -- TODO this eval from right to left ? correct it if so
   ListExpr xs ->
     let gatherValues
           :: ([EdhValue] -> EdhProg ())
@@ -179,6 +181,7 @@ evalExpr ctx expr exit = case expr of
             xs
           >>= ($ [])
 
+  -- TODO this eval from right to left ? correct it if so
   TupleExpr xs ->
     let gatherValues
           :: ([EdhValue] -> EdhProg ())
@@ -249,7 +252,24 @@ evalExpr ctx expr exit = case expr of
         <> T.pack (show procExpr)
 
 
-  -- InfixExpr op lhExpr rhExpr -> 
+  InfixExpr opSym lhExpr rhExpr ->
+    resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
+      Nothing ->
+        throwEdh
+          $  EvalError
+          $  "Operator ("
+          <> T.pack (show opSym)
+          <> ") not in scope"
+      Just scope'@(Scope !ent !_obj) ->
+        edhReadAttr ent (AttrByName opSym) $ \case
+          EdhHostProc (HostProcedure !_name !proc) -> proc
+            ctx
+            (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
+            scope'
+            exit
+          -- TODO handle operator procedures etc.
+          val -> throwEdh $ EvalError $ "Not callable: " <> T.pack (show val)
+
 
   _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
  where

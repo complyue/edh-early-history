@@ -181,16 +181,15 @@ concatProc callerCtx argsSender procScope exit = undefined
 typeProc :: EdhProcedure
 typeProc callerCtx argsSender procScope exit =
   packEdhArgs callerCtx argsSender $ \(ArgsPack !args !kwargs) ->
-    let argsType = map edhTypeOf args
-        kwargsType =
-            Map.fromList $ flip map (Map.toAscList kwargs) $ \(attrName, val) ->
+
+    let !argsType = map edhTypeOf args
+        kwargsType = -- note: leave this lazy, not always needed
+            Map.fromList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
               (ItemByStr attrName, edhTypeOf val)
     in  if null kwargs
           then case argsType of
             [t] -> exit (procScope, t)
-            _   -> do
-              l <- liftIO $ newTVarIO argsType
-              exit (procScope, EdhList (List l))
+            _   -> exit (procScope, EdhTuple argsType)
           else do
             d <- liftIO $ newTVarIO $ Map.union kwargsType $ Map.fromAscList
               [ (ItemByNum (fromIntegral i), t)
@@ -203,9 +202,8 @@ dictProc :: EdhProcedure
 dictProc callerCtx argsSender procScope exit =
   packEdhArgs callerCtx argsSender $ \(ArgsPack !args !kwargs) ->
     let kwDict =
-            Map.fromAscList
-              $ flip map (Map.toAscList kwargs)
-              $ \(attrName, val) -> (ItemByStr attrName, val)
+            Map.fromAscList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
+              (ItemByStr attrName, val)
     in  do
           d <- liftIO $ newTVarIO $ Map.union kwDict $ Map.fromAscList
             [ (ItemByNum (fromIntegral i), t)

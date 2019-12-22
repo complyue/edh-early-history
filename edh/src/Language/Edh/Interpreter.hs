@@ -58,7 +58,7 @@ evalEdhSource
   -> Text
   -> m (Either InterpretError EdhValue)
 evalEdhSource world modu code = liftIO $ do
-    -- serialize parsing against 'worldOperators'
+  -- serialize parsing against 'worldOperators'
   pr <- atomicModifyIORef' (worldOperators world) $ \opPD ->
     let (pr, opPD') =
             runState (runParserT parseProgram (moduleId modu) code) opPD
