@@ -176,9 +176,16 @@ assignProc !callerCtx (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !e
   = case lhExpr of
     AttrExpr !addr -> case addr of
       DirectRef !addr' -> resolveAddr callerScope addr' $ \key -> do
-        withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
-          writeEdhAttr ent key $ \wtr -> wtr val
-          exit result
+        withEdhTx $ do
+          -- XXX this is not correct:
+          -- need a TMVar for both the read and write op to be submitted into
+          -- the same tx
+          var <- liftIO newEmptyTMVarIO
+          eval' rhExpr $ \result -> do
+            liftIO $ atomically $ putTMVar var result
+            exit result
+          writeEdhAttr ent key
+            $ \wtr -> (liftIO $ atomically $ readTMVar var) >>= wtr . snd
       IndirectRef !expr !addr' -> case expr of
         AttrExpr (ThisRef) -> resolveAddr callerScope addr' $ \key ->
           withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
