@@ -7,7 +7,6 @@ module Language.Edh.Details.Tx
   , writeEdhAttr
   , throwEdh
   , withEdhTx
-  , withEdhTx'
   , asyncEdh
   )
 where
@@ -57,7 +56,7 @@ asyncEdh' !masterTh !f = forkIO $ catch f onExc
 
 
 withEdhTx :: EdhProg () -> EdhProg ()
-withEdhTx !initOps = do
+withEdhTx !subProg = do
   txs@(EdhTxState !_ !openOps !execOps) <- ask
   let ensureOpenTx :: IO (IO ())
       ensureOpenTx = modifyMVar openOps $ \case
@@ -69,24 +68,7 @@ withEdhTx !initOps = do
                 putMVar execOps oops''
           return (Just oops', submitTx)
         Just !oops' -> return (Just oops', return ())
-  liftIO $ bracket ensureOpenTx id $ const $ runReaderT (unEdhProg initOps) txs
-
-withEdhTx' :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
-withEdhTx' !initOps !collectResult = do
-  txs@(EdhTxState !masterTh !openOps !execOps) <- ask
-  let ensureOpenTx :: IO (IO ())
-      ensureOpenTx = modifyMVar openOps $ \case
-        Nothing -> do
-          oops' <- newIORef (EdhTxOps [] [])
-          let submitTx = do
-                modifyMVar_ openOps (const $ return Nothing)
-                !oops'' <- readIORef oops'
-                putMVar execOps oops''
-          return (Just oops', submitTx)
-        Just !oops' -> return (Just oops', return ())
-  liftIO $ do
-    v <- bracket ensureOpenTx id $ const $ runReaderT (unEdhProg initOps) txs
-    void $ asyncEdh' masterTh $ runReaderT (unEdhProg $ collectResult v) txs
+  liftIO $ bracket ensureOpenTx id $ const $ runReaderT (unEdhProg subProg) txs
 
 
 readEdhAttr :: Entity -> AttrKey -> (EdhValue -> EdhProg ()) -> EdhProg ()
@@ -147,10 +129,12 @@ runEdhProg !prog = do
     tryTakeMVar execOps >>= \case
       Nothing     -> return () -- no more tx to execute
       Just !txOps -> do
+        trace " ** got tx **" $ return ()
         -- drive this tx
         crunchTx 0 txs txOps
         -- take a breath
         yield
+        trace " ** done tx **" $ return ()
         -- start another iteration
         driveEdhProg txs
    where
