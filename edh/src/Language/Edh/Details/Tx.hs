@@ -150,15 +150,15 @@ runEdhProg !prog = do
       Nothing     -> return () -- no more tx to execute
       Just !txOps -> do
         -- drive this tx
-        crunchTx txs txOps
+        crunchTx 0 txs txOps
         -- take a breath
         yield
         -- start another iteration
         driveEdhProg txs
    where
-    crunchTx :: EdhTxState -> EdhTxOps -> IO ()
-    crunchTx (EdhTxState !masterTh _ _) txOps@(EdhTxOps !txReads !txWrites) =
-      do
+    crunchTx :: Int -> EdhTxState -> EdhTxOps -> IO ()
+    crunchTx retryCntr (EdhTxState !masterTh _ _) txOps@(EdhTxOps !txReads !txWrites)
+      = do
         -- asynchronously launch all tx ops submitted by the program
         forM_ txReads $ \(!_ent, !_key, !exit, !var, !tid) ->
           atomicWriteIORef tid
@@ -176,7 +176,7 @@ runEdhProg !prog = do
                 )
         -- auto cycling on STM retry
         join $ atomically $ stmTx `orElse` return
-          (resetAll >> crunchTx txs txOps)
+          (resetAll >> crunchTx (retryCntr + 1) txs txOps)
      where
       stmTx :: STM (IO ())
       stmTx = do
@@ -198,7 +198,10 @@ runEdhProg !prog = do
         return (return ())
       resetAll :: IO ()
       resetAll = do
-        trace (" -*- retrying tx") $ return ()
+        when (retryCntr >= 3)
+          $ trace (" -*- stm retrying #" <> show retryCntr)
+          $ return ()
+        -- kill all launched threads, clear all vars
         forM_ txReads $ \(_ent, _key, _exit, var, tid) -> do
           atomicModifyIORef' tid (Nothing, ) >>= \case
             Nothing    -> return ()

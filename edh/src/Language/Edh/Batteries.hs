@@ -176,29 +176,17 @@ assignProc !callerCtx (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !e
   = case lhExpr of
     AttrExpr !addr -> case addr of
       DirectRef !addr' -> resolveAddr callerScope addr' $ \key -> do
-        var <- liftIO newEmptyTMVarIO
+        -- var <- liftIO newEmptyTMVarIO
         withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
-          trace
-              (  " ** plan assign "
-              <> show key
-              <> " = "
-              <> show val
-              <> " to "
-              <> show this
-              )
-            $ return ()
-          writeEdhAttr ent key $ \wtr ->
-            trace
-                (  " *** try assign "
-                <> show key
-                <> " = "
-                <> show val
-                <> " to "
-                <> show this
-                )
-              $ wtr val
-          liftIO $ atomically $ putTMVar var result
-        asyncEdh ((liftIO $ atomically $ readTMVar var) >>= exit)
+          -- trace (" ** plan assign " <> show key <> " = " <> show val)
+          --   $ return ()
+          writeEdhAttr ent key $ \wtr -> do
+            -- trace (" *** try assign " <> show key <> " = " <> show val)
+            --   $ return ()
+            wtr val
+          -- liftIO $ atomically $ putTMVar var result
+          exit result
+        -- asyncEdh ((liftIO $ atomically $ readTMVar var) >>= exit)
       IndirectRef !expr !addr' -> case expr of
         AttrExpr (ThisRef) -> resolveAddr callerScope addr' $ \key ->
           withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
