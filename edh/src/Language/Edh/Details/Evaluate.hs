@@ -112,7 +112,7 @@ evalExpr ctx expr exit = case expr of
     --      thunk target value. but how ?
     Guard  -> eval' expr' exit
 
-    AtoIso -> withEdhTx (eval2 expr')
+    AtoIso -> withEdhTx' (eval2 expr')
       $ \var -> (liftIO $ atomically $ readTMVar var) >>= exit
 
     -- TODO impl these

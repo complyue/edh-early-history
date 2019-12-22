@@ -172,7 +172,45 @@ installEdhBatteries world = liftIO $ do
 
 
 assignProc :: EdhProcedure
-assignProc callerCtx argsSender procScope exit = undefined
+assignProc callerCtx (PackSender [SendPosArg lhExpr, SendPosArg rhExpr]) _ exit
+  = case lhExpr of
+    AttrExpr !addr -> case addr of
+      DirectRef !addr' -> resolveAddr callerScope addr' $ \key ->
+        withEdhTx $ eval' rhExpr $ \result@(_, !val) ->
+          edhWriteAttr ent key $ \wtr -> do
+            wtr val
+            exit result
+      IndirectRef !expr !addr' -> case expr of
+        AttrExpr (ThisRef) -> resolveAddr callerScope addr' $ \key ->
+          withEdhTx $ eval' rhExpr $ \result@(_, !val) ->
+            edhWriteAttr thisEnt key $ \wtr -> do
+              wtr val
+              exit result
+        AttrExpr (SupersRef) ->
+          throwEdh $ EvalError "Can not assign an attribute to supers"
+        _ -> resolveAddr callerScope addr' $ \key ->
+          withEdhTx $ eval' expr $ \(_, !tgt) -> case tgt of
+            EdhObject (Object !tgtEnt _ _) ->
+              eval' rhExpr $ \result@(_, !val) ->
+                edhWriteAttr tgtEnt key $ \wtr -> do
+                  wtr val
+                  exit result
+            tgtVal ->
+              throwEdh $ EvalError $ "Invalid assignment target: " <> T.pack
+                (show tgtVal)
+      ThisRef   -> throwEdh $ EvalError "Can not assign to this"
+      SupersRef -> throwEdh $ EvalError "Can not assign to supers"
+    x ->
+      throwEdh $ EvalError $ "Invalid left hand expr for assignment: " <> T.pack
+        (show x)
+ where
+  thisEnt                      = objEntity this
+  callerScope@(Scope ent this) = contextScope callerCtx
+  eval'                        = evalExpr callerCtx
+assignProc _ argsSender _ _ =
+  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
+    (show argsSender)
+
 
 concatProc :: EdhProcedure
 concatProc callerCtx argsSender procScope exit = undefined

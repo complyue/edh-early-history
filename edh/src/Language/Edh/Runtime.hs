@@ -147,9 +147,9 @@ declareEdhOperators world declLoc opps = liftIO
 
 
 putEdhAttrs :: Entity -> [(AttrKey, EdhValue)] -> STM ()
-putEdhAttrs e as = modifyTVar' e $ \e0 -> Map.union ad e0
+putEdhAttrs e as = modifyTVar' e $ \em -> Map.union ad em
   where ad = Map.fromList as
 
 putEdhAttr :: Entity -> AttrKey -> EdhValue -> STM ()
-putEdhAttr e k v = modifyTVar' e $ \e0 -> Map.insert k v e0
+putEdhAttr e k v = modifyTVar' e $ \em -> Map.insert k v em
 

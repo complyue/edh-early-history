@@ -8,7 +8,9 @@ module Language.Edh.Details.Tx
   , edhWriteAttr
   , throwEdh
   , withEdhTx
+  , withEdhTx'
 
+  -- TODO expose this to other modules ?
   -- , asyncEdh
   )
 where
@@ -51,8 +53,11 @@ asyncEdh !masterTh !f = forkIO $ catch f onExc
       _            -> throwTo masterTh e
 
 
-withEdhTx :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
-withEdhTx !initOps !collectResult = do
+withEdhTx :: EdhProg () -> EdhProg ()
+withEdhTx !initOps = withEdhTx' initOps return
+
+withEdhTx' :: EdhProg a -> (a -> EdhProg ()) -> EdhProg ()
+withEdhTx' !initOps !collectResult = do
   txs@(EdhTxState !masterTh !openOps !execOps) <- ask
   let ensureOpenTx :: IO (IO ())
       ensureOpenTx = modifyMVar openOps $ \case
