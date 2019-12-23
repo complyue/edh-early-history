@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Language.Edh.Details.RtTypes where
 
@@ -6,7 +5,6 @@ import           Prelude
 
 
 import           Control.Monad.Except
-import           Control.Monad.Fail
 import           Control.Monad.Reader
 
 import           Control.Concurrent

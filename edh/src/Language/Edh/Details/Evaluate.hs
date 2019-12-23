@@ -278,8 +278,8 @@ evalExpr expr exit = do
           <> T.pack (show procExpr)
 
 
-    InfixExpr !opSym !lhExpr !rhExpr -> return $ do
-      resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
+    InfixExpr !opSym !lhExpr !rhExpr ->
+      return $ resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
         Nothing ->
           throwSTM
             $  EvalError
@@ -487,13 +487,13 @@ evalExpr expr exit = do
 
 
 resolveAddr :: Scope -> AttrAddressor -> STM AttrKey
-resolveAddr _ (NamedAttr attrName) = return (AttrByName attrName)
-resolveAddr scope (SymbolicAttr symName) =
-  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
+resolveAddr _ (NamedAttr !attrName) = return (AttrByName attrName)
+resolveAddr !scope (SymbolicAttr !symName) =
+  resolveEdhCtxAttr ! scope (AttrByName ! symName) >>= \case
     Just scope' -> do
       em <- readTVar (scopeEntity scope')
       case Map.lookup (AttrByName symName) em of
-        Just sym@(EdhSymbol symVal) -> return (AttrBySym symVal)
+        Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
         Just v ->
           throwSTM
             $  EvalError
@@ -513,32 +513,33 @@ resolveAddr scope (SymbolicAttr symName) =
 
 
 resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhCtxAttr scope addr = readTVar ent >>= \em -> if Map.member addr em
+resolveEdhCtxAttr !scope !addr = readTVar ent >>= \em -> if Map.member addr em
   then return (Just scope)
-  else resolveLexicalAttr (classScope $ objClass obj) addr
+  else resolveLexicalAttr (classScope $ objClass this) addr
  where
-  ent = scopeEntity scope
-  obj = thisObject scope
+  !ent  = scopeEntity scope
+  !this = thisObject scope
 
 resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (scope@(Scope ent _obj) : outerEntities) addr =
+resolveLexicalAttr (scope@(Scope !ent _) : outerEntities) addr =
   readTVar ent >>= \em -> if Map.member addr em
     then return (Just scope)
     else resolveLexicalAttr outerEntities addr
 
 
 resolveEdhObjAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhObjAttr scope addr = readTVar objEnt >>= \em -> if Map.member addr em
-  then return (Just scope)
-  else resolveEdhSuperAttr (objSupers obj) addr
+resolveEdhObjAttr !scope !addr = readTVar objEnt >>= \em ->
+  if Map.member addr em
+    then return (Just scope)
+    else resolveEdhSuperAttr (objSupers this) addr
  where
-  obj    = thisObject scope
-  objEnt = objEntity obj
+  this   = thisObject scope
+  objEnt = objEntity this
 
 resolveEdhSuperAttr :: [Object] -> AttrKey -> STM (Maybe Scope)
-resolveEdhSuperAttr []                   _    = return Nothing
-resolveEdhSuperAttr (super : restSupers) addr = readTVar objEnt >>= \em ->
+resolveEdhSuperAttr []                   _     = return Nothing
+resolveEdhSuperAttr (super : restSupers) !addr = readTVar objEnt >>= \em ->
   if Map.member addr em
     then return (Just (Scope objEnt super))
     else resolveEdhSuperAttr restSupers addr
