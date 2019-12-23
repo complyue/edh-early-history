@@ -2,31 +2,16 @@
 module Language.Edh.Batteries where
 
 import           Prelude
-import           Debug.Trace
 
 import           Control.Monad.Reader
 import           Control.Concurrent.STM
-import           Control.Monad.IO.Class
-
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
-import qualified Data.Map.Strict               as Map
-
-import           Data.IORef
-import           Foreign.C.String
-import           Foreign.Marshal.Alloc
-import           System.Mem.Weak
-import           System.IO.Unsafe
 
 import           Data.Lossless.Decimal         as D
 
-import           Language.Edh.Control
-import           Language.Edh.AST
 import           Language.Edh.Runtime
-import           Language.Edh.Event
 
-import Language.Edh.Batteries.Assign 
-import Language.Edh.Batteries.Utils 
+import           Language.Edh.Batteries.Assign
+import           Language.Edh.Batteries.Utils
 
 
 installEdhBatteries :: MonadIO m => EdhWorld -> m ()
@@ -136,7 +121,7 @@ installEdhBatteries world = liftIO $ do
       , 1
       )
 
-  -- string/list concatenation
+  -- string coercing concatenation
     , ("++", 5)
     ]
 
@@ -175,6 +160,4 @@ installEdhBatteries world = liftIO $ do
       , EdhDecimal $ Decimal 1 (-40) 31415926535897932384626433832795028841971
       )
     ]
-
-  return ()
 

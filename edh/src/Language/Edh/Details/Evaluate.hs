@@ -8,13 +8,8 @@ import           Prelude
 import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Reader
-import           Control.Concurrent.MVar
 import           Control.Concurrent.STM
 
-import           Data.IORef
-import           Foreign.C.String
-import           System.IO.Unsafe
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
@@ -24,7 +19,6 @@ import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Tx
-import           Language.Edh.Details.Utils
 
 
 evalStmt :: StmtSrc -> EdhProcExit -> EdhProg (STM ())
