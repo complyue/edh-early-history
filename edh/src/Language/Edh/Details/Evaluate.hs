@@ -125,7 +125,7 @@ evalExpr expr exit = do
       --      thunk target value. but how ?
       Guard  -> eval' expr' exit
 
-      AtoIso -> local (pgs { edh'in'tx = True }) $ evalExpr expr' exit
+      AtoIso -> local (\s -> s { edh'in'tx = True }) $ evalExpr expr' exit
 
       -- TODO impl these
       Go     -> throwEdh $ EvalError "goroutine starter not impl. yet"
@@ -145,69 +145,69 @@ evalExpr expr exit = do
           <> " ❌"
 
     -- TODO this eval from right to left ? correct it if so
-    DictExpr ps ->
-      let
-        gatherDict
-          :: (DictStore -> EdhProg ())
-          -> (Expr, Expr)
-          -> EdhProg (DictStore -> EdhProg ())
-        gatherDict exit' (!kExpr, !vExpr) = return $ \ds ->
-          eval' vExpr $ \(!_scope'v, !vVal) ->
-            eval' kExpr $ \(!_scope'k, !kVal) -> do
-              key <- case kVal of
-                EdhString  k -> return $ ItemByStr k
-                EdhSymbol  k -> return $ ItemBySym k
-                EdhDecimal k -> return $ ItemByNum k
-                EdhBool    k -> return $ ItemByBool k
-                k ->
-                  throwEdh
-                    $  EvalError
-                    $  "Invalid key: "
-                    <> T.pack (show k)
-                    <> " ❌"
-              exit' $ Map.alter
-                (\case -- give later entries higher priority
-                  Nothing  -> Just vVal
-                  Just val -> Just val
-                )
-                key
-                ds
-      in
-        foldM
-            gatherDict
-            (\ds ->
-              (liftIO $ EdhDict . Dict <$> newTVarIO ds) >>= (exit . (scope, ))
-            )
-            ps
-          >>= ($ Map.empty)
+    -- DictExpr ps ->
+      -- let
+      --   gatherDict
+      --     :: (DictStore -> EdhProg ())
+      --     -> (Expr, Expr)
+      --     -> EdhProg (DictStore -> EdhProg ())
+      --   gatherDict exit' (!kExpr, !vExpr) = return $ \ds ->
+      --     eval' vExpr $ \(!_scope'v, !vVal) ->
+      --       eval' kExpr $ \(!_scope'k, !kVal) -> do
+      --         key <- case kVal of
+      --           EdhString  k -> return $ ItemByStr k
+      --           EdhSymbol  k -> return $ ItemBySym k
+      --           EdhDecimal k -> return $ ItemByNum k
+      --           EdhBool    k -> return $ ItemByBool k
+      --           k ->
+      --             throwEdh
+      --               $  EvalError
+      --               $  "Invalid key: "
+      --               <> T.pack (show k)
+      --               <> " ❌"
+      --         exit' $ Map.alter
+      --           (\case -- give later entries higher priority
+      --             Nothing  -> Just vVal
+      --             Just val -> Just val
+      --           )
+      --           key
+      --           ds
+      -- in
+      --   foldM
+      --       gatherDict
+      --       (\ds ->
+      --         (liftIO $ EdhDict . Dict <$> newTVarIO ds) >>= (exit . (scope, ))
+      --       )
+      --       ps
+      --     >>= ($ Map.empty)
 
     -- TODO this eval from right to left ? correct it if so
-    ListExpr xs ->
-      let gatherValues
-            :: ([EdhValue] -> EdhProg ())
-            -> Expr
-            -> EdhProg ([EdhValue] -> EdhProg ())
-          gatherValues exit' expr' =
-              return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
-      in  foldM
-              gatherValues
-              (\vs ->
-                (liftIO $ EdhList . List <$> newTVarIO vs)
-                  >>= (exit . (scope, ))
-              )
-              xs
-            >>= ($ [])
+    -- ListExpr xs ->
+    --   let gatherValues
+    --         :: ([EdhValue] -> EdhProg ())
+    --         -> Expr
+    --         -> EdhProg ([EdhValue] -> EdhProg ())
+    --       gatherValues exit' expr' =
+    --           return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
+    --   in  foldM
+    --           gatherValues
+    --           (\vs ->
+    --             (liftIO $ EdhList . List <$> newTVarIO vs)
+    --               >>= (exit . (scope, ))
+    --           )
+    --           xs
+    --         >>= ($ [])
 
     -- TODO this eval from right to left ? correct it if so
-    TupleExpr xs ->
-      let gatherValues
-            :: ([EdhValue] -> EdhProg ())
-            -> Expr
-            -> EdhProg ([EdhValue] -> EdhProg ())
-          gatherValues exit' expr' =
-              return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
-      in  foldM gatherValues (\vs -> exitEdhProc exit (scope, EdhTuple vs)) xs
-            >>= ($ [])
+    -- TupleExpr xs ->
+    --   let gatherValues
+    --         :: ([EdhValue] -> EdhProg ())
+    --         -> Expr
+    --         -> EdhProg ([EdhValue] -> EdhProg ())
+    --       gatherValues exit' expr' =
+    --           return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
+    --   in  foldM gatherValues (\vs -> exitEdhProc exit (scope, EdhTuple vs)) xs
+    --         >>= ($ [])
 
     ParenExpr x         -> eval' x exit
 
@@ -230,29 +230,35 @@ evalExpr expr exit = do
       ThisRef -> exitEdhProc exit (scope, EdhObject this)
       SupersRef ->
         exitEdhProc exit (scope, EdhTuple $ EdhObject <$> objSupers this)
-      DirectRef addr' -> resolveAddr scope addr' $ \key ->
+      DirectRef !addr' -> return $ do
+        !key <- resolveAddr scope addr'
         resolveEdhCtxAttr scope key >>= \case
           Nothing ->
-            throwEdh $ EvalError $ "Not in scope: " <> T.pack (show addr')
-          Just scope'@(Scope !ent !_obj) -> return $ do
+            throwSTM $ EvalError $ "Not in scope: " <> T.pack (show addr')
+          Just scope'@(Scope !ent !_obj) -> do
             em <- readTVar ent
             case Map.lookup key em of
-              Nothing  -> throwEdh $ EvalError "addr resolving bug"
-              Just val -> exitEdhProc exit (scope', val)
-      IndirectRef !tgtExpr !addr' -> resolveAddr scope addr' $ \key ->
-        eval' tgtExpr $ \case
-          (_, EdhObject !obj) ->
-            resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
-              Nothing ->
-                throwEdh
-                  $  EvalError
-                  $  "No such attribute "
-                  <> T.pack (show key)
-                  <> " from "
-                  <> T.pack (show obj)
-              Just scope''@(Scope !ent !_obj) -> undefined
-                -- readEdhAttr ent key (exit . (scope'', ))
-          (_, v) -> throwEdh $ EvalError $ "Not an object: " <> T.pack (show v)
+              Nothing -> throwSTM $ EvalError "attr resolving bug"
+              Just val ->
+                join $ runReaderT (exitEdhProc exit (scope', val)) pgs
+      IndirectRef !tgtExpr !addr' -> eval' tgtExpr $ \case
+        (_, EdhObject !obj) -> return $ do
+          !key <- resolveAddr scope addr'
+          resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
+            Nothing ->
+              throwSTM
+                $  EvalError
+                $  "No such attribute "
+                <> T.pack (show key)
+                <> " from "
+                <> T.pack (show obj)
+            Just scope'@(Scope !ent !_obj) -> do
+              em <- readTVar ent
+              case Map.lookup key em of
+                Nothing -> throwSTM $ EvalError "attr resolving bug"
+                Just val ->
+                  join $ runReaderT (exitEdhProc exit (scope', val)) pgs
+        (_, v) -> throwEdh $ EvalError $ "Not an object: " <> T.pack (show v)
 
 
     -- IndexExpr ixExpr tgtExpr ->
@@ -273,23 +279,28 @@ evalExpr expr exit = do
           <> T.pack (show procExpr)
 
 
-    InfixExpr opSym lhExpr rhExpr ->
-      resolveEdhCtxAttr scope (AttrByName opSym) $ \case
+    InfixExpr !opSym !lhExpr !rhExpr -> return $ do
+      resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
         Nothing ->
-          throwEdh
+          throwSTM
             $  EvalError
             $  "Operator ("
             <> T.pack (show opSym)
             <> ") not in scope"
-        Just scope'@(Scope !ent !_obj) -> return $ do
+        Just scope'@(Scope !ent !_obj) -> do
           em <- readTVar ent
           case Map.lookup (AttrByName opSym) em of
-            EdhHostProc (HostProcedure !_name !proc) -> proc
-              (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
-              scope'
-              exit
+            Nothing -> error "attr resolving bug"
+            Just (EdhHostProc (HostProcedure !_name !proc)) ->
+              join $ runReaderT
+                (proc (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
+                      scope'
+                      exit
+                )
+                pgs
             -- TODO handle operator procedures etc.
-            val -> throwEdh $ EvalError $ "Not callable: " <> T.pack (show val)
+            Just val ->
+              throwSTM $ EvalError $ "Not callable: " <> T.pack (show val)
 
 
     _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
@@ -412,81 +423,80 @@ evalExpr expr exit = do
 --         Just argVal -> return (argVal, posArgs', kwArgs'')
 
 
-packEdhArgs
-  :: Context
-  -> (Maybe (TQueue EdhTxOp))
-  -> ArgsSender
-  -> (STM ArgsPack -> EdhProg (STM ()))
-  -> EdhProg (STM ())
-packEdhArgs argsSender exit = case argsSender of
-  PackSender packSender ->
-    foldM fillPack exit packSender >>= ($ ArgsPack [] Map.empty)
-  SingleSender argSender ->
-    fillPack exit argSender >>= ($ ArgsPack [] Map.empty)
- where
-  eval' = evalExpr
+-- packEdhArgs
+--   :: Context
+--   -> (Maybe (TQueue EdhTxOp))
+--   -> ArgsSender
+--   -> (STM ArgsPack -> EdhProg (STM ()))
+--   -> EdhProg (STM ())
+-- packEdhArgs argsSender exit = case argsSender of
+--   PackSender packSender ->
+--     foldM fillPack exit packSender >>= ($ ArgsPack [] Map.empty)
+--   SingleSender argSender ->
+--     fillPack exit argSender >>= ($ ArgsPack [] Map.empty)
+--  where
+--   eval' = evalExpr
 
-  fillPack
-    :: (ArgsPack -> EdhProg (STM ()))
-    -> ArgSender
-    -> STM (ArgsPack -> EdhProg (STM ()))
-  fillPack exit' argSender = return $ \(ArgsPack posArgs kwArgs) ->
-    case argSender of
-      UnpackPosArgs listExpr -> eval' listExpr $ \case
-        (_scope, EdhList (List listVar)) -> do
-          listVal <- readTVar listVar
-          exit' $ ArgsPack (listVal ++ posArgs) kwArgs
-        (_scope, v) ->
-          throwEdh $ EvalError $ "Can not unpack args from: " <> T.pack
-            (show v)
-      UnpackKwArgs dictExpr -> eval' dictExpr $ \case
-        (_scope, EdhDict (Dict dictVar)) -> do
-          dictVal   <- readTVar dictVar
-          kwAscList <- forM (Map.toAscList dictVal)
-            $ \(k, v) -> (, v) <$> dictKey2Kw k
-          -- let kwMap = Map.fromAscList kwAscList
-          -- kwMap   <-
-          --   Map.fromAscList <$> forM (Map.toAscList dictVal) $ \(k, v) ->
-          --     (, v) <$> dictKey2Kw k
-          -- kwArgs appear later, give them higher priority
-          exit'
-            $ ArgsPack posArgs (Map.union kwArgs $ Map.fromAscList kwAscList)
-        (_scope, v) ->
-          throwEdh $ EvalError $ "Can not unpack kwargs from: " <> T.pack
-            (show v)
-      SendPosArg argExpr -> eval' argExpr
-        $ \(_scope, argVal) -> exit' $ ArgsPack (argVal : posArgs) kwArgs
-      SendKwArg kw argExpr -> eval' argExpr $ \(_scope, argVal) ->
-        -- kwArgs appear later, give them higher priority
-        exit' $ ArgsPack posArgs $ Map.alter
-          (\case
-            Nothing  -> Just argVal
-            Just val -> Just val
-          )
-          kw
-          kwArgs
+--   fillPack
+--     :: (ArgsPack -> EdhProg (STM ()))
+--     -> ArgSender
+--     -> STM (ArgsPack -> EdhProg (STM ()))
+--   fillPack exit' argSender = return $ \(ArgsPack posArgs kwArgs) ->
+--     case argSender of
+--       UnpackPosArgs listExpr -> eval' listExpr $ \case
+--         (_scope, EdhList (List listVar)) -> do
+--           listVal <- readTVar listVar
+--           exit' $ ArgsPack (listVal ++ posArgs) kwArgs
+--         (_scope, v) ->
+--           throwEdh $ EvalError $ "Can not unpack args from: " <> T.pack
+--             (show v)
+--       UnpackKwArgs dictExpr -> eval' dictExpr $ \case
+--         (_scope, EdhDict (Dict dictVar)) -> do
+--           dictVal   <- readTVar dictVar
+--           kwAscList <- forM (Map.toAscList dictVal)
+--             $ \(k, v) -> (, v) <$> dictKey2Kw k
+--           -- let kwMap = Map.fromAscList kwAscList
+--           -- kwMap   <-
+--           --   Map.fromAscList <$> forM (Map.toAscList dictVal) $ \(k, v) ->
+--           --     (, v) <$> dictKey2Kw k
+--           -- kwArgs appear later, give them higher priority
+--           exit'
+--             $ ArgsPack posArgs (Map.union kwArgs $ Map.fromAscList kwAscList)
+--         (_scope, v) ->
+--           throwEdh $ EvalError $ "Can not unpack kwargs from: " <> T.pack
+--             (show v)
+--       SendPosArg argExpr -> eval' argExpr
+--         $ \(_scope, argVal) -> exit' $ ArgsPack (argVal : posArgs) kwArgs
+--       SendKwArg kw argExpr -> eval' argExpr $ \(_scope, argVal) ->
+--         -- kwArgs appear later, give them higher priority
+--         exit' $ ArgsPack posArgs $ Map.alter
+--           (\case
+--             Nothing  -> Just argVal
+--             Just val -> Just val
+--           )
+--           kw
+--           kwArgs
 
-  dictKey2Kw :: ItemKey -> STM AttrName
-  dictKey2Kw = \case
-    ItemByStr name -> return name
-    k ->
-      throwEdh
-        $  EvalError
-        $  "Invalid argument keyword from dict key: "
-        <> T.pack (show k)
+--   dictKey2Kw :: ItemKey -> STM AttrName
+--   dictKey2Kw = \case
+--     ItemByStr name -> return name
+--     k ->
+--       throwEdh
+--         $  EvalError
+--         $  "Invalid argument keyword from dict key: "
+--         <> T.pack (show k)
 
 
-resolveAddr
-  :: Scope -> AttrAddressor -> (AttrKey -> EdhProg (STM ())) -> EdhProg (STM ())
-resolveAddr _ (NamedAttr attrName) exit = exit (AttrByName attrName)
-resolveAddr scope (SymbolicAttr symName) exit =
+resolveAddr :: Scope -> AttrAddressor -> STM AttrKey
+resolveAddr _ (NamedAttr attrName) = return (AttrByName attrName)
+resolveAddr scope (SymbolicAttr symName) =
   resolveEdhCtxAttr scope (AttrByName symName) >>= \case
     Just scope' -> do
       em <- readTVar (scopeEntity scope')
       case Map.lookup (AttrByName symName) em of
-        Just (EdhSymbol symVal) -> exitEdhProc exit (AttrBySym symVal)
+        Just sym@(EdhSymbol symVal) -> return (AttrBySym symVal)
         Just v ->
-          throwEdh
+          throwSTM
             $  EvalError
             $  "Not a symbol: "
             <> T.pack (show v)
@@ -496,7 +506,7 @@ resolveAddr scope (SymbolicAttr symName) exit =
             <> T.pack (show $ thisObject scope') -- TODO this correct ?
         Nothing -> error "bug in ctx attr resolving"
     Nothing ->
-      throwEdh
+      throwSTM
         $  EvalError
         $  "No symbol named "
         <> T.pack (show symName)

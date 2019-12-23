@@ -315,8 +315,8 @@ exitEdhProc exit result = do
   pgs <- ask
   let txq   = edh'main'queue pgs
       !inTx = edh'in'tx pgs
-  return if inTx
-    then runReaderT (exit result) pgs >>= id
+  return $ if inTx
+    then join $ runReaderT (exit result) pgs
     else writeTQueue txq (result, exit)
 {-# INLINE exitEdhProc #-}
 

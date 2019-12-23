@@ -20,14 +20,14 @@ throwEdh :: Exception e => e -> EdhProg (STM ())
 throwEdh e = return $ throwSTM e
 
 
-runEdhProg :: Context -> EdhProg () -> IO ()
+runEdhProg :: Context -> EdhProg (STM ()) -> IO ()
 runEdhProg !ctx !prog = do
   -- prepare program state
   !masterTh  <- myThreadId
   !mainQueue <- newTQueueIO
   let !pgs = EdhProgState masterTh mainQueue ctx False
-  -- launch the program
-  atomically $ runReaderT prog pgs
+  -- queue the program for bootstrap
+  atomically $ writeTQueue mainQueue ((contextScope ctx, nil), const prog)
 -- drive transaction executions from the master thread.
 -- exceptions occurred in all threads started by this program will be re-thrown
 -- asynchronously to this thread, causing the whole program to abort.
@@ -35,11 +35,11 @@ runEdhProg !ctx !prog = do
  where
   driveEdhProg :: EdhProgState -> IO ()
   driveEdhProg pgs@(EdhProgState _ !mainQueue _ _) =
-    (atomically $ tryReadTQueue mainQueue) >>= \case
+    atomically (tryReadTQueue mainQueue) >>= \case
       Nothing   -> return () -- program finished 
       Just !txo -> do
         -- run this tx
-        (goSTM 0 txo)
+        goSTM 0 txo
         -- loop another iteration
         driveEdhProg pgs
    where
@@ -49,7 +49,7 @@ runEdhProg !ctx !prog = do
 
       stmDone <-
         atomically
-        $        (Just <$> (runReaderT (op input) pgs >>= id))
+        $        (Just <$> join (runReaderT (op input) pgs))
         `orElse` return Nothing
       case stmDone of
         Nothing -> goSTM (rtc + 1) txo

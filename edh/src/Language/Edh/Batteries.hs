@@ -4,6 +4,7 @@ module Language.Edh.Batteries where
 import           Prelude
 import           Debug.Trace
 
+import           Control.Monad.Reader
 import           Control.Concurrent.STM
 import           Control.Monad.IO.Class
 
@@ -172,36 +173,44 @@ installEdhBatteries world = liftIO $ do
 
 
 assignProc :: EdhProcedure
-assignProc !callerCtx (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit
-  = case lhExpr of
+assignProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
+  !pgs <- ask
+  let txq                             = edh'main'queue pgs
+      !inTx                           = edh'in'tx pgs
+      !callerCtx                      = edh'context pgs
+      !callerScope@(Scope !ent !this) = contextScope callerCtx
+      !thisEnt                        = objEntity this
+      !pgs'tx                         = pgs { edh'in'tx = True }
+      finishAssign :: Entity -> AttrKey -> (Scope, EdhValue) -> EdhProg (STM ())
+      finishAssign tgtEnt key (_, !val) = return $ do
+        let result = (callerScope, val) -- assigment result as if come from the calling scope
+        modifyTVar' tgtEnt $ \em -> Map.insert key val em
+        if inTx
+          then join $ runReaderT (exit result) pgs
+          else writeTQueue txq (result, exit)
+  case lhExpr of
     AttrExpr !addr -> case addr of
-      DirectRef !addr' -> resolveAddr callerScope addr' $ \key -> do
-        withEdhTx $ do
-          -- XXX this is not correct:
-          -- need a TMVar for both the read and write op to be submitted into
-          -- the same tx
-          var <- liftIO newEmptyTMVarIO
-          eval' rhExpr $ \result -> do
-            liftIO $ atomically $ putTMVar var result
-            exit result
-          writeEdhAttr ent key
-            $ \wtr -> (liftIO $ atomically $ readTMVar var) >>= wtr . snd
-      IndirectRef !expr !addr' -> case expr of
-        AttrExpr (ThisRef) -> resolveAddr callerScope addr' $ \key ->
-          withEdhTx $ eval' rhExpr $ \result@(_, !val) -> do
-            writeEdhAttr thisEnt key $ \wtr -> wtr val
-            exit result
-        AttrExpr (SupersRef) ->
+      DirectRef !addr' -> return $ resolveAddr callerScope addr' >>= \key ->
+        join $ runReaderT (evalExpr rhExpr (finishAssign ent key)) pgs'tx
+      IndirectRef !tgtExpr !addr' -> case tgtExpr of
+        AttrExpr ThisRef ->
+          return
+            $   resolveAddr callerScope addr'
+            >>= \key -> join $ runReaderT
+                  (evalExpr rhExpr (finishAssign thisEnt key))
+                  pgs'tx
+        AttrExpr SupersRef ->
           throwEdh $ EvalError "Can not assign an attribute to supers"
-        _ -> resolveAddr callerScope addr' $ \key ->
-          withEdhTx $ eval' expr $ \(_, !tgt) -> case tgt of
+        _ -> local (const pgs'tx) $ evalExpr tgtExpr $ \(_, !tgtVal) ->
+          case tgtVal of
             EdhObject (Object !tgtEnt _ _) ->
-              eval' rhExpr $ \result@(_, !val) -> do
-                writeEdhAttr tgtEnt key $ \wtr -> wtr val
-                exit result
-            tgtVal ->
-              throwEdh $ EvalError $ "Invalid assignment target: " <> T.pack
-                (show tgtVal)
+              return
+                $   resolveAddr callerScope addr'
+                >>= \key -> join $ runReaderT
+                      (evalExpr rhExpr (finishAssign tgtEnt key))
+                      pgs'tx
+            _ -> throwEdh $ EvalError $ "Invalid assignment target: " <> T.pack
+              (show tgtVal)
       ThisRef   -> throwEdh $ EvalError "Can not assign to this"
       SupersRef -> throwEdh $ EvalError "Can not assign to supers"
     x ->
@@ -209,49 +218,45 @@ assignProc !callerCtx (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !e
         $  EvalError
         $  "Invalid left hand value for assignment: "
         <> T.pack (show x)
- where
-  !thisEnt                        = objEntity this
-  !callerScope@(Scope !ent !this) = contextScope callerCtx
-  eval'                           = evalExpr callerCtx
-assignProc _ !argsSender _ _ =
+assignProc !argsSender _ _ =
   throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
     (show argsSender)
 
 
 concatProc :: EdhProcedure
-concatProc callerCtx argsSender procScope exit = undefined
+concatProc argsSender procScope exit = undefined
 
 
 typeProc :: EdhProcedure
-typeProc callerCtx argsSender procScope exit =
-  packEdhArgs callerCtx argsSender $ \(ArgsPack !args !kwargs) ->
+typeProc argsSender procScope exit = undefined
+  -- packEdhArgs  argsSender $ \(ArgsPack !args !kwargs) ->
 
-    let !argsType = map edhTypeOf args
-        kwargsType = -- note: leave this lazy, not always needed
-            Map.fromList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
-              (ItemByStr attrName, edhTypeOf val)
-    in  if null kwargs
-          then case argsType of
-            [t] -> exit (procScope, t)
-            _   -> exit (procScope, EdhTuple argsType)
-          else do
-            d <- liftIO $ newTVarIO $ Map.union kwargsType $ Map.fromAscList
-              [ (ItemByNum (fromIntegral i), t)
-              | (i, t) <- zip [(0 :: Int) ..] argsType
-              ]
-            exit (procScope, EdhDict (Dict d))
+  --   let !argsType = map edhTypeOf args
+  --       kwargsType = -- note: leave this lazy, not always needed
+  --           Map.fromList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
+  --             (ItemByStr attrName, edhTypeOf val)
+  --   in  if null kwargs
+  --         then case argsType of
+  --           [t] -> exit (procScope, t)
+  --           _   -> exit (procScope, EdhTuple argsType)
+  --         else do
+  --           d <- liftIO $ newTVarIO $ Map.union kwargsType $ Map.fromAscList
+  --             [ (ItemByNum (fromIntegral i), t)
+  --             | (i, t) <- zip [(0 :: Int) ..] argsType
+  --             ]
+  --           exit (procScope, EdhDict (Dict d))
 
 
 dictProc :: EdhProcedure
-dictProc callerCtx argsSender procScope exit =
-  packEdhArgs callerCtx argsSender $ \(ArgsPack !args !kwargs) ->
-    let kwDict =
-            Map.fromAscList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
-              (ItemByStr attrName, val)
-    in  do
-          d <- liftIO $ newTVarIO $ Map.union kwDict $ Map.fromAscList
-            [ (ItemByNum (fromIntegral i), t)
-            | (i, t) <- zip [(0 :: Int) ..] args
-            ]
-          exit (procScope, EdhDict (Dict d))
+dictProc argsSender procScope exit = undefined
+  -- packEdhArgs  argsSender $ \(ArgsPack !args !kwargs) ->
+  --   let kwDict =
+  --           Map.fromAscList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
+  --             (ItemByStr attrName, val)
+  --   in  do
+  --         d <- liftIO $ newTVarIO $ Map.union kwDict $ Map.fromAscList
+  --           [ (ItemByNum (fromIntegral i), t)
+  --           | (i, t) <- zip [(0 :: Int) ..] args
+  --           ]
+  --         exit (procScope, EdhDict (Dict d))
 

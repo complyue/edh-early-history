@@ -19,6 +19,8 @@ import           Prelude
 
 import           Control.Exception
 import           Control.Monad.Except
+import           Control.Monad.Reader
+
 import           Control.Concurrent.STM
 
 import           Data.IORef
@@ -60,7 +62,7 @@ runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
 runEdhProgram' _   []    = return $ Right EdhNil
 runEdhProgram' ctx stmts = do
   !final <- newEmptyTMVarIO
-  let wrapper :: EdhProg ()
+  let wrapper :: EdhProg (STM ())
       wrapper = do
         pgs <- ask
         let txq = edh'main'queue pgs
