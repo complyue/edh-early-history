@@ -10,12 +10,12 @@ The very
 of
 [Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
 is an excellent relief, giving you lock-free (a.k.a optimistic locking)
-transactions. Edh brings major advantages of **STM** to the object
-layer, with eaiser and intuitive syntax.
+transactions. **Edh** brings major advantages of **STM** to the object
+layer, with eaiser and intuitive paradigm to program data consistency.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
-  - [easy data consistency with concurrency](#easy-data-consistency-with-concurrency)
+  - [easy concurrency, auto parallelism, with easy data consistency](#easy-concurrency-auto-parallelism-with-easy-data-consistency)
   - [lock-free serialization](#lock-free-serialization)
   - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
   - [lossless decimal for numbers](#lossless-decimal-for-numbers)
@@ -53,10 +53,14 @@ _change the world_, while a **function** must stay
 [side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
 free.
 
-### easy data consistency with concurrency
+### easy concurrency, auto parallelism, with easy data consistency
 
 Any procedure, or even a `for` loop can be put to a new thread for concurrent
 running with simply a `go` keyword prefixed to it. i.e. **goroutines**.
+
+The **Haskell** runtime system is very good at leveraging multi-core CPUs
+to run your concurrent program efficiently, and is very tunable for ideal
+performance.
 
 Building atop the excellent
 [Haskell implementation](http://hackage.haskell.org/package/stm)
@@ -65,12 +69,12 @@ of
 , **Edh** code carries intrinsic transactional semantics.
 
 Attribute assingment (including `(=)` `(+=)` `(-=)` `(*=)` `(/=)`),
-`pair`/`tuple`/`list`/`dict` construction,
-arguments packing, etc. are atomic.
+`pair`/`tuple`/`list`/`dict` construction, arguments packing, etc. are all atomic
+regarding concurrency.
 
 And there's the magical `ai` (stands for **atomically** **isolatedly**) keyword,
 when prefixed to a code block, the block runs in an isolated **STM** transaction
-that succeed or fail as a whole.
+that either succeed or fail as a whole.
 
 ### lock-free serialization
 
