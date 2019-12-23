@@ -77,12 +77,13 @@ evalStmt' stmt exit = do
     BreakStmt                 -> exitEdhProc exit (scope, EdhBreak)
     ContinueStmt              -> exitEdhProc exit (scope, EdhContinue)
     FallthroughStmt           -> exitEdhProc exit (scope, EdhFallthrough)
-    -- TODO impl. this
-    YieldStmt  argsSndr       -> undefined -- EdhYield <$>  
-    ReturnStmt expr           -> evalExpr expr
-      $ \(!scope', !val) -> exitEdhProc exit (scope', EdhReturn val)
 
-    ImportStmt argsRcvr srcExpr -> case srcExpr of
+    YieldStmt expr ->
+      evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhYield val)
+    ReturnStmt expr ->
+      evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhReturn val)
+
+    ImportStmt _argsRcvr srcExpr -> case srcExpr of
       LitExpr (StringLiteral moduPath) -> exitEdhProc
         exit
         (scope, EdhString $ "wana import " <> moduPath <> ".edh huh?")
