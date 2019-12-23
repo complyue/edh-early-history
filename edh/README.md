@@ -15,8 +15,8 @@ layer, with eaiser and intuitive syntax.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
-  - [easy concurrency, no-brainer atomicity, lock-free serialization](#easy-concurrency-no-brainer-atomicity-lock-free-serialization)
-  - [easy programming of data consistency](#easy-programming-of-data-consistency)
+  - [easy data consistency with concurrency](#easy-data-consistency-with-concurrency)
+  - [lock-free serialization](#lock-free-serialization)
   - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
   - [lossless decimal for numbers](#lossless-decimal-for-numbers)
 - [Why splice](#why-splice)
