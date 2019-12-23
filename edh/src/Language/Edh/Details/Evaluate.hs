@@ -157,44 +157,34 @@ evalExpr expr exit = do
           <> T.pack (show v)
           <> " ❌"
 
-    -- TODO this eval from right to left ? correct it if so
-    -- DictExpr ps ->
-      -- let
-      --   gatherDict
-      --     :: (DictStore -> EdhProg ())
-      --     -> (Expr, Expr)
-      --     -> EdhProg (DictStore -> EdhProg ())
-      --   gatherDict exit' (!kExpr, !vExpr) = return $ \ds ->
-      --     evalExpr vExpr $ \(!_scope'v, !vVal) ->
-      --       evalExpr kExpr $ \(!_scope'k, !kVal) -> do
-      --         key <- case kVal of
-      --           EdhString  k -> return $ ItemByStr k
-      --           EdhSymbol  k -> return $ ItemBySym k
-      --           EdhDecimal k -> return $ ItemByNum k
-      --           EdhBool    k -> return $ ItemByBool k
-      --           k ->
-      --             throwEdh
-      --               $  EvalError
-      --               $  "Invalid key: "
-      --               <> T.pack (show k)
-      --               <> " ❌"
-      --         exit' $ Map.alter
-      --           (\case -- give later entries higher priority
-      --             Nothing  -> Just vVal
-      --             Just val -> Just val
-      --           )
-      --           key
-      --           ds
-      -- in
-      --   foldM
-      --       gatherDict
-      --       (\ds ->
-      --         (liftIO $ EdhDict . Dict <$> newTVarIO ds) >>= (exit . (scope, ))
-      --       )
-      --       ps
-      --     >>= ($ Map.empty)
+    DictExpr xs -> -- make sure dict k:v pairs are evaluated in same tx
+      local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, tv) ->
+        case tv of
+          EdhTuple l -> return $ do
+            dpl <- forM l $ \case
+              EdhPair kVal vVal -> (, vVal) <$> case kVal of
+                EdhType    k -> return $ ItemByType k
+                EdhString  k -> return $ ItemByStr k
+                EdhSymbol  k -> return $ ItemBySym k
+                EdhDecimal k -> return $ ItemByNum k
+                EdhBool    k -> return $ ItemByBool k
+                k ->
+                  throwSTM
+                    $  EvalError
+                    $  "Invalid dict key: "
+                    <> T.pack (show k)
+                    <> " ❌"
+              pv ->
+                throwSTM
+                  $  EvalError
+                  $  "Invalid dict entry: "
+                  <> T.pack (show pv)
+                  <> " ❌"
+            ds <- newTVar $ Map.fromList dpl
+            join $ runReaderT (exitEdhProc exit (scope, EdhDict (Dict ds))) pgs
+          _ -> error "bug"
 
-    ListExpr xs -> -- list construction runs in an implicit tx
+    ListExpr xs -> -- make sure list values are evaluated in same tx
       local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, tv) ->
         case tv of
           EdhTuple l -> return $ do
@@ -202,7 +192,7 @@ evalExpr expr exit = do
             join $ runReaderT (exitEdhProc exit (scope, EdhList ll)) pgs
           _ -> error "bug"
 
-    TupleExpr xs -> -- tuple construction runs in an implicit tx
+    TupleExpr xs -> -- make sure tuple values are evaluated in same tx
       local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, tv) ->
         case tv of
           EdhTuple l -> exitEdhProc exit (scope, EdhTuple l)

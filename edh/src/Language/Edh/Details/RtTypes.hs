@@ -390,6 +390,7 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
         | EdhModule !Module
 
     -- * mutable containers
+        | EdhPair !EdhValue !EdhValue
         | EdhDict !Dict
         | EdhList !List
 
@@ -436,10 +437,11 @@ instance Show EdhValue where
   show (EdhObject  v) = show v
   show (EdhModule  v) = show v
 
-  show (EdhDict    v) = show v
-  show (EdhList    v) = show v
+  show (EdhPair k v ) = show k <> ":" <> show v
+  show (EdhDict  v  ) = show v
+  show (EdhList  v  ) = show v
 
-  show (EdhTuple   v) = if null v
+  show (EdhTuple v  ) = if null v
     then "(,)" -- mimic the denotation of empty tuple in Python
     else -- advocate trailing comma here
          "( " ++ concat [ show i ++ ", " | i <- v ] ++ ")"
@@ -479,14 +481,15 @@ instance Show EdhValue where
 instance Eq EdhValue where
   EdhType x       == EdhType y       = x == y
   EdhNil          == EdhNil          = True
-  EdhDecimal  x   == EdhDecimal  y   = x == y
-  EdhBool     x   == EdhBool     y   = x == y
-  EdhString   x   == EdhString   y   = x == y
-  EdhSymbol   x   == EdhSymbol   y   = x == y
+  EdhDecimal x    == EdhDecimal y    = x == y
+  EdhBool    x    == EdhBool    y    = x == y
+  EdhString  x    == EdhString  y    = x == y
+  EdhSymbol  x    == EdhSymbol  y    = x == y
 
-  EdhObject   x   == EdhObject   y   = x == y
-  EdhModule   x   == EdhModule   y   = x == y
+  EdhObject  x    == EdhObject  y    = x == y
+  EdhModule  x    == EdhModule  y    = x == y
 
+  EdhPair x'k x'v == EdhPair y'k y'v = x'k == y'k && x'v == y'v
   EdhDict     x   == EdhDict     y   = x == y
   EdhList     x   == EdhList     y   = x == y
   EdhTuple    x   == EdhTuple    y   = x == y
@@ -539,12 +542,13 @@ false = EdhBool False
 edhTypeOf :: EdhValue -> EdhValue
 
 edhTypeOf EdhNil           = nil
-edhTypeOf (EdhDecimal  _)  = EdhType DecimalType
-edhTypeOf (EdhBool     _)  = EdhType BoolType
-edhTypeOf (EdhString   _)  = EdhType StringType
-edhTypeOf (EdhSymbol   _)  = EdhType SymbolType
-edhTypeOf (EdhObject   _)  = EdhType ObjectType
-edhTypeOf (EdhModule   _)  = EdhType ModuleType
+edhTypeOf (EdhDecimal _ )  = EdhType DecimalType
+edhTypeOf (EdhBool    _ )  = EdhType BoolType
+edhTypeOf (EdhString  _ )  = EdhType StringType
+edhTypeOf (EdhSymbol  _ )  = EdhType SymbolType
+edhTypeOf (EdhObject  _ )  = EdhType ObjectType
+edhTypeOf (EdhModule  _ )  = EdhType ModuleType
+edhTypeOf (EdhPair _ _  )  = EdhType PairType
 edhTypeOf (EdhDict     _)  = EdhType DictType
 edhTypeOf (EdhList     _)  = EdhType ListType
 edhTypeOf (EdhTuple    _)  = EdhType TupleType

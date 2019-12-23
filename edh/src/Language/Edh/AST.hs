@@ -101,7 +101,7 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
                 }
         | CaseExpr { case'target :: !Expr , case'branches :: !StmtSrc }
 
-        | DictExpr ![(Expr, Expr)]
+        | DictExpr ![Expr] -- should all be Infix ":"
         | ListExpr ![Expr]
         | TupleExpr ![Expr]
         | ParenExpr !Expr
@@ -153,6 +153,7 @@ data EdhTypeValue = TypeType
         | SymbolType
         | ObjectType
         | ModuleType
+        | PairType
         | DictType
         | ListType
         | TupleType

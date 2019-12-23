@@ -38,7 +38,7 @@ installEdhBatteries world = liftIO $ do
     "<batteries>"
     [ -- format: (symbol, precedence)
 
-  -- dict key:value seperator, is dummy in operator regards
+  -- the cons operator, creates pairs in Edh
       ( ":"
       , 1
       ) -- ^ why brittany insists on formatting it like this ?.?
@@ -137,6 +137,7 @@ installEdhBatteries world = liftIO $ do
     , ("++", 5)
     ]
 
+  consHP   <- mkHostProc ":" consProc
   assignHP <- mkHostProc "=" assignProc
   concatHP <- mkHostProc "++" concatProc
   typeHP   <- mkHostProc "type" typeProc
@@ -146,7 +147,8 @@ installEdhBatteries world = liftIO $ do
     rootEntity
     [
   -- operators
-      (AttrByName "=", EdhHostProc assignHP)
+      (AttrByName ":", EdhHostProc consHP)
+    , (AttrByName "=", EdhHostProc assignHP)
     , ( AttrByName "++"
       , EdhHostProc concatHP
       )
@@ -170,6 +172,20 @@ installEdhBatteries world = liftIO $ do
     ]
 
   return ()
+
+
+consProc :: EdhProcedure
+consProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
+  !pgs <- ask
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  -- make sure left hand and right hand values are evaluated in same tx
+  local (\s -> s { edh'in'tx = True }) $ evalExpr lhExpr $ \(_, lhVal) ->
+    evalExpr rhExpr
+      $ \(_, rhVal) -> exitEdhProc exit (scope, EdhPair lhVal rhVal)
+consProc !argsSender _ _ =
+  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
+    (show argsSender)
 
 
 assignProc :: EdhProcedure
