@@ -1,8 +1,17 @@
-# Đ - (WIP) a modern Object layer spliced with Haskell
+# Đ - (WIP) a modern, transactional Object layer spliced with Haskell
 
 Missing **Python**/**JavaScript** or even **Go** in shifting to
 **Haskell**? Now you can have **Edh**, with many goodies from
 those languages but running embedded in Haskell.
+
+Having hard time for data consistency in programming concurrency?
+The very
+[Haskell implementation](http://hackage.haskell.org/package/stm)
+of
+[Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
+is an excellent relief, giving you lock-free (a.k.a optimistic locking)
+transactions. Edh brings major advantages of **STM** to the object
+layer, with eaiser and intuitive syntax.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
@@ -44,17 +53,28 @@ _change the world_, while a **function** must stay
 [side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
 free.
 
-### easy concurrency, no-brainer atomicity, lock-free serialization
+### easy data consistency with concurrency
 
 Any procedure, or even a `for` loop can be put to a new thread for concurrent
 running with simply a `go` keyword prefixed to it. i.e. **goroutines**.
 
-Thanks to **Haskell**'s immutable data structures underlying, modifications
-on `list`/`dict`, including concatenation (comprehension into), prepending,
-are straight forward atomic. Default batteries of **Edh** also have operators
-like `(+=)` `(-=)` `(*=)` `(/=)` on object attributes implemented being atomic.
+Building atop the excellent
+[Haskell implementation](http://hackage.haskell.org/package/stm)
+of
+[Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
+, **Edh** code carries intrinsic transactional semantics.
 
-Finally, the
+Attribute assingment (including `(=)` `(+=)` `(-=)` `(*=)` `(/=)`),
+`pair`/`tuple`/`list`/`dict` construction,
+arguments packing, etc. are atomic.
+
+And there's the magical `ai` (stands for **atomically** **isolatedly**) keyword,
+when prefixed to a code block, the block runs in an isolated **STM** transaction
+that succeed or fail as a whole.
+
+### lock-free serialization
+
+The
 [event `sink`](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
 is implemented in a way that concurrent/parallel publications into it won't
 block (actually won't even delay) each others, so you can implement a single
@@ -64,21 +84,6 @@ without worrying that slow writers may slow down fast writers.
 
 Please make sure the _back-storage-writer_ is reasonably fast as necessary
 though.
-
-### easy programming of data consistency
-
-The
-[invariants](<https://en.wikipedia.org/wiki/Invariant_(mathematics)>)
-concerning a set of attributes on a single object (or more accurately its
-underlying **entity**), is guaranteed
-[iff](https://en.wikipedia.org/wiki/If_and_only_if)
-this set of attributes are always extracted/assigned together within a same
-`let` statement.
-
-For more complex invariants, the class schema should be normalized to the
-[3NF](https://en.wikipedia.org/wiki/Third_normal_form) or further as
-necessary (in relational sense), to take advantage of the single object
-(entity) guarantee.
 
 ### more concise syntax for event handling
 
