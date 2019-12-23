@@ -55,6 +55,20 @@ evalBlock (ss : rest) !exit = evalStmt ss $ \result -> case result of
   _ -> evalBlock rest exit
 
 
+evalExprs :: [Expr] -> EdhProcExit -> EdhProg (STM ())
+-- here 'EdhTuple' is used for intermediate tag,
+-- not returning real tuple values as in Edh.
+evalExprs [] exit = do
+  pgs <- ask
+  let !scope = contextScope ctx
+      !ctx   = edh'context pgs
+  exit (scope, EdhTuple [])
+evalExprs (x : xs) exit = evalExpr x $ \(scope, val) ->
+  evalExprs xs $ \(_, tv) -> case tv of
+    EdhTuple l -> exitEdhProc exit (scope, EdhTuple (val : l))
+    _          -> error "bug"
+
+
 evalStmt' :: Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' stmt exit = do
   !pgs <- ask
@@ -104,12 +118,12 @@ evalExpr expr exit = do
       SinkCtor        -> throwEdh $ EvalError "sink ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
-      PrefixPlus  -> eval' expr' exit
-      PrefixMinus -> eval' expr' $ \case
+      PrefixPlus  -> evalExpr expr' exit
+      PrefixMinus -> evalExpr expr' $ \case
         (scope', EdhDecimal v) -> exitEdhProc exit (scope', EdhDecimal (-v))
         (_scope', v) ->
           throwEdh $ EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
-      Not -> eval' expr' $ \case
+      Not -> evalExpr expr' $ \case
         (scope', EdhBool v) -> exitEdhProc exit (scope', EdhBool $ not v)
         (_scope', v) ->
           throwEdh
@@ -122,7 +136,7 @@ evalExpr expr exit = do
       --      cooperate with the branch operator (->), find a way to
       --      tell it that this is guarded value, don't compare with
       --      thunk target value. but how ?
-      Guard  -> eval' expr' exit
+      Guard  -> evalExpr expr' exit
 
       AtoIso -> local (\s -> s { edh'in'tx = True }) $ evalExpr expr' exit
 
@@ -130,10 +144,10 @@ evalExpr expr exit = do
       Go     -> throwEdh $ EvalError "goroutine starter not impl. yet"
       Defer  -> throwEdh $ EvalError "defer scheduler not impl. yet"
 
-    IfExpr cond cseq alt -> eval' cond $ \case
-      (_scope', EdhBool True ) -> evalSS cseq exit
+    IfExpr cond cseq alt -> evalExpr cond $ \case
+      (_scope', EdhBool True ) -> evalStmt cseq exit
       (_scope', EdhBool False) -> case alt of
-        Just elseClause -> evalSS elseClause exit
+        Just elseClause -> evalStmt elseClause exit
         _               -> exitEdhProc exit (scope, nil)
       (_scope', v) ->
         -- we are so strongly typed
@@ -151,8 +165,8 @@ evalExpr expr exit = do
       --     -> (Expr, Expr)
       --     -> EdhProg (DictStore -> EdhProg ())
       --   gatherDict exit' (!kExpr, !vExpr) = return $ \ds ->
-      --     eval' vExpr $ \(!_scope'v, !vVal) ->
-      --       eval' kExpr $ \(!_scope'k, !kVal) -> do
+      --     evalExpr vExpr $ \(!_scope'v, !vVal) ->
+      --       evalExpr kExpr $ \(!_scope'k, !kVal) -> do
       --         key <- case kVal of
       --           EdhString  k -> return $ ItemByStr k
       --           EdhSymbol  k -> return $ ItemBySym k
@@ -180,35 +194,21 @@ evalExpr expr exit = do
       --       ps
       --     >>= ($ Map.empty)
 
-    -- TODO this eval from right to left ? correct it if so
-    -- ListExpr xs ->
-    --   let gatherValues
-    --         :: ([EdhValue] -> EdhProg ())
-    --         -> Expr
-    --         -> EdhProg ([EdhValue] -> EdhProg ())
-    --       gatherValues exit' expr' =
-    --           return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
-    --   in  foldM
-    --           gatherValues
-    --           (\vs ->
-    --             (liftIO $ EdhList . List <$> newTVarIO vs)
-    --               >>= (exit . (scope, ))
-    --           )
-    --           xs
-    --         >>= ($ [])
+    ListExpr xs -> -- list construction runs in an implicit tx
+      local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, tv) ->
+        case tv of
+          EdhTuple l -> return $ do
+            ll <- List <$> newTVar l
+            join $ runReaderT (exitEdhProc exit (scope, EdhList ll)) pgs
+          _ -> error "bug"
 
-    -- TODO this eval from right to left ? correct it if so
-    -- TupleExpr xs ->
-    --   let gatherValues
-    --         :: ([EdhValue] -> EdhProg ())
-    --         -> Expr
-    --         -> EdhProg ([EdhValue] -> EdhProg ())
-    --       gatherValues exit' expr' =
-    --           return $ \vs -> eval' expr' $ \(_, !val) -> exit' (val : vs)
-    --   in  foldM gatherValues (\vs -> exitEdhProc exit (scope, EdhTuple vs)) xs
-    --         >>= ($ [])
+    TupleExpr xs -> -- tuple construction runs in an implicit tx
+      local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, tv) ->
+        case tv of
+          EdhTuple l -> exitEdhProc exit (scope, EdhTuple l)
+          _          -> error "bug"
 
-    ParenExpr x         -> eval' x exit
+    ParenExpr x         -> evalExpr x exit
 
     -- TODO this should check for Thunk, and implement
     --      break/fallthrough semantics
@@ -240,7 +240,7 @@ evalExpr expr exit = do
               Nothing -> throwSTM $ EvalError "attr resolving bug"
               Just val ->
                 join $ runReaderT (exitEdhProc exit (scope', val)) pgs
-      IndirectRef !tgtExpr !addr' -> eval' tgtExpr $ \case
+      IndirectRef !tgtExpr !addr' -> evalExpr tgtExpr $ \case
         (_, EdhObject !obj) -> return $ do
           !key <- resolveAddr scope addr'
           resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
@@ -262,7 +262,7 @@ evalExpr expr exit = do
 
     -- IndexExpr ixExpr tgtExpr ->
 
-    CallExpr procExpr args -> eval' procExpr $ \case
+    CallExpr procExpr args -> evalExpr procExpr $ \case
         -- EdhClass classDef -> 
         -- EdhMethod mthExpr -> 
         -- EdhGenrDef genrDef ->
@@ -303,9 +303,6 @@ evalExpr expr exit = do
 
 
     _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
- where
-  evalSS = evalStmt
-  eval'  = evalExpr
 
 
 -- evalExprToVar :: Context -> Expr -> EdhProg (TMVar (Scope, EdhValue))
@@ -489,7 +486,7 @@ evalExpr expr exit = do
 resolveAddr :: Scope -> AttrAddressor -> STM AttrKey
 resolveAddr _ (NamedAttr !attrName) = return (AttrByName attrName)
 resolveAddr !scope (SymbolicAttr !symName) =
-  resolveEdhCtxAttr ! scope (AttrByName ! symName) >>= \case
+  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
     Just scope' -> do
       em <- readTVar (scopeEntity scope')
       case Map.lookup (AttrByName symName) em of
