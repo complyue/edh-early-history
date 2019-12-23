@@ -390,13 +390,14 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
         | EdhModule !Module
 
     -- * mutable containers
-        | EdhPair !EdhValue !EdhValue
         | EdhDict !Dict
         | EdhList !List
 
     -- * immutable containers
     --   the elements may still pointer to mutable data
+        | EdhPair !EdhValue !EdhValue
         | EdhTuple ![EdhValue]
+        | EdhArgsPack ArgsPack
 
     -- * pending evaluated code block
         | EdhBlock ![StmtSrc]
@@ -437,14 +438,25 @@ instance Show EdhValue where
   show (EdhObject  v) = show v
   show (EdhModule  v) = show v
 
-  show (EdhPair k v ) = show k <> ":" <> show v
-  show (EdhDict  v  ) = show v
-  show (EdhList  v  ) = show v
+  show (EdhDict    v) = show v
+  show (EdhList    v) = show v
 
+  show (EdhPair k v ) = show k <> ":" <> show v
   show (EdhTuple v  ) = if null v
     then "(,)" -- mimic the denotation of empty tuple in Python
     else -- advocate trailing comma here
          "( " ++ concat [ show i ++ ", " | i <- v ] ++ ")"
+  show (EdhArgsPack (ArgsPack posArgs kwArgs)) =
+    if null posArgs && Map.null kwArgs
+      then "pack()"
+      else
+        "pack( "
+        ++ concat [ show i ++ ", " | i <- posArgs ]
+        ++ concat
+             [ T.unpack kw ++ "=" ++ show v ++ ", "
+             | (kw, v) <- Map.toList kwArgs
+             ]
+        ++ ")"
 
   show (EdhBlock v) = if null v
     then "{;}" -- make it obvious this is an empty block
@@ -489,10 +501,11 @@ instance Eq EdhValue where
   EdhObject  x    == EdhObject  y    = x == y
   EdhModule  x    == EdhModule  y    = x == y
 
+  EdhDict    x    == EdhDict    y    = x == y
+  EdhList    x    == EdhList    y    = x == y
   EdhPair x'k x'v == EdhPair y'k y'v = x'k == y'k && x'v == y'v
-  EdhDict     x   == EdhDict     y   = x == y
-  EdhList     x   == EdhList     y   = x == y
   EdhTuple    x   == EdhTuple    y   = x == y
+  EdhArgsPack x   == EdhArgsPack y   = x == y
 
   EdhBlock    x   == EdhBlock    y   = x == y
 
@@ -548,10 +561,11 @@ edhTypeOf (EdhString  _ )  = EdhType StringType
 edhTypeOf (EdhSymbol  _ )  = EdhType SymbolType
 edhTypeOf (EdhObject  _ )  = EdhType ObjectType
 edhTypeOf (EdhModule  _ )  = EdhType ModuleType
+edhTypeOf (EdhDict    _ )  = EdhType DictType
+edhTypeOf (EdhList    _ )  = EdhType ListType
 edhTypeOf (EdhPair _ _  )  = EdhType PairType
-edhTypeOf (EdhDict     _)  = EdhType DictType
-edhTypeOf (EdhList     _)  = EdhType ListType
 edhTypeOf (EdhTuple    _)  = EdhType TupleType
+edhTypeOf (EdhArgsPack _)  = EdhType ArgsPackType
 edhTypeOf (EdhBlock    _)  = EdhType BlockType
 edhTypeOf (EdhThunk    _)  = EdhType ThunkType
 edhTypeOf (EdhHostProc _)  = EdhType HostProcType

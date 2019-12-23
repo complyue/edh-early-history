@@ -336,7 +336,6 @@ evalExpr expr exit = do
 --       <> " positional argument(s) to wild receiver"
 --  where
 --   scope = contextScope ctx
---   eval' = evalExpr ctx
 
 --   woResidual :: ArgsPack -> Map.Map AttrKey EdhValue -> IO Entity
 --   woResidual (ArgsPack posResidual kwResidual) attrs
@@ -404,73 +403,90 @@ evalExpr expr exit = do
 --           []                   -> case argDefault of
 --             Nothing -> throwIO $ EvalError $ "Missing argument: " <> argName
 --             Just defaultExpr -> do
---               defaultVal <- eval' defaultExpr
+--               defaultVal <- evalExpr defaultExpr
 --               return (defaultVal, posArgs', kwArgs'')
 --         Just argVal -> return (argVal, posArgs', kwArgs'')
 
 
--- packEdhArgs
---   :: Context
---   -> (Maybe (TQueue EdhTxOp))
---   -> ArgsSender
---   -> (STM ArgsPack -> EdhProg (STM ()))
---   -> EdhProg (STM ())
--- packEdhArgs argsSender exit = case argsSender of
---   PackSender packSender ->
---     foldM fillPack exit packSender >>= ($ ArgsPack [] Map.empty)
---   SingleSender argSender ->
---     fillPack exit argSender >>= ($ ArgsPack [] Map.empty)
---  where
---   eval' = evalExpr
+packEdhArgs :: ArgsSender -> EdhProcExit -> EdhProg (STM ())
+-- make sure values in a pack are evaluated in same tx
+packEdhArgs argsSender exit =
+  local (\s -> s { edh'in'tx = True }) $ case argsSender of
+    PackSender   argSenders -> packEdhArgs' argSenders exit
+    SingleSender argSender  -> packEdhArgs' [argSender] exit
 
---   fillPack
---     :: (ArgsPack -> EdhProg (STM ()))
---     -> ArgSender
---     -> STM (ArgsPack -> EdhProg (STM ()))
---   fillPack exit' argSender = return $ \(ArgsPack posArgs kwArgs) ->
---     case argSender of
---       UnpackPosArgs listExpr -> eval' listExpr $ \case
---         (_scope, EdhList (List listVar)) -> do
---           listVal <- readTVar listVar
---           exit' $ ArgsPack (listVal ++ posArgs) kwArgs
---         (_scope, v) ->
---           throwEdh $ EvalError $ "Can not unpack args from: " <> T.pack
---             (show v)
---       UnpackKwArgs dictExpr -> eval' dictExpr $ \case
---         (_scope, EdhDict (Dict dictVar)) -> do
---           dictVal   <- readTVar dictVar
---           kwAscList <- forM (Map.toAscList dictVal)
---             $ \(k, v) -> (, v) <$> dictKey2Kw k
---           -- let kwMap = Map.fromAscList kwAscList
---           -- kwMap   <-
---           --   Map.fromAscList <$> forM (Map.toAscList dictVal) $ \(k, v) ->
---           --     (, v) <$> dictKey2Kw k
---           -- kwArgs appear later, give them higher priority
---           exit'
---             $ ArgsPack posArgs (Map.union kwArgs $ Map.fromAscList kwAscList)
---         (_scope, v) ->
---           throwEdh $ EvalError $ "Can not unpack kwargs from: " <> T.pack
---             (show v)
---       SendPosArg argExpr -> eval' argExpr
---         $ \(_scope, argVal) -> exit' $ ArgsPack (argVal : posArgs) kwArgs
---       SendKwArg kw argExpr -> eval' argExpr $ \(_scope, argVal) ->
---         -- kwArgs appear later, give them higher priority
---         exit' $ ArgsPack posArgs $ Map.alter
---           (\case
---             Nothing  -> Just argVal
---             Just val -> Just val
---           )
---           kw
---           kwArgs
-
---   dictKey2Kw :: ItemKey -> STM AttrName
---   dictKey2Kw = \case
---     ItemByStr name -> return name
---     k ->
---       throwEdh
---         $  EvalError
---         $  "Invalid argument keyword from dict key: "
---         <> T.pack (show k)
+packEdhArgs' :: [ArgSender] -> EdhProcExit -> EdhProg (STM ())
+packEdhArgs' [] exit = do
+  pgs <- ask
+  let !scope = contextScope ctx
+      !ctx   = edh'context pgs
+  exit (scope, EdhArgsPack $ ArgsPack [] Map.empty)
+packEdhArgs' (x : xs) exit = do
+  pgs <- ask
+  let !scope = contextScope ctx
+      !ctx   = edh'context pgs
+  case x of
+    UnpackPosArgs listExpr -> evalExpr listExpr $ \case
+      (_, EdhList (List l)) -> packEdhArgs' xs $ \(_, pk) -> case pk of
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
+          ll <- readTVar l
+          join $ runReaderT
+            (exitEdhProc
+              exit
+              (scope, EdhArgsPack (ArgsPack (posArgs ++ ll) kwArgs))
+            )
+            pgs
+        _ -> error "bug"
+      (_, v) ->
+        throwEdh $ EvalError $ "Can not unpack args from: " <> T.pack (show v)
+    UnpackKwArgs dictExpr -> evalExpr dictExpr $ \case
+      (_, EdhDict (Dict ds)) -> packEdhArgs' xs $ \(_, pk) -> case pk of
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
+          dm  <- readTVar ds
+          kvl <- forM (Map.toAscList dm) $ \(k, v) -> (, v) <$> dictKey2Kw k
+          join $ runReaderT
+            (exitEdhProc
+              exit
+              ( scope
+              , EdhArgsPack
+                (ArgsPack posArgs $ Map.union kwArgs $ Map.fromAscList kvl)
+              )
+            )
+            pgs
+        _ -> error "bug"
+      (_, v) ->
+        throwEdh $ EvalError $ "Can not unpack kwargs from: " <> T.pack (show v)
+    SendPosArg argExpr -> evalExpr argExpr $ \(_, val) ->
+      packEdhArgs' xs $ \(_, pk) -> case pk of
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+          exit
+          (scope, EdhArgsPack (ArgsPack (val : posArgs) kwArgs))
+        _ -> error "bug"
+    SendKwArg kw argExpr -> evalExpr argExpr $ \(_, val) ->
+      packEdhArgs' xs $ \(_, pk) -> case pk of
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+          exit
+          ( scope
+          , EdhArgsPack
+            (ArgsPack posArgs $ Map.alter
+              (\case -- make sure latest value with same kw take effect
+                Nothing       -> Just val
+                Just laterVal -> Just laterVal
+              )
+              kw
+              kwArgs
+            )
+          )
+        _ -> error "bug"
+ where
+  dictKey2Kw :: ItemKey -> STM AttrName
+  dictKey2Kw = \case
+    ItemByStr name -> return name
+    k ->
+      throwSTM
+        $  EvalError
+        $  "Invalid argument keyword from dict key: "
+        <> T.pack (show k)
 
 
 resolveAddr :: Scope -> AttrAddressor -> STM AttrKey

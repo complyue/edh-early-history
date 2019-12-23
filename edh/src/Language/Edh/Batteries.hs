@@ -139,6 +139,7 @@ installEdhBatteries world = liftIO $ do
 
   consHP   <- mkHostProc ":" consProc
   assignHP <- mkHostProc "=" assignProc
+  packHP   <- mkHostProc "pack" packProc
   concatHP <- mkHostProc "++" concatProc
   typeHP   <- mkHostProc "type" typeProc
   dictHP   <- mkHostProc "dict" dictProc
@@ -147,8 +148,9 @@ installEdhBatteries world = liftIO $ do
     rootEntity
     [
   -- operators
-      (AttrByName ":", EdhHostProc consHP)
-    , (AttrByName "=", EdhHostProc assignHP)
+      (AttrByName ":"   , EdhHostProc consHP)
+    , (AttrByName "pack", EdhHostProc packHP)
+    , (AttrByName "="   , EdhHostProc assignHP)
     , ( AttrByName "++"
       , EdhHostProc concatHP
       )
@@ -186,6 +188,10 @@ consProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
 consProc !argsSender _ _ =
   throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
     (show argsSender)
+
+
+packProc :: EdhProcedure
+packProc !argsSender _ !exit = packEdhArgs argsSender exit
 
 
 assignProc :: EdhProcedure

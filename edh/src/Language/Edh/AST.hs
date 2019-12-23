@@ -153,10 +153,11 @@ data EdhTypeValue = TypeType
         | SymbolType
         | ObjectType
         | ModuleType
-        | PairType
         | DictType
         | ListType
+        | PairType
         | TupleType
+        | ArgsPackType
         | BlockType
         | ThunkType
         | HostProcType
