@@ -3,8 +3,8 @@
 module Language.Edh.Runtime
   ( createEdhWorld
   , declareEdhOperators
-  , putEdhAttrs
-  , putEdhAttr
+  , installEdhAttrs
+  , installEdhAttr
   , runEdhProgram
   , runEdhProgram'
   , moduleContext
@@ -148,10 +148,10 @@ declareEdhOperators world declLoc opps = liftIO
       else (prevPrec, prevDeclLoc)
 
 
-putEdhAttrs :: Entity -> [(AttrKey, EdhValue)] -> STM ()
-putEdhAttrs e as = modifyTVar' e $ \em -> Map.union ad em
+installEdhAttrs :: Entity -> [(AttrKey, EdhValue)] -> STM ()
+installEdhAttrs e as = modifyTVar' e $ \em -> Map.union ad em
   where ad = Map.fromList as
 
-putEdhAttr :: Entity -> AttrKey -> EdhValue -> STM ()
-putEdhAttr e k v = modifyTVar' e $ \em -> Map.insert k v em
+installEdhAttr :: Entity -> AttrKey -> EdhValue -> STM ()
+installEdhAttr e k v = modifyTVar' e $ \em -> Map.insert k v em
 

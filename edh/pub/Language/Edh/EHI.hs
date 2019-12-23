@@ -54,8 +54,8 @@ module Language.Edh.EHI
   , Iterator
     -- ** World changing tools
   , declareEdhOperators
-  , putEdhAttrs
-  , putEdhAttr
+  , installEdhAttrs
+  , installEdhAttr
   )
 where
 

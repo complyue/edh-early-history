@@ -142,7 +142,7 @@ installEdhBatteries world = liftIO $ do
   typeHP   <- mkHostProc "type" typeProc
   dictHP   <- mkHostProc "dict" dictProc
 
-  atomically $ putEdhAttrs
+  atomically $ installEdhAttrs
     rootEntity
     [
   -- operators
