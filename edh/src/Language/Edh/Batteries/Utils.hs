@@ -2,28 +2,17 @@
 module Language.Edh.Batteries.Utils where
 
 import           Prelude
-import           Debug.Trace
+-- import           Debug.Trace
 
 import           Control.Monad.Reader
 import           Control.Concurrent.STM
-import           Control.Monad.IO.Class
 
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
-
-import           Data.IORef
-import           Foreign.C.String
-import           Foreign.Marshal.Alloc
-import           System.Mem.Weak
-import           System.IO.Unsafe
-
-import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Runtime
-import           Language.Edh.Event
 
 
 consProc :: EdhProcedure
@@ -45,39 +34,46 @@ packProc !argsSender _ !exit = packEdhArgs argsSender exit
 
 
 concatProc :: EdhProcedure
-concatProc argsSender procScope exit = undefined
+concatProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
+  pgs <- ask
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  evalExpr lhExpr $ \(_, lhVal) -> evalExpr rhExpr $ \(_, rhVal) -> exitEdhProc
+    exit
+    (scope, EdhString $ edhValueStr lhVal <> edhValueStr rhVal)
+concatProc !argsSender _ _ =
+  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
+    (show argsSender)
 
 
 typeProc :: EdhProcedure
-typeProc argsSender procScope exit = undefined
-  -- packEdhArgs  argsSender $ \(ArgsPack !args !kwargs) ->
-
-  --   let !argsType = map edhTypeOf args
-  --       kwargsType = -- note: leave this lazy, not always needed
-  --           Map.fromList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
-  --             (ItemByStr attrName, edhTypeOf val)
-  --   in  if null kwargs
-  --         then case argsType of
-  --           [t] -> exit (procScope, t)
-  --           _   -> exit (procScope, EdhTuple argsType)
-  --         else do
-  --           d <- liftIO $ newTVarIO $ Map.union kwargsType $ Map.fromAscList
-  --             [ (ItemByNum (fromIntegral i), t)
-  --             | (i, t) <- zip [(0 :: Int) ..] argsType
-  --             ]
-  --           exit (procScope, EdhDict (Dict d))
+typeProc !argsSender !procScope !exit =
+  packEdhArgs argsSender $ \(_, EdhArgsPack (ArgsPack !args !kwargs)) ->
+    let !argsType = edhTypeOf <$> args
+    in  if null kwargs
+          then case argsType of
+            [t] -> exitEdhProc exit (procScope, t)
+            _   -> exitEdhProc exit (procScope, EdhTuple argsType)
+          else exitEdhProc
+            exit
+            ( procScope
+            , EdhArgsPack $ ArgsPack argsType $ Map.map edhTypeOf kwargs
+            )
 
 
 dictProc :: EdhProcedure
-dictProc argsSender procScope exit = undefined
-  -- packEdhArgs  argsSender $ \(ArgsPack !args !kwargs) ->
-  --   let kwDict =
-  --           Map.fromAscList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
-  --             (ItemByStr attrName, val)
-  --   in  do
-  --         d <- liftIO $ newTVarIO $ Map.union kwDict $ Map.fromAscList
-  --           [ (ItemByNum (fromIntegral i), t)
-  --           | (i, t) <- zip [(0 :: Int) ..] args
-  --           ]
-  --         exit (procScope, EdhDict (Dict d))
+dictProc !argsSender _ !exit = do
+  !pgs <- ask
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  packEdhArgs argsSender $ \(_, EdhArgsPack (ArgsPack !args !kwargs)) ->
+    let !kwDict =
+            Map.fromAscList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
+              (ItemByStr attrName, val)
+    in  return $ do
+          d <- newTVar $ Map.union kwDict $ Map.fromAscList
+            [ (ItemByNum (fromIntegral i), t)
+            | (i, t) <- zip [(0 :: Int) ..] args
+            ]
+          join $ runReaderT (exitEdhProc exit (scope, EdhDict (Dict d))) pgs
 

@@ -2,13 +2,11 @@
 module Language.Edh.Batteries.Assign where
 
 import           Prelude
-import           Debug.Trace
+-- import           Debug.Trace
 
 import           Control.Monad.Reader
 import           Control.Concurrent.STM
-import           Control.Monad.IO.Class
 
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 

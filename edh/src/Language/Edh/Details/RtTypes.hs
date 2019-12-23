@@ -426,6 +426,9 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     -- * reflection
         | EdhProxy !EdhValue
 
+edhValueStr :: EdhValue -> Text
+edhValueStr (EdhString s) = s
+edhValueStr v             = T.pack $ show v
 
 instance Show EdhValue where
   show (EdhType t)    = show t
