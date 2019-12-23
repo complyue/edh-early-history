@@ -108,10 +108,10 @@ instance Show List where
 
 -- | calling stack frames at any point of Edh code execution
 data Context = Context {
-        contextWorld :: !EdhWorld
-        , contextModu :: !Module
-        , contextScope :: !Scope
-    }
+    contextWorld :: !EdhWorld
+    , contextModu :: !Module
+    , contextScope :: !Scope
+  }
 
 
 -- Especially note that Edh has no block scope as in C
@@ -133,11 +133,11 @@ data Context = Context {
 --  * if it is a methd procedure call, `thisObject` remains the
 --    same as previous stack frame.
 data Scope = Scope {
-        -- | the entity of current scope, it's unique in a method procedure,
-        -- and is the underlying entity of 'thisObject' in a class procedure.
-        scopeEntity :: !Entity
-        , thisObject :: !Object -- ^ `this` object of current scope
-    }
+    -- | the entity of current scope, it's unique in a method procedure,
+    -- and is the underlying entity of 'thisObject' in a class procedure.
+    scopeEntity :: !Entity
+    , thisObject :: !Object -- ^ `this` object of current scope
+  }
 instance Eq Scope where
   Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
 
@@ -277,40 +277,21 @@ data EdhWorld = EdhWorld {
   }
 
 
--- | The monad for transactional running of an Edh program
-newtype EdhProg a = EdhProg { unEdhProg :: ReaderT EdhTxState IO a }
-  deriving (Functor, Applicative, Monad, MonadReader EdhTxState,
-            MonadIO, MonadFail)
+-- | The monad for running of an Edh program
+type EdhProg = ReaderT EdhProgState STM
 
--- | The states of a transaction
-data EdhTxState = EdhTxState {
-    edh'tx'master :: !ThreadId
-    -- | the stub for an open op set collecting more ops into current tx
-    , edh'tx'open :: !(MVar (Maybe (IORef EdhTxOps)))
-    -- | the stub an op set is submitted into for execution
-    , edh'tx'exec :: !(MVar EdhTxOps)
+-- | The states of a program
+data EdhProgState = EdhProgState {
+    edh'master'thread :: !ThreadId
+    , edh'main'queue :: !(TQueue EdhTxOp)
+    , edh'context :: !Context
+    , edh'in'tx :: !Bool
+    -- , edh'forker'thread :: !ThreadId
+    -- , edh'fork'chan :: !(TChan xxx)
   }
 
--- | All operations per a transaction
-data EdhTxOps = EdhTxOps {
-    edh'tx'reads :: ! [TxReadOp]
-    , edh'tx'writes :: ![TxWriteOp]
-  }
-type TxReadOp
-  = ( Entity
-    , AttrKey
-    , EdhValue -> EdhProg ()
-    , TMVar EdhValue
-    , IORef (Maybe ThreadId)
-    )
-type TxWriteOp
-  = ( Entity
-    , AttrKey
-    , (EdhValue -> EdhProg ()) -> EdhProg ()
-    , TMVar EdhValue
-    , IORef (Maybe ThreadId)
-    )
-
+-- | An operation to run in a new, separate stm transaction
+type EdhTxOp = ((Scope, EdhValue), (Scope, EdhValue) -> EdhProg (STM ()))
 
 -- | Type of a procedure in host language that can be called from Edh code.
 --
@@ -319,21 +300,33 @@ type TxWriteOp
 -- conforming to this procedual interface in the host language (Haskell)
 -- should be considered idiomatic).
 type EdhProcedure -- such a procedure servs as the callee
-  =  Context -- ^ the caller's context
-  -> ArgsSender -- ^ the manifestation of how the caller wills to send args
+  =  ArgsSender -- ^ the manifestation of how the caller wills to send args
   -> Scope -- ^ the scope from which the callee is addressed off
   -> EdhProcExit -- ^ the CPS exit to return a value from this procedure
-  -> EdhProg ()
+  -> EdhProg (STM ())
 
 -- | The type for an Edh procedure's return, in continuation passing style.
-type EdhProcExit = (Scope, EdhValue) -> EdhProg ()
+type EdhProcExit = (Scope, EdhValue) -> EdhProg (STM ())
+
+-- | Convenient function to be used as short-hand to return from an Edh
+-- procedure (or functions with similar signature)
+exitEdhProc :: EdhProcExit -> (Scope, EdhValue) -> EdhProg (STM ())
+exitEdhProc exit result = do
+  pgs <- ask
+  let txq   = edh'main'queue pgs
+      !inTx = edh'in'tx pgs
+  return if inTx
+    then runReaderT (exit result) pgs >>= id
+    else writeTQueue txq (result, exit)
+{-# INLINE exitEdhProc #-}
+
 
 -- | A pack of evaluated argument values with positional/keyword origin,
 -- normally obtained by invoking `packEdhArgs ctx argsSender`.
 data ArgsPack = ArgsPack {
     positional'args :: ![EdhValue]
     , keyword'args :: !(Map.Map AttrName EdhValue)
-  }
+  } deriving (Eq)
 
 
 -- | Type of procedures implemented in the host language (Haskell).

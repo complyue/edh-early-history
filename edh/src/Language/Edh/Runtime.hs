@@ -59,19 +59,20 @@ moduleContext w m = Context { contextWorld = w
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
 runEdhProgram' _   []    = return $ Right EdhNil
 runEdhProgram' ctx stmts = do
-  final <- newEmptyTMVarIO
-  let finalize (_scope, val) = do
-        liftIO $ atomically $ putTMVar final val
-  tryJust Just
-    $  runEdhProg (evalStmts stmts finalize)
-    >> (atomically $ readTMVar final)
-
- where
-
-  evalStmts :: SeqStmts -> ((Scope, EdhValue) -> EdhProg ()) -> EdhProg ()
-  evalStmts []       exit = exit (contextScope ctx, nil)
-  evalStmts [s     ] exit = evalStmt ctx s exit
-  evalStmts (s : rs) exit = evalStmt ctx s (\_ -> evalStmts rs exit)
+  !final <- newEmptyTMVarIO
+  let wrapper :: EdhProg ()
+      wrapper = do
+        pgs <- ask
+        let txq = edh'main'queue pgs
+            ctx = edh'context pgs
+            evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
+            evalStmts []       exit = exit (contextScope ctx, nil)
+            evalStmts [s     ] exit = evalStmt s exit
+            evalStmts (s : rs) exit = evalStmt s (const $ evalStmts rs exit)
+        evalStmts stmts $ \(_, !val) -> return $ putTMVar final val
+  tryJust Just $ do
+    runEdhProg ctx wrapper
+    (atomically $ readTMVar final)
 
 
 createEdhWorld :: MonadIO m => m EdhWorld
