@@ -16,6 +16,8 @@ import           Control.Concurrent.STM
 import           Language.Edh.Details.RtTypes
 
 
+-- | Throw from an Edh program, be cautious NOT to have any monadic action
+-- following such a throw, or it'll silently fail to work out.
 throwEdh :: Exception e => e -> EdhProg (STM ())
 throwEdh e = return $ throwSTM e
 

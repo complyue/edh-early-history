@@ -309,7 +309,8 @@ type EdhProcedure -- such a procedure servs as the callee
 type EdhProcExit = (Scope, EdhValue) -> EdhProg (STM ())
 
 -- | Convenient function to be used as short-hand to return from an Edh
--- procedure (or functions with similar signature)
+-- procedure (or functions with similar signature), this sets transaction
+-- boundaries wrt 'edh'in'tx' stated in the program's current state.
 exitEdhProc :: EdhProcExit -> (Scope, EdhValue) -> EdhProg (STM ())
 exitEdhProc exit result = do
   pgs <- ask

@@ -41,12 +41,11 @@ evalBlock [] !exit = do
   !pgs <- ask
   let !ctx = edh'context pgs
   exitEdhProc exit (contextScope ctx, nil)
-evalBlock [!ss] !exit = evalStmt ss $ \result -> exitEdhProc
-  exit
-  case result of
+evalBlock [!ss] !exit = evalStmt ss $ \result ->
+  exitEdhProc exit $ case result of
     (!scope', EdhCaseClose !val) -> (scope', val)
     _                            -> result
-evalBlock !(ss : rest) exit = evalStmt ss $ \result -> case result of
+evalBlock (ss : rest) !exit = evalStmt ss $ \result -> case result of
   (!scope', EdhCaseClose !val) -> exitEdhProc exit (scope', val)
   brk@(!_, EdhBreak) -> exitEdhProc exit brk
   ctn@(!_, EdhContinue) -> exitEdhProc exit ctn
