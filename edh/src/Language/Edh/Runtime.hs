@@ -19,7 +19,6 @@ import           Prelude
 
 import           Control.Exception
 import           Control.Monad.Except
-import           Control.Monad.Reader
 
 import           Control.Concurrent.STM
 
@@ -64,17 +63,14 @@ runEdhProgram' ctx stmts = do
   !final <- newEmptyTMVarIO
   let wrapper :: EdhProg (STM ())
       wrapper = do
-        pgs <- ask
-        let txq = edh'main'queue pgs
-            ctx = edh'context pgs
-            evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
+        let evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
             evalStmts []       exit = exit (contextScope ctx, nil)
             evalStmts [s     ] exit = evalStmt s exit
             evalStmts (s : rs) exit = evalStmt s (const $ evalStmts rs exit)
         evalStmts stmts $ \(_, !val) -> return $ putTMVar final val
   tryJust Just $ do
     runEdhProg ctx wrapper
-    (atomically $ readTMVar final)
+    atomically $ readTMVar final
 
 
 createEdhWorld :: MonadIO m => m EdhWorld
