@@ -510,6 +510,8 @@ resolveAddr !scope (SymbolicAttr !symName) =
         <> " available"
 
 
+-- Edh attribute resolution
+
 resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
 resolveEdhCtxAttr !scope !addr = readTVar ent >>= \em -> if Map.member addr em
   then return (Just scope)
@@ -520,26 +522,30 @@ resolveEdhCtxAttr !scope !addr = readTVar ent >>= \em -> if Map.member addr em
 
 resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (scope@(Scope !ent _) : outerEntities) addr =
+resolveLexicalAttr (scope@(Scope !ent !obj) : outerEntities) addr =
   readTVar ent >>= \em -> if Map.member addr em
     then return (Just scope)
-    else resolveLexicalAttr outerEntities addr
+    else if ent == objEntity obj
+      then -- go directly to supers as entity of this object has been
+           -- determined not containing the interesting attribute
+           resolveEdhSuperAttr (objSupers obj) addr
+      else do
+        resolveEdhObjAttr obj addr >>= \case
+          Just scope'from'object -> return $ Just scope'from'object
+          -- go one level outer of the lexical stack
+          Nothing                -> resolveLexicalAttr outerEntities addr
 
-
-resolveEdhObjAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhObjAttr !scope !addr = readTVar objEnt >>= \em ->
+resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
+resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->
   if Map.member addr em
-    then return (Just scope)
+    then return (Just $ Scope thisEnt this)
     else resolveEdhSuperAttr (objSupers this) addr
- where
-  this   = thisObject scope
-  objEnt = objEntity this
+  where !thisEnt = objEntity this
 
 resolveEdhSuperAttr :: [Object] -> AttrKey -> STM (Maybe Scope)
-resolveEdhSuperAttr []                   _     = return Nothing
-resolveEdhSuperAttr (super : restSupers) !addr = readTVar objEnt >>= \em ->
-  if Map.member addr em
-    then return (Just (Scope objEnt super))
-    else resolveEdhSuperAttr restSupers addr
-  where objEnt = objEntity super
+resolveEdhSuperAttr [] _ = return Nothing
+resolveEdhSuperAttr (super : restSupers) !addr =
+  resolveEdhObjAttr super addr >>= \case
+    Just scope -> return $ Just scope
+    Nothing    -> resolveEdhSuperAttr restSupers addr
 
