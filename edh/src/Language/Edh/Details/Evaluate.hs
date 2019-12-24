@@ -284,12 +284,50 @@ evalExpr expr exit = do
       (scope', EdhHostProc (HostProcedure _name proc)) ->
         proc argsSndr scope' exit
 
-      -- EdhClass classDef -> 
+
+      (_, EdhClass cls@(Class _ _clsName (ProcDecl proc'args proc'body))) ->
+          -- ensure args sending and receiving happens within a same tx
+          -- for atomicity of the call making
+        local (\pgs' -> pgs' { edh'in'tx = True })
+          $ packEdhArgs argsSndr
+          $ \(_, pkv) -> case pkv of
+              EdhArgsPack pk -> recvEdhArgs proc'args pk $ \(_, scopeObj) ->
+                case scopeObj of
+                  EdhObject (Object ent' cls' [])
+                    | cls' == (scopeClass world)
+                    -> let !newThis = Object ent' cls []
+                -- use this as the scope entity of instance ctor execution
+                       in  local
+                               (\pgs' -> pgs'
+                -- set new object's scope
+                                 { edh'context = Context world
+                                                         (Scope ent' newThis)
+                -- restore original tx state after args received
+                                 , edh'in'tx   = edh'in'tx pgs
+                                 }
+                               )
+                             $ evalStmt proc'body
+                             $ \(_, ctorRtn) -> case ctorRtn of
+                -- allow a class procedure to explicitly return another
+                -- object than newly constructed `this`.
+                -- it can still return `nil` to break out the procedure
+                -- fast.
+                -- this is magically an advance feature.
+                                 EdhReturn rtnVal | rtnVal /= nil ->
+                                   exitEdhProc exit (scope, rtnVal)
+                -- no explicit return from class procedure, return the
+                -- newly constructed this object, instead of the last
+                -- value from the procedure execution.
+                                 _ ->
+                                   exitEdhProc exit (scope, EdhObject newThis)
+                  _ -> error "bug"
+              _ -> error "bug"
+
 
       (_, EdhMethod (Method ownerObj _mthName (ProcDecl proc'args proc'body)))
         ->
           -- ensure args sending and receiving happens within a same tx
-          -- for atomicity of the call statement
+          -- for atomicity of the call making
            local (\pgs' -> pgs' { edh'in'tx = True })
           $ packEdhArgs argsSndr
           $ \(_, pkv) -> case pkv of
@@ -299,7 +337,7 @@ evalExpr expr exit = do
                     -- use this as the scope entity of method execution
                     local
                         (\pgs' -> pgs'
-                          -- use method's scope
+                          -- set method's scope
                           { edh'context = Context world (Scope ent' ownerObj)
                           -- restore original tx state after args received
                           , edh'in'tx   = edh'in'tx pgs
