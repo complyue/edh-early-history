@@ -71,13 +71,30 @@ evalStmt' stmt exit = do
       !scope = contextScope ctx
   case stmt of
 
-    ExprStmt expr             -> evalExpr expr exit
+    ExprStmt expr -> evalExpr expr exit
 
-    LetStmt argsRcvr argsSndr -> undefined
+    LetStmt argsRcvr argsSndr ->
+      -- ensure sending and receiving happens within a same tx
+      -- for atomicity of the let statement
+      local (\pgs' -> pgs' { edh'in'tx = True })
+        $ packEdhArgs argsSndr
+        $ \(_, pkv) -> case pkv of
+            EdhArgsPack pk -> recvEdhArgs argsRcvr pk $ \(_, scopeObj) ->
+              case scopeObj of
+                EdhObject (Object ent cls [])
+                  | cls == (scopeClass $ contextWorld ctx) -> return $ do
+                    -- overwrite current scope entity with attributes from
+                    -- the received entity
+                    um <- readTVar ent
+                    modifyTVar' (scopeEntity scope) $ \em -> Map.union um em
+                    -- let statement evaluates to nil always
+                    join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
+                _ -> error "bug"
+            _ -> error "bug"
 
-    BreakStmt                 -> exitEdhProc exit (scope, EdhBreak)
-    ContinueStmt              -> exitEdhProc exit (scope, EdhContinue)
-    FallthroughStmt           -> exitEdhProc exit (scope, EdhFallthrough)
+    BreakStmt       -> exitEdhProc exit (scope, EdhBreak)
+    ContinueStmt    -> exitEdhProc exit (scope, EdhContinue)
+    FallthroughStmt -> exitEdhProc exit (scope, EdhFallthrough)
 
     YieldStmt expr ->
       evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhYield val)
@@ -352,6 +369,11 @@ assignEdhTarget inTxAfter lhExpr exit (_, rhVal) = do
 --  * argument renaming - match the name as sent, receive to a  differently
 --     named attribute of the entity. while renaming a positional argument
 --     is doable but meaningless, you'd just use the later name
+--- * rest-args repacking, in forms of:
+---     *args
+---     **kwargs
+---     ***pkargs
+
 
 recvEdhArgs :: ArgsReceiver -> ArgsPack -> EdhProcExit -> EdhProg (STM ())
 recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
@@ -362,23 +384,27 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
     !world       = contextWorld callerCtx
     recvFromPack
       :: (ArgsPack, EntityStore) -> ArgReceiver -> STM (ArgsPack, EntityStore)
-    recvFromPack ((ArgsPack posArgs' kwArgs'), em) argRcvr = case argRcvr of
-      RecvRestPosArgs restPosArgAttr -> do
-        argsList <- newTVar posArgs'
-        return
-          ( ArgsPack [] kwArgs'
-          , Map.insert (AttrByName restPosArgAttr) (EdhList $ List argsList) em
-          )
-      RecvRestKwArgs restKwArgAttr -> do
-        argsDict <- Dict <$> (newTVar $ Map.mapKeys ItemByStr kwArgs')
-        return
-          ( ArgsPack posArgs' Map.empty
-          , Map.insert (AttrByName restKwArgAttr) (EdhDict argsDict) em
-          )
+    recvFromPack (pk@(ArgsPack posArgs' kwArgs'), em) argRcvr = case argRcvr of
+      RecvRestPosArgs restPosArgAttr -> return
+        ( ArgsPack [] kwArgs'
+        , Map.insert (AttrByName restPosArgAttr)
+                     (EdhArgsPack $ ArgsPack posArgs' Map.empty)
+                     em
+        )
+      RecvRestKwArgs restKwArgAttr -> return
+        ( ArgsPack posArgs' Map.empty
+        , Map.insert (AttrByName restKwArgAttr)
+                     (EdhArgsPack $ ArgsPack [] kwArgs')
+                     em
+        )
+      RecvRestPkArgs restPkArgAttr -> return
+        ( ArgsPack [] Map.empty
+        , Map.insert (AttrByName restPkArgAttr) (EdhArgsPack pk) em
+        )
       RecvArg argName argTgtAddr argDefault -> do
         (argVal, posArgs'', kwArgs'') <- resolveArgValue argName argDefault
         case argTgtAddr of
-          Nothing -> do
+          Nothing ->
             return
               ( ArgsPack posArgs'' kwArgs''
               , Map.insert (AttrByName argName) argVal em
@@ -412,11 +438,10 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
       resolveArgValue argName argDefault = do
         let (inKwArgs, kwArgs'') = takeOutFromMap argName kwArgs'
         case inKwArgs of
-          Nothing -> case posArgs' of
+          Just argVal -> return (argVal, posArgs', kwArgs'')
+          _           -> case posArgs' of
             (posArg : posArgs'') -> return (posArg, posArgs'', kwArgs'')
             []                   -> case argDefault of
-              Nothing ->
-                throwSTM $ EvalError $ "Missing argument: " <> argName
               Just defaultExpr -> do
                 defaultVar <- newEmptyTMVar
                 join $ runReaderT
@@ -426,7 +451,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                   (pgs { edh'in'tx = True })
                 defaultVal <- readTMVar defaultVar
                 return (defaultVal, posArgs', kwArgs'')
-          Just argVal -> return (argVal, posArgs', kwArgs'')
+              _ -> throwSTM $ EvalError $ "Missing argument: " <> argName
     doReturn :: Entity -> STM ()
     doReturn ent = join $ runReaderT
       (exitEdhProc exit
@@ -463,8 +488,8 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
       <> T.pack (show $ length posResidual)
       <> " positional argument(s)"
     | not (Map.null kwResidual)
-    = throwSTM $ EvalError $ "Extraneous keyword arguments: " <> T.pack
-      (show $ Map.keys kwResidual)
+    = throwSTM $ EvalError $ "Extraneous keyword arguments: " <> T.unwords
+      (Map.keys kwResidual)
     | otherwise
     = newTVar em
 

@@ -34,9 +34,9 @@ type SeqStmts = [StmtSrc]
 
 newtype StmtSrc = StmtSrc (SourcePos, Stmt)
 instance Eq StmtSrc where
-    StmtSrc (x'sp, _) == StmtSrc (y'sp, _) = x'sp == y'sp
+  StmtSrc (x'sp, _) == StmtSrc (y'sp, _) = x'sp == y'sp
 instance Show StmtSrc where
-    show (StmtSrc (sp, _)) = "Edh statement @ " ++ sourcePosPretty sp
+  show (StmtSrc (sp, _)) = "Edh statement @ " ++ sourcePosPretty sp
 
 
 data Stmt = VoidStmt
@@ -71,6 +71,7 @@ data ArgsReceiver = PackReceiver ![ArgReceiver]
     deriving (Show)
 data ArgReceiver = RecvRestPosArgs !AttrName
         | RecvRestKwArgs !AttrName
+        | RecvRestPkArgs !AttrName
         | RecvArg !AttrName !(Maybe AttrAddr) !(Maybe Expr)
     deriving (Show)
 

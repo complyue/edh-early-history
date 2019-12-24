@@ -87,14 +87,21 @@ parseArgRecvs :: [ArgReceiver] -> Bool -> Bool -> Parser [ArgReceiver]
 parseArgRecvs rs kwConsumed posConsumed =
   (lookAhead (symbol ")") >> return rs) <|> do
     nextArg <-
-      (if posConsumed then parseKwRecv True else nextPosArg) <* trailingComma
+      (if posConsumed
+          then restPkArgs <|> restKwArgs <|> parseKwRecv True
+          else nextPosArg
+        )
+        <* trailingComma
     case nextArg of
       RecvRestPosArgs _ -> parseArgRecvs (nextArg : rs) kwConsumed True
       RecvRestKwArgs  _ -> parseArgRecvs (nextArg : rs) True posConsumed
       _                 -> parseArgRecvs (nextArg : rs) kwConsumed posConsumed
  where
   nextPosArg, restKwArgs, restPosArgs :: Parser ArgReceiver
-  nextPosArg = restKwArgs <|> restPosArgs <|> parseKwRecv True
+  nextPosArg = restPkArgs <|> restKwArgs <|> restPosArgs <|> parseKwRecv True
+  restPkArgs = do
+    void $ symbol "***"
+    RecvRestPkArgs <$> parseAttrName
   restKwArgs = do
     void $ symbol "**"
     RecvRestKwArgs <$> parseAttrName
@@ -287,6 +294,7 @@ parseStmt = do
     .   (srcPos, )
     <$> choice
           [ parseImportStmt
+          , parseLetStmt
           , parseClassStmt
           , parseExtendsStmt
           , parseMethodStmt
