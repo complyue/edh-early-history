@@ -461,7 +461,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
   -- execution of the args receiving always in a tx for atomicity
   local (\pgs' -> pgs' { edh'in'tx = True }) $ case argsRcvr of
     PackReceiver argRcvrs -> return $ do
-      (pck', em) <- foldM (recvFromPack) (pck, Map.empty) argRcvrs
+      (pck', em) <- foldM recvFromPack (pck, Map.empty) argRcvrs
       ent        <- woResidual pck' em
       doReturn ent
     SingleReceiver argRcvr -> return $ do
@@ -606,8 +606,12 @@ resolveAddr !scope (SymbolicAttr !symName) =
 
 resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
 resolveEdhCtxAttr !scope !addr = readTVar ent >>= \em -> if Map.member addr em
-  then return (Just scope)
-  else resolveLexicalAttr (classScope $ objClass this) addr
+  then -- directly present on current scope
+       return (Just scope)
+  else -- skip searching `this` object here, so within a method procedure you
+       -- have to be explicit if intend to address attribute off `this` object,
+       -- by writing `this.xxx`
+       resolveLexicalAttr (classScope $ objClass this) addr
  where
   !ent  = scopeEntity scope
   !this = thisObject scope
@@ -616,16 +620,18 @@ resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
 resolveLexicalAttr (scope@(Scope !ent !obj) : outerEntities) addr =
   readTVar ent >>= \em -> if Map.member addr em
-    then return (Just scope)
-    else if ent == objEntity obj
-      then -- go directly to supers as entity of this object has been
-           -- determined not containing the interesting attribute
+    then -- directly present on current scope
+         return (Just scope)
+    else -- go for the interesting attribute from inheritance hierarchy
+         -- of this object, so a module can `extends` some objects too,
+         -- in addition to the `import` mechanism
+         if ent == objEntity obj
+      then -- go directly to supers as entity of this object just searched
            resolveEdhSuperAttr (objSupers obj) addr
-      else do
-        resolveEdhObjAttr obj addr >>= \case
-          Just scope'from'object -> return $ Just scope'from'object
-          -- go one level outer of the lexical stack
-          Nothing                -> resolveLexicalAttr outerEntities addr
+      else resolveEdhObjAttr obj addr >>= \case
+        Just scope'from'object -> return $ Just scope'from'object
+        -- go one level outer of the lexical stack
+        Nothing                -> resolveLexicalAttr outerEntities addr
 
 resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
 resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->
