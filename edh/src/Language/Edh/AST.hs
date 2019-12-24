@@ -88,7 +88,10 @@ data ArgSender = UnpackPosArgs !Expr
 data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
                         ,  procedure'body :: !StmtSrc
                         }
-    deriving (Show)
+  deriving (Show)
+instance Eq ProcDecl where
+  ProcDecl _ x'body == ProcDecl _ y'body = x'body == y'body
+
 
 data Prefix = PrefixPlus | PrefixMinus | Not
     | Guard -- similar to guard in Haskell

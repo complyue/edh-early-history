@@ -18,8 +18,6 @@ import           Foreign.Marshal.Alloc
 import           System.Mem.Weak
 import           System.IO.Unsafe
 
-import           Text.Megaparsec
-
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
@@ -102,10 +100,9 @@ instance Show List where
     where ll = unsafePerformIO $ readTVarIO l
 
 
--- | calling stack frames at any point of Edh code execution
+-- | The execution context of an Edh thread
 data Context = Context {
     contextWorld :: !EdhWorld
-    , contextModu :: !Module
     , contextScope :: !Scope
   }
 
@@ -177,37 +174,35 @@ instance Eq Object where
   -- equality by pointer to entity
   Object x'e _ _ == Object y'e _ _ = x'e == y'e
 instance Show Object where
-  show (Object _ (Class _ cn _ _) supers) =
+  show (Object _ (Class _ cn _) supers) =
     "[object: "
       ++ T.unpack cn
       ++ (if null supers
            then ""
            else T.unpack $ " extends" <> T.concat
-             [ " " <> scn | (Object _ (Class _ scn _ _) _) <- supers ]
+             [ " " <> scn | (Object _ (Class _ scn _) _) <- supers ]
          )
       ++ "]"
 
 data Class = Class {
     classScope :: ![Scope] -- ^ the scope this class procedure is defined
     , className :: !AttrName
-    , classSourcePos :: !SourcePos
     , classProcedure :: !ProcDecl
   }
 instance Eq Class where
-  Class x's _ x'sp _ == Class y's _ y'sp _ = x's == y's && x'sp == y'sp
+  Class x's _ x'pd == Class y's _ y'pd = x's == y's && x'pd == y'pd
 instance Show Class where
-  show (Class _ cn _ _) = "[class: " ++ T.unpack cn ++ "]"
+  show (Class _ cn _) = "[class: " ++ T.unpack cn ++ "]"
 
 data Method = Method {
     methodOwnerObject :: !Object
     , methodName :: !AttrName
-    , methodSourcePos :: !SourcePos
     , methodProcedure :: !ProcDecl
   }
 instance Eq Method where
-  Method x'o _ x'sp _ == Method y'o _ y'sp _ = x'o == y'o && x'sp == y'sp
+  Method x'o _ x'pd == Method y'o _ y'pd = x'o == y'o && x'pd == y'pd
 instance Show Method where
-  show (Method (Object _ (Class _ cn _ _) _) mn _ _) =
+  show (Method (Object _ (Class _ cn _) _) mn _) =
     "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
 
 data GenrDef = GenrDef {

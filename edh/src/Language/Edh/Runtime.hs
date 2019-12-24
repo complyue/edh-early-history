@@ -47,10 +47,7 @@ runEdhProgram w m rs = liftIO $ runEdhProgram' ctx rs
 
 
 moduleContext :: EdhWorld -> Module -> Context
-moduleContext w m = Context { contextWorld = w
-                            , contextModu  = m
-                            , contextScope = scope
-                            }
+moduleContext w m = Context { contextWorld = w, contextScope = scope }
  where
   mo    = moduleObject m
   scope = Scope { scopeEntity = objEntity mo, thisObject = mo }
@@ -88,7 +85,6 @@ createEdhWorld = liftIO $ do
     !worldClass = Class
       { classScope     = []
       , className      = "<world>"
-      , classSourcePos = srcPos
       , classProcedure = ProcDecl { procedure'args = WildReceiver
                                   , procedure'body = StmtSrc (srcPos, VoidStmt)
                                   }
@@ -103,7 +99,6 @@ createEdhWorld = liftIO $ do
       Class
         { classScope     = [Scope moduManiMethods root]
         , className      = "<module>"
-        , classSourcePos = srcPos
         , classProcedure = ProcDecl
                              { procedure'args = WildReceiver
                              , procedure'body = StmtSrc (srcPos, VoidStmt)
@@ -113,7 +108,6 @@ createEdhWorld = liftIO $ do
       Class
         { classScope     = [Scope scopeManiMethods root]
         , className      = "<scope>"
-        , classSourcePos = srcPos
         , classProcedure = ProcDecl
                              { procedure'args = WildReceiver
                              , procedure'body = StmtSrc (srcPos, VoidStmt)
