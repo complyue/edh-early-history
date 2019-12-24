@@ -3,7 +3,6 @@ module Language.Edh.Details.RtTypes where
 
 import           Prelude
 
-
 import           Control.Monad.Except
 import           Control.Monad.Reader
 
@@ -43,9 +42,9 @@ instance Show Dict where
       ++ "}"
     where dm = unsafePerformIO $ readTVarIO d
 data ItemKey = ItemByType !EdhTypeValue
-        | ItemByStr !Text | ItemBySym !Symbol
-        | ItemByNum !Decimal | ItemByBool !Bool
-    deriving (Eq, Ord)
+    | ItemByStr !Text | ItemBySym !Symbol
+    | ItemByNum !Decimal | ItemByBool !Bool
+  deriving (Eq, Ord)
 instance Show ItemKey where
   show (ItemByType k) = show k
   show (ItemByStr  k) = show k
@@ -143,39 +142,39 @@ instance Eq Scope where
 -- to any number of super objects. Objects reference eachothers
 -- to form a networked data structure.
 data Object = Object {
-        -- | pointer to the stored attribute set of an entity
-        objEntity :: !Entity
+    -- | pointer to the stored attribute set of an entity
+    objEntity :: !Entity
 
-        -- | the class (a.k.a constructor procedure) of an object
-        --
-        -- this serves information purpose in the class hierarchy,
-        -- not participanting in object attribute resolution, but
-        -- serves lexical attribute resolution.
-        --
-        -- TODO not sure whether referential transparency (GHC)
-        -- works to reduce ram overhead of this field to cost a
-        -- single pointer, and if that's not the case, may worth
-        -- doing an optimisation, as every object created induce
-        -- this overhead and there'll be many objects to create
-        -- for the run.
-        , objClass :: !Class
+    -- | the class (a.k.a constructor procedure) of an object
+    --
+    -- this serves information purpose in the class hierarchy,
+    -- not participanting in object attribute resolution, but
+    -- serves lexical attribute resolution.
+    --
+    -- TODO not sure whether referential transparency (GHC)
+    -- works to reduce ram overhead of this field to cost a
+    -- single pointer, and if that's not the case, may worth
+    -- doing an optimisation, as every object created induce
+    -- this overhead and there'll be many objects to create
+    -- for the run.
+    , objClass :: !Class
 
-        -- | up-links for object inheritance hierarchy
-        --
-        -- similar to obj.__class__.__mro__ in Python, but resides
-        -- per object in Edh, in contrast to per class in Python.
-        --
-        -- this means the inheritance topology is variable compared
-        -- to other OO languages.
-        , objSupers :: ![Object]
+    -- | up-links for object inheritance hierarchy
+    --
+    -- similar to obj.__class__.__mro__ in Python, but resides
+    -- per object in Edh, in contrast to per class in Python.
+    --
+    -- this means the inheritance topology is variable compared
+    -- to other OO languages.
+    , objSupers :: ![Object]
 
-        -- so there's black magic to use different class/supers to
-        -- view the same entity as another type of object, fooling
-        -- the rest of the world. JavaScript folks have been able
-        -- to do this for decades.
-    }
+    -- so there's black magic to use different class/supers to
+    -- view the same entity as another type of object, fooling
+    -- the rest of the world. JavaScript folks have been able
+    -- to do this for decades.
+  }
 instance Eq Object where
-    -- equality by pointer to entity
+  -- equality by pointer to entity
   Object x'e _ _ == Object y'e _ _ = x'e == y'e
 instance Show Object where
   show (Object _ (Class _ cn _ _) supers) =
@@ -189,22 +188,22 @@ instance Show Object where
       ++ "]"
 
 data Class = Class {
-        classScope :: ![Scope] -- ^ the scope this class procedure is defined
-        , className :: !AttrName
-        , classSourcePos :: !SourcePos
-        , classProcedure :: !ProcDecl
-    }
+    classScope :: ![Scope] -- ^ the scope this class procedure is defined
+    , className :: !AttrName
+    , classSourcePos :: !SourcePos
+    , classProcedure :: !ProcDecl
+  }
 instance Eq Class where
   Class x's _ x'sp _ == Class y's _ y'sp _ = x's == y's && x'sp == y'sp
 instance Show Class where
   show (Class _ cn _ _) = "[class: " ++ T.unpack cn ++ "]"
 
 data Method = Method {
-        methodOwnerObject :: !Object
-        , methodName :: !AttrName
-        , methodSourcePos :: !SourcePos
-        , methodProcedure :: !ProcDecl
-    }
+    methodOwnerObject :: !Object
+    , methodName :: !AttrName
+    , methodSourcePos :: !SourcePos
+    , methodProcedure :: !ProcDecl
+  }
 instance Eq Method where
   Method x'o _ x'sp _ == Method y'o _ y'sp _ = x'o == y'o && x'sp == y'sp
 instance Show Method where
@@ -212,31 +211,31 @@ instance Show Method where
     "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
 
 data GenrDef = GenrDef {
-        generatorOwnerObject :: !Object
-        , generatorSourcePos :: !SourcePos
-        , generatorProcedure :: !ProcDecl
-    }
+    generatorOwnerObject :: !Object
+    , generatorSourcePos :: !SourcePos
+    , generatorProcedure :: !ProcDecl
+  }
 instance Eq GenrDef where
   GenrDef x'o x'sp _ == GenrDef y'o y'sp _ = x'o == y'o && x'sp == y'sp
 instance Show GenrDef where
   show (GenrDef _ _ _) = "[generator]"
 
 data Module = Module {
-        moduleObject :: !Object
-        , moduleId :: !ModuleId
-    }
+    moduleObject :: !Object
+    , moduleId :: !ModuleId
+  }
 instance Eq Module where
   Module x'o _ == Module y'o _ = x'o == y'o
 instance Show Module where
   show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 data Iterator = Iterator {
-        iterScope :: !Scope
-        , iterRestStmts :: ![StmtSrc]
-    }
+    iterScope :: !Scope
+    , iterRestStmts :: ![StmtSrc]
+  }
 instance Eq Iterator where
-    -- TODO prove there won't be concurrent executable iterators
-    -- against the same entity, or tackle problems encountered
+  -- TODO prove there won't be concurrent executable iterators
+  -- against the same entity, or tackle problems encountered
   Iterator x'e _ == Iterator y'e _ = x'e == y'e
 instance Show Iterator where
   show (Iterator _ _) = "[iterator]"
@@ -383,53 +382,53 @@ instance Show EventSink where
 
 -- | the type for a value
 data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
-    -- * immutable values
-        | EdhNil
-        | EdhDecimal !Decimal
-        | EdhBool !Bool
-        | EdhString !Text
-        | EdhSymbol !Symbol
+  -- * immutable values
+    | EdhNil
+    | EdhDecimal !Decimal
+    | EdhBool !Bool
+    | EdhString !Text
+    | EdhSymbol !Symbol
 
-    -- * direct pointer (to entities) values
-        | EdhObject !Object
-        | EdhModule !Module
+  -- * direct pointer (to entities) values
+    | EdhObject !Object
+    | EdhModule !Module
 
-    -- * mutable containers
-        | EdhDict !Dict
-        | EdhList !List
+  -- * mutable containers
+    | EdhDict !Dict
+    | EdhList !List
 
-    -- * immutable containers
-    --   the elements may still pointer to mutable data
-        | EdhPair !EdhValue !EdhValue
-        | EdhTuple ![EdhValue]
-        | EdhArgsPack ArgsPack
+  -- * immutable containers
+  --   the elements may still pointer to mutable data
+    | EdhPair !EdhValue !EdhValue
+    | EdhTuple ![EdhValue]
+    | EdhArgsPack ArgsPack
 
-    -- * pending evaluated code block
-        | EdhBlock ![StmtSrc]
+  -- * pending evaluated code block
+    | EdhBlock ![StmtSrc]
 
-    -- * harness for lazy evaluation
-        | EdhThunk !Thunk
+  -- * harness for lazy evaluation
+    | EdhThunk !Thunk
 
-    -- * host procedure callable from Edh world
-        | EdhHostProc !HostProcedure
+  -- * host procedure callable from Edh world
+    | EdhHostProc !HostProcedure
 
-    -- * precedure definitions
-        | EdhClass !Class
-        | EdhMethod !Method
-        | EdhGenrDef !GenrDef
+  -- * precedure definitions
+    | EdhClass !Class
+    | EdhMethod !Method
+    | EdhGenrDef !GenrDef
 
-    -- * flow control
-        | EdhBreak | EdhContinue
-        | EdhCaseClose !EdhValue | EdhFallthrough
-        | EdhIterator !Iterator
-        | EdhYield !EdhValue
-        | EdhReturn !EdhValue
+  -- * flow control
+    | EdhBreak | EdhContinue
+    | EdhCaseClose !EdhValue | EdhFallthrough
+    | EdhIterator !Iterator
+    | EdhYield !EdhValue
+    | EdhReturn !EdhValue
 
-    -- * event sink
-        | EdhSink !EventSink
+  -- * event sink
+    | EdhSink !EventSink
 
-    -- * reflection
-        | EdhProxy !EdhValue
+  -- * reflection
+    | EdhProxy !EdhValue
 
 edhValueStr :: EdhValue -> Text
 edhValueStr (EdhString s) = s
