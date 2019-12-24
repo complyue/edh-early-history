@@ -74,7 +74,7 @@ evalStmt' stmt exit = do
     ExprStmt expr -> evalExpr expr exit
 
     LetStmt argsRcvr argsSndr ->
-      -- ensure sending and receiving happens within a same tx
+      -- ensure args sending and receiving happens within a same tx
       -- for atomicity of the let statement
       local (\pgs' -> pgs' { edh'in'tx = True })
         $ packEdhArgs argsSndr
@@ -101,6 +101,22 @@ evalStmt' stmt exit = do
     ReturnStmt expr ->
       evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhReturn val)
 
+    ClassStmt name pd -> return $ do -- TODO how to get lexical scope stack ?
+      let mth = EdhClass $ Class { classScope     = [scope]
+                                 , className      = name
+                                 , classProcedure = pd
+                                 }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
+      join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
+
+    MethodStmt name pd -> return $ do
+      let mth = EdhMethod $ Method { methodOwnerObject = this
+                                   , methodName        = name
+                                   , methodProcedure   = pd
+                                   }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
+      join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
+
     GeneratorStmt name pd -> return $ do
       let genr = EdhGenrDef $ GenrDef { generatorOwnerObject = this
                                       , generatorName        = name
@@ -125,9 +141,7 @@ evalStmt' stmt exit = do
 evalExpr :: Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr expr exit = do
   pgs <- ask
-  let ctx   = edh'context pgs
-      scope = contextScope ctx
-      this  = thisObject scope
+  let !(Context !world scope@(Scope _ !this)) = edh'context pgs
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (scope, EdhDecimal v)
@@ -237,8 +251,8 @@ evalExpr expr exit = do
         resolveEdhCtxAttr scope key >>= \case
           Nothing ->
             throwSTM $ EvalError $ "Not in scope: " <> T.pack (show addr')
-          Just scope'@(Scope !ent !_obj) -> do
-            em <- readTVar ent
+          Just scope'@(Scope !ent' !_obj) -> do
+            em <- readTVar ent'
             case Map.lookup key em of
               Nothing -> throwSTM $ EvalError "attr resolving bug"
               Just val ->
@@ -254,8 +268,8 @@ evalExpr expr exit = do
                 <> T.pack (show key)
                 <> " from "
                 <> T.pack (show obj)
-            Just scope'@(Scope !ent !_obj) -> do
-              em <- readTVar ent
+            Just scope'@(Scope !ent' !_obj) -> do
+              em <- readTVar ent'
               case Map.lookup key em of
                 Nothing -> throwSTM $ EvalError "attr resolving bug"
                 Just val ->
@@ -265,12 +279,41 @@ evalExpr expr exit = do
 
     -- IndexExpr ixExpr tgtExpr ->
 
-    CallExpr procExpr args -> evalExpr procExpr $ \case
-        -- EdhClass classDef -> 
-        -- EdhMethod mthExpr -> 
-        -- EdhGenrDef genrDef ->
+    CallExpr procExpr argsSndr -> evalExpr procExpr $ \case
 
-      (scope', EdhHostProc (HostProcedure _name proc)) -> proc args scope' exit
+      (scope', EdhHostProc (HostProcedure _name proc)) ->
+        proc argsSndr scope' exit
+
+      -- EdhClass classDef -> 
+
+      (_, EdhMethod (Method ownerObj _mthName (ProcDecl proc'args proc'body)))
+        ->
+          -- ensure args sending and receiving happens within a same tx
+          -- for atomicity of the call statement
+           local (\pgs' -> pgs' { edh'in'tx = True })
+          $ packEdhArgs argsSndr
+          $ \(_, pkv) -> case pkv of
+              EdhArgsPack pk -> recvEdhArgs proc'args pk $ \(_, scopeObj) ->
+                case scopeObj of
+                  EdhObject (Object ent' cls []) | cls == (scopeClass world) ->
+                    -- use this as the scope entity of method execution
+                    local
+                        (\pgs' -> pgs'
+                          -- use method's scope
+                          { edh'context = Context world (Scope ent' ownerObj)
+                          -- restore original tx state after args received
+                          , edh'in'tx   = edh'in'tx pgs
+                          }
+                        )
+                      $ evalStmt proc'body
+                      $ \(_, mthRtn) -> case mthRtn of
+                          EdhReturn rtnVal -> exitEdhProc exit (scope, rtnVal)
+                          _                -> exitEdhProc exit (scope, mthRtn)
+                  _ -> error "bug"
+              _ -> error "bug"
+
+
+      -- EdhGenrDef genrDef ->
 
       (_scope', val) ->
         throwEdh
@@ -289,8 +332,8 @@ evalExpr expr exit = do
             $  "Operator ("
             <> T.pack (show opSym)
             <> ") not in scope"
-        Just scope'@(Scope !ent !_obj) -> do
-          em <- readTVar ent
+        Just scope'@(Scope !ent' !_obj) -> do
+          em <- readTVar ent'
           case Map.lookup (AttrByName opSym) em of
             Nothing -> error "attr resolving bug"
             Just (EdhHostProc (HostProcedure !_name !proc)) ->
