@@ -67,8 +67,8 @@ evalExprs (x : xs) exit = evalExpr x $ \(scope, val) ->
 evalStmt' :: Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' stmt exit = do
   !pgs <- ask
-  let !ctx   = edh'context pgs
-      !scope = contextScope ctx
+  let !ctx                      = edh'context pgs
+      !scope@(Scope !ent !this) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr expr exit
@@ -81,12 +81,12 @@ evalStmt' stmt exit = do
         $ \(_, pkv) -> case pkv of
             EdhArgsPack pk -> recvEdhArgs argsRcvr pk $ \(_, scopeObj) ->
               case scopeObj of
-                EdhObject (Object ent cls [])
+                EdhObject (Object ent' cls [])
                   | cls == (scopeClass $ contextWorld ctx) -> return $ do
                     -- overwrite current scope entity with attributes from
                     -- the received entity
-                    um <- readTVar ent
-                    modifyTVar' (scopeEntity scope) $ \em -> Map.union um em
+                    um <- readTVar ent'
+                    modifyTVar' ent $ \em -> Map.union um em
                     -- let statement evaluates to nil always
                     join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
                 _ -> error "bug"
@@ -100,6 +100,14 @@ evalStmt' stmt exit = do
       evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhYield val)
     ReturnStmt expr ->
       evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhReturn val)
+
+    GeneratorStmt name pd -> return $ do
+      let genr = EdhGenrDef $ GenrDef { generatorOwnerObject = this
+                                      , generatorName        = name
+                                      , generatorProcedure   = pd
+                                      }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName name) genr em
+      join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
 
     ImportStmt _argsRcvr srcExpr -> case srcExpr of
       LitExpr (StringLiteral moduPath) -> exitEdhProc
@@ -211,24 +219,16 @@ evalExpr expr exit = do
           EdhTuple l -> exitEdhProc exit (scope, EdhTuple l)
           _          -> error "bug"
 
-    ParenExpr x         -> evalExpr x exit
+    ParenExpr x     -> evalExpr x exit
 
     -- TODO this should check for Thunk, and implement
     --      break/fallthrough semantics
-    BlockExpr stmts     -> evalBlock stmts exit
+    BlockExpr stmts -> evalBlock stmts exit
 
     -- TODO impl this
     -- ForExpr ar iter todo -> undefined
 
-    GeneratorExpr sp pd -> exit
-      ( scope
-      , EdhGenrDef $ GenrDef { generatorOwnerObject = this
-                             , generatorSourcePos   = sp
-                             , generatorProcedure   = pd
-                             }
-      )
-
-    AttrExpr addr -> case addr of
+    AttrExpr  addr  -> case addr of
       ThisRef -> exitEdhProc exit (scope, EdhObject this)
       SupersRef ->
         exitEdhProc exit (scope, EdhTuple $ EdhObject <$> objSupers this)

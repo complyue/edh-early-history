@@ -212,7 +212,7 @@ instance Show Method where
 
 data GenrDef = GenrDef {
     generatorOwnerObject :: !Object
-    , generatorSourcePos :: !SourcePos
+    , generatorName :: !AttrName
     , generatorProcedure :: !ProcDecl
   }
 instance Eq GenrDef where
@@ -228,6 +228,7 @@ instance Eq Module where
   Module x'o _ == Module y'o _ = x'o == y'o
 instance Show Module where
   show (Module _ mp) = "[module: " ++ mp ++ "]"
+
 
 data Iterator = Iterator {
     iterScope :: !Scope

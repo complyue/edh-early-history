@@ -221,6 +221,11 @@ parseMethodStmt = do
   void $ symbol "method"
   liftA2 MethodStmt parseAlphaName parseProcDecl
 
+parseGeneratorStmt :: Parser Stmt
+parseGeneratorStmt = do
+  void $ symbol "generator"
+  liftA2 GeneratorStmt parseAlphaName parseProcDecl
+
 parseWhileStmt :: Parser Stmt
 parseWhileStmt = do
   void $ symbol "while"
@@ -298,15 +303,16 @@ parseStmt = do
           , parseClassStmt
           , parseExtendsStmt
           , parseMethodStmt
+          , parseGeneratorStmt
           , parseWhileStmt
-              -- TODO validate break/continue must within a loop construct
+    -- TODO validate break/continue must within a loop construct
           , BreakStmt <$ symbol "break"
           , ContinueStmt <$ symbol "continue"
-              -- TODO validate fallthrough must within a case-of block
+    -- TODO validate fallthrough must within a case-of block
           , FallthroughStmt <$ symbol "fallthrough"
           , parseOpDeclOvrdStmt
           , parseTryStmt
-              -- TODO validate yield must within a generator procedure
+    -- TODO validate yield must within a generator procedure
           , parseYieldStmt
           , parseReturnStmt
           , parseVoidStmt
@@ -368,11 +374,6 @@ parseForExpr = do
   iter <- parseExpr
   void $ symbol "do"
   ForExpr ar iter <$> parseExpr
-
-parseGeneratorExpr :: Parser Expr
-parseGeneratorExpr = do
-  void $ symbol "generator"
-  liftA2 GeneratorExpr getSourcePos parseProcDecl
 
 parseListExpr :: Parser Expr
 parseListExpr = ListExpr
@@ -563,8 +564,7 @@ parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxCallPrec prec leftCtor = do
   addrExpr <- choice
     [ -- possibly callable exprs
-      parseGeneratorExpr
-    , parseOpAddrOrTupleOrParen
+      parseOpAddrOrTupleOrParen
     , AttrExpr <$> parseAttrAddr
     ]
   optional (lookAhead $ symbol "," <|> symbol ";") >>= \case

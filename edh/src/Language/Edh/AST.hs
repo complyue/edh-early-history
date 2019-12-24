@@ -45,6 +45,7 @@ data Stmt = VoidStmt
     | ClassStmt !ClassName !ProcDecl
     | ExtendsStmt !Expr
     | MethodStmt !MethodName !ProcDecl
+    | GeneratorStmt !MethodName !ProcDecl
     | WhileStmt !Expr !StmtSrc
     | BreakStmt | ContinueStmt
     | FallthroughStmt
@@ -120,7 +121,6 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
     | BlockExpr ![StmtSrc]
 
     | ForExpr !ArgsReceiver !Expr !Expr
-    | GeneratorExpr !SourcePos !ProcDecl
 
     | AttrExpr !AttrAddr
     | IndexExpr { index'value :: !Expr
