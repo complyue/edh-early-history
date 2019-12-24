@@ -136,8 +136,11 @@ instance Eq Scope where
 
 
 -- | An object views an entity, with inheritance relationship 
--- to any number of super objects. Objects reference eachothers
--- to form a networked data structure.
+-- to any number of super objects.
+-- 
+-- Note Edh objects are fat, every methods are stored per object,
+-- this is essentially Go style type-embedding in contrast to
+-- class based method resolution in traditional OO systems.
 data Object = Object {
     -- | pointer to the stored attribute set of an entity
     objEntity :: !Entity
@@ -147,22 +150,9 @@ data Object = Object {
     -- this serves information purpose in the class hierarchy,
     -- not participanting in object attribute resolution, but
     -- serves lexical attribute resolution.
-    --
-    -- TODO not sure whether referential transparency (GHC)
-    -- works to reduce ram overhead of this field to cost a
-    -- single pointer, and if that's not the case, may worth
-    -- doing an optimisation, as every object created induce
-    -- this overhead and there'll be many objects to create
-    -- for the run.
     , objClass :: !Class
 
     -- | up-links for object inheritance hierarchy
-    --
-    -- similar to obj.__class__.__mro__ in Python, but resides
-    -- per object in Edh, in contrast to per class in Python.
-    --
-    -- this means the inheritance topology is variable compared
-    -- to other OO languages.
     , objSupers :: ![Object]
 
     -- so there's black magic to use different class/supers to
