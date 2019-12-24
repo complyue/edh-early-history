@@ -14,7 +14,6 @@ import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
-import           Data.IORef
 import           Foreign.C.String
 import           Foreign.Marshal.Alloc
 import           System.Mem.Weak
@@ -267,11 +266,17 @@ mkThunk !desc !valuator = do
 
 -- | A world for Edh programs to change
 data EdhWorld = EdhWorld {
+    -- | root object of this world
     worldRoot :: !Object
-    -- all module objects in this world belong to this class
+    -- | all module objects in this world belong to this class
     , moduleClass :: !Class
-    , worldOperators :: !(IORef OpPrecDict)
-    , worldModules :: !(IORef (Map.Map ModuleId Module))
+    -- | all scope wrapper objects in this world belong to this class
+    , scopeClass :: !Class
+    -- | all operators declared in this world, this also used as the
+    -- _world lock_ in parsing source code to be executed in this world
+    , worldOperators :: !(TMVar OpPrecDict)
+    -- | all modules loaded into this world
+    , worldModules :: !(TVar (Map.Map ModuleId Module))
   }
 
 

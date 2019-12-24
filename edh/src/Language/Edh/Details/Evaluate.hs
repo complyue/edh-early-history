@@ -19,6 +19,7 @@ import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.Tx
+import           Language.Edh.Details.Utils
 
 
 evalStmt :: StmtSrc -> EdhProcExit -> EdhProg (STM ())
@@ -228,7 +229,7 @@ evalExpr expr exit = do
       IndirectRef !tgtExpr !addr' -> evalExpr tgtExpr $ \case
         (_, EdhObject !obj) -> return $ do
           !key <- resolveAddr scope addr'
-          resolveEdhObjAttr (Scope (objEntity obj) obj) key >>= \case
+          resolveEdhObjAttr obj key >>= \case
             Nothing ->
               throwSTM
                 $  EvalError
@@ -290,11 +291,51 @@ evalExpr expr exit = do
     _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
 
 
--- evalExprToVar :: Context -> Expr -> EdhProg (TMVar (Scope, EdhValue))
--- evalExprToVar ctx expr = do
---   var <- liftIO newEmptyTMVarIO
---   evalExpr ctx expr $ \sv -> liftIO $ atomically $ putTMVar var sv
---   return var
+-- | assign an evaluated value to a target expression
+--
+-- Note the calling procedure should declare in-tx state in evaluating the
+-- right-handle value as well as running this, so the evaluation of the
+-- right-hand value as well as the writting to the target entity are done
+-- within the same tx, thus for atomicity of the whole assignment.
+-- and it should pass the first argument to indicate whether to maintain
+-- in-tx state after the assignment done.
+assignEdhTarget
+  :: Bool -> Expr -> EdhProcExit -> (Scope, EdhValue) -> EdhProg (STM ())
+assignEdhTarget inTxAfter lhExpr exit (_, rhVal) = do
+  pgs <- ask
+  let !callerCtx                      = edh'context pgs
+      !callerScope@(Scope !ent !this) = contextScope callerCtx
+      !thisEnt                        = objEntity this
+      -- assigment result as if come from the calling scope
+      !result                         = (callerScope, rhVal)
+      finishAssign :: Entity -> AttrKey -> STM ()
+      finishAssign ent' key = do
+        modifyTVar' ent' $ \em -> Map.insert key rhVal em
+        -- restore in-tx state
+        join $ runReaderT (exitEdhProc exit result)
+                          (pgs { edh'in'tx = inTxAfter })
+  case lhExpr of
+    AttrExpr !addr -> case addr of
+      DirectRef !addr' ->
+        return $ resolveAddr callerScope addr' >>= \key -> finishAssign ent key
+      IndirectRef !tgtExpr !addr' -> case tgtExpr of
+        AttrExpr ThisRef -> return $ resolveAddr callerScope addr' >>= \key ->
+          finishAssign thisEnt key
+        AttrExpr SupersRef ->
+          throwEdh $ EvalError "Can not assign an attribute to supers"
+        _ -> evalExpr tgtExpr $ \(_, !tgtVal) -> case tgtVal of
+          EdhObject (Object !tgtEnt _ _) ->
+            return $ resolveAddr callerScope addr' >>= \key ->
+              finishAssign tgtEnt key
+          _ -> throwEdh $ EvalError $ "Invalid assignment target: " <> T.pack
+            (show tgtVal)
+      ThisRef   -> throwEdh $ EvalError "Can not assign to this"
+      SupersRef -> throwEdh $ EvalError "Can not assign to supers"
+    x ->
+      throwEdh
+        $  EvalError
+        $  "Invalid left hand value for assignment: "
+        <> T.pack (show x)
 
 
 -- The Edh call convention is so called call-by-repacking, i.e. a new pack of
@@ -311,96 +352,121 @@ evalExpr expr exit = do
 --  * argument renaming - match the name as sent, receive to a  differently
 --     named attribute of the entity. while renaming a positional argument
 --     is doable but meaningless, you'd just use the later name
---
 
--- recvEdhArgs :: ArgsPack -> Context -> ArgsReceiver -> IO Entity
--- recvEdhArgs pck@(ArgsPack posArgs kwArgs) ctx argsRcvr = case argsRcvr of
---   PackReceiver argRcvrs -> do
---     (pck', attrs) <- foldM (recvFromPack ctx) (pck, Map.empty) argRcvrs
---     woResidual pck' attrs
---   SingleReceiver argRcvr -> do
---     (pck', attrs) <- recvFromPack ctx (pck, Map.empty) argRcvr
---     woResidual pck' attrs
---   WildReceiver -> if null posArgs
---     then newMVar $ Map.mapKeys AttrByName kwArgs
---     else
---       throwIO
---       $  EvalError
---       $  "Unexpected "
---       <> T.pack (show $ length posArgs)
---       <> " positional argument(s) to wild receiver"
---  where
---   scope = contextScope ctx
-
---   woResidual :: ArgsPack -> Map.Map AttrKey EdhValue -> IO Entity
---   woResidual (ArgsPack posResidual kwResidual) attrs
---     | not (null posResidual)
---     = throwIO
---       $  EvalError
---       $  "Extraneous "
---       <> T.pack (show $ length posResidual)
---       <> " positional argument(s)"
---     | not (Map.null kwResidual)
---     = throwIO $ EvalError $ "Extraneous keyword arguments: " <> T.pack
---       (show $ Map.keys kwResidual)
---     | otherwise
---     = newMVar attrs
---   recvFromPack
---     :: Context
---     -> (ArgsPack, Map.Map AttrKey EdhValue)
---     -> ArgReceiver
---     -> IO (ArgsPack, Map.Map AttrKey EdhValue)
---   recvFromPack ctx ((ArgsPack posArgs' kwArgs'), attrs) argRcvr =
---     case argRcvr of
---       RecvRestPosArgs restPosArgAttr -> do
---         argsList <- newIORef posArgs'
---         return
---           ( ArgsPack [] kwArgs'
---           , Map.insert (AttrByName restPosArgAttr) (EdhList argsList) attrs
---           )
---       RecvRestKwArgs restKwArgAttr -> do
---         argsDict <- newIORef $ Dict $ Map.mapKeys ItemByStr kwArgs'
---         return
---           ( ArgsPack posArgs' Map.empty
---           , Map.insert (AttrByName restKwArgAttr) (EdhDict argsDict) attrs
---           )
---       RecvArg argName argTgtAddr argDefault -> do
---         (argVal, posArgs'', kwArgs'') <- resolveArgValue argName argDefault
---         case argTgtAddr of
---           Nothing -> do
---             return
---               ( ArgsPack posArgs'' kwArgs''
---               , Map.insert (AttrByName argName) argVal attrs
---               )
---           Just (DirectRef addr) -> case addr of
---             NamedAttr attrName -> -- simple rename
---                                   return
---               ( ArgsPack posArgs'' kwArgs''
---               , Map.insert (AttrByName argName) argVal attrs
---               )
---             SymbolicAttr symName -> -- todo support this ?
---               throwIO $ EvalError "arg renaming to symbolic attr not supported"
---           Just (IndirectRef addrExpr addr) ->
---               -- TODO impl. this
---             throwIO $ EvalError "arg retargeting not impl. yet"
---           tgt -> throwIO $ EvalError $ "Invalid argument retarget: " <> T.pack
---             (show tgt)
---    where
---     resolveArgValue
---       :: AttrName
---       -> Maybe Expr
---       -> IO (EdhValue, [EdhValue], Map.Map AttrName EdhValue)
---     resolveArgValue argName argDefault = do
---       let (inKwArgs, kwArgs'') = takeOutFromMap argName kwArgs'
---       case inKwArgs of
---         Nothing -> case posArgs' of
---           (posArg : posArgs'') -> return (posArg, posArgs'', kwArgs'')
---           []                   -> case argDefault of
---             Nothing -> throwIO $ EvalError $ "Missing argument: " <> argName
---             Just defaultExpr -> do
---               defaultVal <- evalExpr defaultExpr
---               return (defaultVal, posArgs', kwArgs'')
---         Just argVal -> return (argVal, posArgs', kwArgs'')
+recvEdhArgs :: ArgsReceiver -> ArgsPack -> EdhProcExit -> EdhProg (STM ())
+recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
+  pgs <- ask
+  let
+    !callerCtx   = edh'context pgs
+    !callerScope = contextScope callerCtx
+    !world       = contextWorld callerCtx
+    recvFromPack
+      :: (ArgsPack, EntityStore) -> ArgReceiver -> STM (ArgsPack, EntityStore)
+    recvFromPack ((ArgsPack posArgs' kwArgs'), em) argRcvr = case argRcvr of
+      RecvRestPosArgs restPosArgAttr -> do
+        argsList <- newTVar posArgs'
+        return
+          ( ArgsPack [] kwArgs'
+          , Map.insert (AttrByName restPosArgAttr) (EdhList $ List argsList) em
+          )
+      RecvRestKwArgs restKwArgAttr -> do
+        argsDict <- Dict <$> (newTVar $ Map.mapKeys ItemByStr kwArgs')
+        return
+          ( ArgsPack posArgs' Map.empty
+          , Map.insert (AttrByName restKwArgAttr) (EdhDict argsDict) em
+          )
+      RecvArg argName argTgtAddr argDefault -> do
+        (argVal, posArgs'', kwArgs'') <- resolveArgValue argName argDefault
+        case argTgtAddr of
+          Nothing -> do
+            return
+              ( ArgsPack posArgs'' kwArgs''
+              , Map.insert (AttrByName argName) argVal em
+              )
+          Just (DirectRef addr) -> case addr of
+            NamedAttr attrName -> -- simple rename
+              return
+                ( ArgsPack posArgs'' kwArgs''
+                , Map.insert (AttrByName attrName) argVal em
+                )
+            SymbolicAttr _symName -> -- todo support this ?
+                                     throwSTM
+              $ EvalError "arg renaming to symbolic attr not supported"
+          Just addr@(IndirectRef _ _) -> do
+            join $ runReaderT
+              (assignEdhTarget True
+                               (AttrExpr addr)
+                               (const $ return $ return ())
+                               (callerScope, argVal)
+              )
+              (pgs { edh'in'tx = True })
+            return (ArgsPack posArgs'' kwArgs'', em)
+          tgt ->
+            throwSTM $ EvalError $ "Invalid argument retarget: " <> T.pack
+              (show tgt)
+     where
+      resolveArgValue
+        :: AttrName
+        -> Maybe Expr
+        -> STM (EdhValue, [EdhValue], Map.Map AttrName EdhValue)
+      resolveArgValue argName argDefault = do
+        let (inKwArgs, kwArgs'') = takeOutFromMap argName kwArgs'
+        case inKwArgs of
+          Nothing -> case posArgs' of
+            (posArg : posArgs'') -> return (posArg, posArgs'', kwArgs'')
+            []                   -> case argDefault of
+              Nothing ->
+                throwSTM $ EvalError $ "Missing argument: " <> argName
+              Just defaultExpr -> do
+                defaultVar <- newEmptyTMVar
+                join $ runReaderT
+                  (evalExpr defaultExpr
+                            (\(_, val) -> return (putTMVar defaultVar val))
+                  )
+                  (pgs { edh'in'tx = True })
+                defaultVal <- readTMVar defaultVar
+                return (defaultVal, posArgs', kwArgs'')
+          Just argVal -> return (argVal, posArgs', kwArgs'')
+    doReturn :: Entity -> STM ()
+    doReturn ent = join $ runReaderT
+      (exitEdhProc exit
+                   (callerScope, EdhObject $ Object ent (scopeClass world) [])
+      )
+      pgs -- execute outer code wrt what tx state originally is
+  -- execution of the args receiving always in a tx for atomicity
+  local (\pgs' -> pgs' { edh'in'tx = True }) $ case argsRcvr of
+    PackReceiver argRcvrs -> return $ do
+      (pck', em) <- foldM (recvFromPack) (pck, Map.empty) argRcvrs
+      ent        <- woResidual pck' em
+      doReturn ent
+    SingleReceiver argRcvr -> return $ do
+      (pck', em) <- recvFromPack (pck, Map.empty) argRcvr
+      ent        <- woResidual pck' em
+      doReturn ent
+    WildReceiver -> return $ if null posArgs
+      then do
+        ent <- newTVar $ Map.mapKeys AttrByName kwArgs
+        doReturn ent
+      else
+        throwSTM
+        $  EvalError
+        $  "Unexpected "
+        <> T.pack (show $ length posArgs)
+        <> " positional argument(s) to wild receiver"
+ where
+  woResidual :: ArgsPack -> EntityStore -> STM Entity
+  woResidual (ArgsPack !posResidual !kwResidual) em
+    | not (null posResidual)
+    = throwSTM
+      $  EvalError
+      $  "Extraneous "
+      <> T.pack (show $ length posResidual)
+      <> " positional argument(s)"
+    | not (Map.null kwResidual)
+    = throwSTM $ EvalError $ "Extraneous keyword arguments: " <> T.pack
+      (show $ Map.keys kwResidual)
+    | otherwise
+    = newTVar em
 
 
 packEdhArgs :: ArgsSender -> EdhProcExit -> EdhProg (STM ())
@@ -484,6 +550,7 @@ packEdhArgs' (x : xs) exit = do
         <> T.pack (show k)
 
 
+-- | resolve an attribute addressor, either alphanumeric named or symbolic
 resolveAddr :: Scope -> AttrAddressor -> STM AttrKey
 resolveAddr _ (NamedAttr !attrName) = return (AttrByName attrName)
 resolveAddr !scope (SymbolicAttr !symName) =

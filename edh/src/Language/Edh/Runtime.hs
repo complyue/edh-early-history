@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Runtime
@@ -21,8 +22,6 @@ import           Control.Exception
 import           Control.Monad.Except
 
 import           Control.Concurrent.STM
-
-import           Data.IORef
 
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
@@ -75,7 +74,12 @@ runEdhProgram' ctx stmts = do
 
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
-  worldEntity <- newTVarIO Map.empty
+  -- ultimate default methods/operators/values go into this
+  worldEntity      <- newTVarIO Map.empty
+  -- methods supporting reflected module manipulation go into this
+  moduManiMethods  <- newTVarIO Map.empty
+  -- methods supporting reflected scope manipulation go into this
+  scopeManiMethods <- newTVarIO Map.empty
   let
     !srcPos = SourcePos { sourceName   = "<Genesis>"
                         , sourceLine   = mkPos 1
@@ -91,14 +95,24 @@ createEdhWorld = liftIO $ do
       }
     !root =
       Object { objEntity = worldEntity, objClass = worldClass, objSupers = [] }
-  opPD  <- newIORef Map.empty
-  modus <- newIORef Map.empty
+  opPD  <- newTMVarIO Map.empty
+  modus <- newTVarIO Map.empty
   return $ EdhWorld
     { worldRoot      = root
     , moduleClass    =
       Class
-        { classScope     = [Scope worldEntity root]
+        { classScope     = [Scope moduManiMethods root]
         , className      = "<module>"
+        , classSourcePos = srcPos
+        , classProcedure = ProcDecl
+                             { procedure'args = WildReceiver
+                             , procedure'body = StmtSrc (srcPos, VoidStmt)
+                             }
+        }
+    , scopeClass     =
+      Class
+        { classScope     = [Scope scopeManiMethods root]
+        , className      = "<scope>"
         , classSourcePos = srcPos
         , classProcedure = ProcDecl
                              { procedure'args = WildReceiver
@@ -110,26 +124,32 @@ createEdhWorld = liftIO $ do
     }
 
 
-declareEdhOperators
-  :: MonadIO m => EdhWorld -> Text -> [(OpSymbol, Precedence)] -> m ()
-declareEdhOperators world declLoc opps = liftIO
-  $ atomicModifyIORef' (worldOperators world) declarePrecedence
+declareEdhOperators :: EdhWorld -> Text -> [(OpSymbol, Precedence)] -> STM ()
+declareEdhOperators world declLoc opps = do
+  opPD <- takeTMVar wops
+  catchSTM (declarePrecedence opPD)
+    $ \(e :: SomeException) -> tryPutTMVar wops opPD >> throwSTM e
  where
-  declarePrecedence :: OpPrecDict -> (OpPrecDict, ())
-  declarePrecedence opPD =
-    (, ())
-      $ Map.unionWithKey chkCompatible opPD
+  !wops = worldOperators world
+  declarePrecedence :: OpPrecDict -> STM ()
+  declarePrecedence opPD = do
+    opPD' <-
+      sequence
+      $ Map.unionWithKey chkCompatible (return <$> opPD)
       $ Map.fromList
-      $ flip map opps
-      $ \(op, p) -> (op, (p, declLoc))
+      $ (<$> opps)
+      $ \(op, p) -> (op, return (p, declLoc))
+    putTMVar wops opPD'
   chkCompatible
     :: OpSymbol
-    -> (Precedence, Text)
-    -> (Precedence, Text)
-    -> (Precedence, Text)
-  chkCompatible op (prevPrec, prevDeclLoc) (newPrec, newDeclLoc) =
+    -> STM (Precedence, Text)
+    -> STM (Precedence, Text)
+    -> STM (Precedence, Text)
+  chkCompatible op prev newly = do
+    (prevPrec, prevDeclLoc) <- prev
+    (newPrec , newDeclLoc ) <- newly
     if prevPrec /= newPrec
-      then throw $ EvalError
+      then throwSTM $ EvalError
         (  "precedence change from "
         <> T.pack (show prevPrec)
         <> " (declared "
@@ -141,7 +161,7 @@ declareEdhOperators world declLoc opps = liftIO
         <> ") for operator: "
         <> op
         )
-      else (prevPrec, prevDeclLoc)
+      else return (prevPrec, prevDeclLoc)
 
 
 installEdhAttrs :: Entity -> [(AttrKey, EdhValue)] -> STM ()
