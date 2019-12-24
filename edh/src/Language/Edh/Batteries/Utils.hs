@@ -15,6 +15,7 @@ import           Language.Edh.AST
 import           Language.Edh.Runtime
 
 
+-- | operator (:)
 consProc :: EdhProcedure
 consProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
   !pgs <- ask
@@ -29,10 +30,12 @@ consProc !argsSender _ _ =
     (show argsSender)
 
 
+-- | utility pack(*args,**kwargs)
 packProc :: EdhProcedure
 packProc !argsSender _ !exit = packEdhArgs argsSender exit
 
 
+-- | operator (++)
 concatProc :: EdhProcedure
 concatProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
   pgs <- ask
@@ -46,6 +49,7 @@ concatProc !argsSender _ _ =
     (show argsSender)
 
 
+-- | utility type(*args,**kwargs)
 typeProc :: EdhProcedure
 typeProc !argsSender !procScope !exit =
   packEdhArgs argsSender $ \(_, EdhArgsPack (ArgsPack !args !kwargs)) ->
@@ -61,6 +65,7 @@ typeProc !argsSender !procScope !exit =
             )
 
 
+-- | utility dict(**kwargs,*args)
 dictProc :: EdhProcedure
 dictProc !argsSender _ !exit = do
   !pgs <- ask

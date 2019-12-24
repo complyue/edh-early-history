@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Batteries where
 
@@ -10,6 +11,7 @@ import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Runtime
 
+import           Language.Edh.Batteries.Math
 import           Language.Edh.Batteries.Assign
 import           Language.Edh.Batteries.Utils
 
@@ -125,39 +127,31 @@ installEdhBatteries world = liftIO $ do
     , ("++", 5)
     ]
 
-  consHP   <- mkHostProc ":" consProc
-  assignHP <- mkHostProc "=" assignProc
-  packHP   <- mkHostProc "pack" packProc
-  concatHP <- mkHostProc "++" concatProc
-  typeHP   <- mkHostProc "type" typeProc
-  dictHP   <- mkHostProc "dict" dictProc
 
-  atomically $ installEdhAttrs
-    rootEntity
-    [
-  -- operators
-      (AttrByName ":"   , EdhHostProc consHP)
-    , (AttrByName "pack", EdhHostProc packHP)
-    , (AttrByName "="   , EdhHostProc assignHP)
-    , ( AttrByName "++"
-      , EdhHostProc concatHP
-      )
+  operators <- mapM
+    (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
+    [ (":"   , consProc)
+    , ("+"   , addProc)
+    , ("-"   , subsProc)
+    , ("*"   , mulProc)
+    , ("/"   , divProc)
+    , ("="   , assignProc)
+    , ("pack", packProc)
+    , ("++"  , concatProc)
+    , ("type", typeProc)
+    , ("dict", dictProc)
+    ]
 
-  -- introspection
-    , ( AttrByName "type"
-      , EdhHostProc typeHP
-      )
-
-  -- utility
-    , ( AttrByName "dict"
-      , EdhHostProc dictHP
-      )
-
+  atomically
+    $  installEdhAttrs rootEntity
+    $  operators
+    ++ [
   -- math constants
   -- todo figure out proper ways to make these really **constant**,
   --      i.e. not rebindable to other values
-    , ( AttrByName "pi"
-      , EdhDecimal $ Decimal 1 (-40) 31415926535897932384626433832795028841971
-      )
-    ]
+         ( AttrByName "pi"
+         , EdhDecimal
+           $ Decimal 1 (-40) 31415926535897932384626433832795028841971
+         )
+       ]
 

@@ -341,9 +341,9 @@ instance Eq HostProcedure where
 instance Show HostProcedure where
   show (HostProcedure pn _) = "[hostproc: " ++ nm ++ "]"
     where nm = unsafePerformIO $ peekCString pn
-mkHostProc :: String -> EdhProcedure -> IO HostProcedure
+mkHostProc :: Text -> EdhProcedure -> IO HostProcedure
 mkHostProc !d !p = do
-  !s <- newCString d
+  !s <- newCString $ T.unpack d
   let !hp = HostProcedure { hostProc'name = s, hostProc'proc = p }
   addFinalizer hp $ free s
   return hp
