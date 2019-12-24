@@ -12,6 +12,8 @@ import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Runtime
 
+import           Data.Lossless.Decimal
+
 
 -- | operator (+)
 addProc :: EdhProcedure
@@ -107,3 +109,34 @@ divProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
 divProc !argsSender _ _ =
   throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
     (show argsSender)
+
+
+-- | operator (**)
+powProc :: EdhProcedure
+powProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
+  !pgs <- ask
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  evalExpr lhExpr $ \(_, lhVal) -> case lhVal of
+    EdhDecimal lhNum -> evalExpr rhExpr $ \(_, rhVal) -> case rhVal of
+      EdhDecimal (Decimal rh'd rh'e rh'n) -> if rh'd /= 1
+        then
+          throwEdh
+          $  EvalError
+          $  "Invalid right-hand value for (**) operation: "
+          <> T.pack (show rhVal)
+        else exitEdhProc exit (scope, EdhDecimal $ lhNum ^^ (rh'n * 10 ^ rh'e))
+      _ ->
+        throwEdh
+          $  EvalError
+          $  "Invalid right-hand value for (**) operation: "
+          <> T.pack (show rhVal)
+    _ ->
+      throwEdh
+        $  EvalError
+        $  "Invalid left-hand value for (**) operation: "
+        <> T.pack (show lhVal)
+powProc !argsSender _ _ =
+  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
+    (show argsSender)
+
