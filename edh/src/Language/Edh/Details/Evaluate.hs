@@ -232,10 +232,8 @@ evalExpr expr exit = do
     -- ForExpr ar iter todo -> undefined
 
     AttrExpr  addr  -> case addr of
-      ThisRef -> exitEdhProc exit (this, scope, EdhObject this)
-      ThatRef -> exitEdhProc exit (that, scope, EdhObject that)
-      SupersRef ->
-        exitEdhProc exit (this, scope, EdhTuple $ EdhObject <$> objSupers this)
+      ThisRef          -> exitEdhProc exit (this, scope, EdhObject this)
+      ThatRef          -> exitEdhProc exit (that, scope, EdhObject that)
       DirectRef !addr' -> return $ do
         !key <- resolveAddr pgs addr'
         resolveEdhCtxAttr scope key >>= \case
@@ -434,17 +432,14 @@ assignEdhTarget pgsAfter lhExpr exit (_, _, rhVal) = do
           return $ resolveAddr pgs addr' >>= \key -> finishAssign thisEnt key
         AttrExpr ThatRef ->
           return $ resolveAddr pgs addr' >>= \key -> finishAssign thatEnt key
-        AttrExpr SupersRef ->
-          throwEdh EvalError "Can not assign an attribute to supers"
         _ -> evalExpr tgtExpr $ \(!_tgtThis, !_tgtScope, !tgtVal) ->
           case tgtVal of
             EdhObject (Object !tgtEnt _ _) ->
               return $ resolveAddr pgs addr' >>= \key -> finishAssign tgtEnt key
             _ -> throwEdh EvalError $ "Invalid assignment target: " <> T.pack
               (show tgtVal)
-      ThisRef   -> throwEdh EvalError "Can not assign to this"
-      ThatRef   -> throwEdh EvalError "Can not assign to that"
-      SupersRef -> throwEdh EvalError "Can not assign to supers"
+      ThisRef -> throwEdh EvalError "Can not assign to this"
+      ThatRef -> throwEdh EvalError "Can not assign to that"
     x ->
       throwEdh EvalError $ "Invalid left hand value for assignment: " <> T.pack
         (show x)

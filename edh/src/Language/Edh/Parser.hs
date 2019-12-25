@@ -128,21 +128,14 @@ parseKwRecv inPack = do
  where
   validateTgt :: Maybe AttrAddr -> Maybe AttrAddr
   validateTgt tgt = case tgt of
-    Nothing        -> Nothing
-    Just ThisRef   -> fail "can not overwrite this"
-    Just ThatRef   -> fail "can not overwrite that"
-    Just SupersRef -> fail "can not overwrite supers"
-    _              -> tgt
+    Nothing      -> Nothing
+    Just ThisRef -> fail "can not overwrite this"
+    Just ThatRef -> fail "can not overwrite that"
+    _            -> tgt
 
-
-parseSupersRef :: Parser AttrAddr
-parseSupersRef = SupersRef <$ symbol "supers"
 
 parseAttrAddr :: Parser AttrAddr
-parseAttrAddr =
-    -- `supers` is a list thus can not be further addressed
-    -- for attribute access, can stop at it on sight
-                parseSupersRef <|> do
+parseAttrAddr = do
   p1 <- leadingPart
   moreAddr p1
  where
@@ -554,8 +547,7 @@ parseIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
 parseIdxNonCallPrec prec leftCtor = do
   e1 <- choice
     [ -- possibly indexable, non-callable exprs
-      AttrExpr <$> parseSupersRef
-    , parseListExpr
+      parseListExpr
     , parseBlockOrDict
     ]
   optional parseIndexExpr >>= \case

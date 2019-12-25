@@ -22,18 +22,19 @@ installEdhBatteries world = liftIO $ do
 
   !rootArtifacts <- mapM
     (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
-    [ (":"    , consProc)
-    , ("+"    , addProc)
-    , ("-"    , subsProc)
-    , ("*"    , mulProc)
-    , ("/"    , divProc)
-    , ("**"   , powProc)
-    , ("="    , assignProc)
-    , ("pack" , packProc)
-    , ("++"   , concatProc)
-    , ("type" , typeProc)
-    , ("dict" , dictProc)
-    , ("scope", scopeObtainProc)
+    [ (":"     , consProc)
+    , ("+"     , addProc)
+    , ("-"     , subsProc)
+    , ("*"     , mulProc)
+    , ("/"     , divProc)
+    , ("**"    , powProc)
+    , ("="     , assignProc)
+    , ("pack"  , packProc)
+    , ("++"    , concatProc)
+    , ("type"  , typeProc)
+    , ("dict"  , dictProc)
+    , ("supers", supersProc)
+    , ("scope" , scopeObtainProc)
     ]
 
   !scopeArtifacts <- mapM

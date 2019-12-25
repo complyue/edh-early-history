@@ -301,7 +301,7 @@ type EdhTxTask
 -- Note the caller context/scope can be obtained from the program state.
 type EdhProcedure -- such a procedure servs as the callee
   =  ArgsSender -- ^ the manifestation of how the caller wills to send args
-  -> Object -- ^ the target `this` object
+  -> Object -- ^ the target object, i.e. 'thatObject' in context
   -> Scope -- ^ the scope from which the callee is addressed off
   -> EdhProcExit -- ^ the CPS exit to return a value from this procedure
   -> EdhProg (STM ())
