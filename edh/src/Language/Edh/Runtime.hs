@@ -26,6 +26,7 @@ import           Control.Concurrent.STM
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
+import           Data.List.NonEmpty             ( NonEmpty(..) )
 
 import           Text.Megaparsec
 
@@ -47,10 +48,14 @@ runEdhProgram w m rs = liftIO $ runEdhProgram' ctx rs
 
 
 moduleContext :: EdhWorld -> Module -> Context
-moduleContext w m = Context { contextWorld = w, contextScope = scope }
+moduleContext w m = Context { contextWorld = w
+                            , contextStack = moduScope :| [rootScope]
+                            }
  where
-  mo    = moduleObject m
-  scope = Scope { scopeEntity = objEntity mo, thisObject = mo }
+  !mo        = moduleObject m
+  !moduScope = Scope (objEntity mo) mo
+  !root      = worldRoot w
+  !rootScope = Scope (objEntity root) root
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)

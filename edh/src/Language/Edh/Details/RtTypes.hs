@@ -12,6 +12,8 @@ import           Control.Concurrent.STM
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
+import           Data.List.NonEmpty             ( NonEmpty(..) )
+import qualified Data.List.NonEmpty            as NE
 
 import           Foreign.C.String
 import           Foreign.Marshal.Alloc
@@ -103,9 +105,11 @@ instance Show List where
 -- | The execution context of an Edh thread
 data Context = Context {
     contextWorld :: !EdhWorld
-    , contextScope :: !Scope
+    , contextStack :: !(NonEmpty Scope)
   }
 
+contextScope :: Context -> Scope
+contextScope = NE.head . contextStack
 
 -- Especially note that Edh has no block scope as in C
 -- family languages, JavaScript neither does before ES6,

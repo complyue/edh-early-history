@@ -12,6 +12,8 @@ import           Control.Concurrent.STM
 
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
+import           Data.List.NonEmpty             ( (<|) )
+import qualified Data.List.NonEmpty            as NE
 
 import           Text.Megaparsec
 
@@ -67,8 +69,8 @@ evalExprs (x : xs) exit = evalExpr x $ \(scope, val) ->
 evalStmt' :: Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' stmt exit = do
   !pgs <- ask
-  let !ctx                      = edh'context pgs
-      !scope@(Scope !ent !this) = contextScope ctx
+  let !ctx@(  Context !_world !stack) = edh'context pgs
+      !scope@(Scope   !ent    !this ) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr expr exit
@@ -101,8 +103,8 @@ evalStmt' stmt exit = do
     ReturnStmt expr ->
       evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhReturn val)
 
-    ClassStmt name pd -> return $ do -- TODO how to get lexical scope stack ?
-      let mth = EdhClass $ Class { classScope     = [scope]
+    ClassStmt name pd -> return $ do
+      let mth = EdhClass $ Class { classScope     = NE.toList stack
                                  , className      = name
                                  , classProcedure = pd
                                  }
@@ -141,7 +143,8 @@ evalStmt' stmt exit = do
 evalExpr :: Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr expr exit = do
   pgs <- ask
-  let !(Context !world scope@(Scope _ !this)) = edh'context pgs
+  let !ctx@(  Context !world !stack) = edh'context pgs
+      !scope@(Scope   _      !this ) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (scope, EdhDecimal v)
@@ -296,23 +299,24 @@ evalExpr expr exit = do
                   EdhObject (Object ent' cls' [])
                     | cls' == (scopeClass world)
                     -> let !newThis = Object ent' cls []
-                -- use this as the scope entity of instance ctor execution
+                                                                -- use this as the scope entity of instance ctor execution
                        in  local
                                (\pgs' -> pgs'
-                -- set new object's scope
-                                 { edh'context = Context world
-                                                         (Scope ent' newThis)
-                -- restore original tx state after args received
+                                                                -- set new object's scope
+                                 { edh'context = Context
+                                                   world
+                                                   (Scope ent' newThis <| stack)
+                                                                -- restore original tx state after args received
                                  , edh'in'tx   = edh'in'tx pgs
                                  }
                                )
                              $ evalStmt proc'body
                              $ \(_, ctorRtn) -> case ctorRtn of
-                -- allow a class procedure to explicitly return another
-                -- object than newly constructed `this`.
-                -- it can still return `nil` to break out the procedure
-                -- fast.
-                -- this is magically an advance feature.
+                                                                -- allow a class procedure to explicitly return another
+                                                                -- object than newly constructed `this`.
+                                                                -- it can still return `nil` to break out the procedure
+                                                                -- fast.
+                                                                -- this is magically an advance feature.
                                  EdhReturn rtnVal | rtnVal /= nil ->
                                    exitEdhProc exit (scope, rtnVal)
                 -- no explicit return from class procedure, return the
@@ -338,7 +342,9 @@ evalExpr expr exit = do
                     local
                         (\pgs' -> pgs'
                           -- set method's scope
-                          { edh'context = Context world (Scope ent' ownerObj)
+                          { edh'context = Context
+                                            world
+                                            (Scope ent' ownerObj <| stack)
                           -- restore original tx state after args received
                           , edh'in'tx   = edh'in'tx pgs
                           }
