@@ -59,7 +59,7 @@ data Stmt = VoidStmt
     | ExprStmt !Expr
   deriving (Show)
 
-data AttrAddr = ThisRef | SupersRef
+data AttrAddr = ThisRef | ThatRef | SupersRef
     | DirectRef !AttrAddressor
     | IndirectRef !Expr !AttrAddressor
   deriving (Show)

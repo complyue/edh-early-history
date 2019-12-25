@@ -132,8 +132,8 @@ evalStmt' stmt exit = do
 evalExpr :: Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr expr exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !stack _ _) = edh'context pgs
-      !scope@(Scope _ !this _          ) = contextScope ctx
+  let !ctx@(  Context !world !stack that _) = edh'context pgs
+      !scope@(Scope _ !this _             ) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -233,6 +233,7 @@ evalExpr expr exit = do
 
     AttrExpr  addr  -> case addr of
       ThisRef -> exitEdhProc exit (this, scope, EdhObject this)
+      ThatRef -> exitEdhProc exit (that, scope, EdhObject that)
       SupersRef ->
         exitEdhProc exit (this, scope, EdhTuple $ EdhObject <$> objSupers this)
       DirectRef !addr' -> return $ do
@@ -413,9 +414,10 @@ assignEdhTarget
   -> EdhProg (STM ())
 assignEdhTarget pgsAfter lhExpr exit (_, _, rhVal) = do
   !pgs <- ask
-  let !callerCtx                          = edh'context pgs
+  let !callerCtx@(  Context _ _ that _  ) = edh'context pgs
       !callerScope@(Scope !ent !this _sp) = contextScope callerCtx
       !thisEnt                            = objEntity this
+      thatEnt                             = objEntity that
       -- assigment result as if come from the calling scope
       !result                             = (this, callerScope, rhVal)
       finishAssign :: Entity -> AttrKey -> STM ()
@@ -430,6 +432,8 @@ assignEdhTarget pgsAfter lhExpr exit (_, _, rhVal) = do
       IndirectRef !tgtExpr !addr' -> case tgtExpr of
         AttrExpr ThisRef ->
           return $ resolveAddr pgs addr' >>= \key -> finishAssign thisEnt key
+        AttrExpr ThatRef ->
+          return $ resolveAddr pgs addr' >>= \key -> finishAssign thatEnt key
         AttrExpr SupersRef ->
           throwEdh EvalError "Can not assign an attribute to supers"
         _ -> evalExpr tgtExpr $ \(!_tgtThis, !_tgtScope, !tgtVal) ->
@@ -439,6 +443,7 @@ assignEdhTarget pgsAfter lhExpr exit (_, _, rhVal) = do
             _ -> throwEdh EvalError $ "Invalid assignment target: " <> T.pack
               (show tgtVal)
       ThisRef   -> throwEdh EvalError "Can not assign to this"
+      ThatRef   -> throwEdh EvalError "Can not assign to that"
       SupersRef -> throwEdh EvalError "Can not assign to supers"
     x ->
       throwEdh EvalError $ "Invalid left hand value for assignment: " <> T.pack

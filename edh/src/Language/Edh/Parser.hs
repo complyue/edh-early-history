@@ -130,6 +130,7 @@ parseKwRecv inPack = do
   validateTgt tgt = case tgt of
     Nothing        -> Nothing
     Just ThisRef   -> fail "can not overwrite this"
+    Just ThatRef   -> fail "can not overwrite that"
     Just SupersRef -> fail "can not overwrite supers"
     _              -> tgt
 
@@ -147,9 +148,10 @@ parseAttrAddr =
  where
   leadingPart :: Parser Expr
   leadingPart = choice
-    [ (AttrExpr ThisRef) <$ symbol "this"
-    , (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
-    , (AttrExpr . DirectRef . NamedAttr) <$> parseAttrName
+    [ AttrExpr ThisRef <$ symbol "this"
+    , AttrExpr ThatRef <$ symbol "that"
+    , AttrExpr . DirectRef . SymbolicAttr <$> parseAttrSym
+    , AttrExpr . DirectRef . NamedAttr <$> parseAttrName
     ]
   followingPart :: Parser Expr
   followingPart = choice
@@ -166,6 +168,7 @@ parseAttrAddr =
       )
       <|> case p1 of
             AttrExpr ThisRef -> return ThisRef
+            AttrExpr ThatRef -> return ThatRef
             AttrExpr r1      -> return r1
             _expr            -> error "bug"
 
