@@ -556,7 +556,8 @@ parseIdxNonCallPrec prec leftCtor = do
     , parseBlockOrDict
     ]
   optional parseIndexExpr >>= \case
-    Just idxVal -> parseNextOp (IndexExpr idxVal e1) prec leftCtor
+    -- 10 should be highest precedence
+    Just idxVal -> parseNextOp (IndexExpr idxVal e1) 10 leftCtor
     Nothing     -> parseNextOp e1 prec leftCtor
 
 parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
@@ -569,21 +570,27 @@ parseIdxCallPrec prec leftCtor = do
   optional (lookAhead $ symbol "," <|> symbol ";") >>= \case
     Just _  -> return $ leftCtor addrExpr
     Nothing -> optional parseIndexExpr >>= \case
-      Just idxVal -> parseNextOp (IndexExpr idxVal addrExpr) prec leftCtor
+      -- 10 should be highest precedence
+      Just idxVal -> parseNextOp (IndexExpr idxVal addrExpr) 10 leftCtor
       Nothing     -> optional parsePackSender >>= \case
         Just packSender ->
-          parseNextOp (CallExpr addrExpr packSender) prec leftCtor
+          -- 10 should be highest precedence
+          parseNextOp (CallExpr addrExpr packSender) 10 leftCtor
         Nothing -> parseNextOp addrExpr prec leftCtor
 
 parseNextOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
-parseNextOp e1 prec leftCtor = optional parseOpLit >>= \case
-  Nothing    -> return $ leftCtor e1
-  Just opSym -> do
-    opPD <- get
-    case Map.lookup opSym opPD of
-      Nothing -> fail $ "undeclared operator: " <> T.unpack opSym
-      Just (opPrec, _opDeclPos) -> parseExprPrec opPrec $ \nextExpr ->
-        if prec < opPrec
-          then leftCtor $ InfixExpr opSym e1 nextExpr
-          else InfixExpr opSym (leftCtor e1) nextExpr
+parseNextOp e1 prec leftCtor = optional parsePackSender >>= \case
+  Just packSender ->
+    -- 10 should be highest precedence
+    parseNextOp (CallExpr e1 packSender) 10 leftCtor
+  Nothing -> optional parseOpLit >>= \case
+    Nothing    -> return $ leftCtor e1
+    Just opSym -> do
+      opPD <- get
+      case Map.lookup opSym opPD of
+        Nothing -> fail $ "undeclared operator: " <> T.unpack opSym
+        Just (opPrec, _opDeclPos) -> parseExprPrec opPrec $ \nextExpr ->
+          if prec < opPrec
+            then leftCtor $ InfixExpr opSym e1 nextExpr
+            else InfixExpr opSym (leftCtor e1) nextExpr
 
