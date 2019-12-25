@@ -406,11 +406,13 @@ evalExpr expr exit = do
 -- right-handle value as well as running this, so the evaluation of the
 -- right-hand value as well as the writting to the target entity are done
 -- within the same tx, thus for atomicity of the whole assignment.
--- and it should pass the first argument to indicate whether to maintain
--- in-tx state after the assignment done.
 assignEdhTarget
-  :: Bool -> Expr -> EdhProcExit -> (Scope, EdhValue) -> EdhProg (STM ())
-assignEdhTarget inTxAfter lhExpr exit (_, rhVal) = do
+  :: EdhProgState
+  -> Expr
+  -> EdhProcExit
+  -> (Scope, EdhValue)
+  -> EdhProg (STM ())
+assignEdhTarget pgsAfter lhExpr exit (_, rhVal) = do
   pgs <- ask
   let !callerCtx                      = edh'context pgs
       !callerScope@(Scope !ent !this) = contextScope callerCtx
@@ -418,11 +420,10 @@ assignEdhTarget inTxAfter lhExpr exit (_, rhVal) = do
       -- assigment result as if come from the calling scope
       !result                         = (callerScope, rhVal)
       finishAssign :: Entity -> AttrKey -> STM ()
-      finishAssign ent' key = do
-        modifyTVar' ent' $ \em -> Map.insert key rhVal em
-        -- restore in-tx state
-        join $ runReaderT (exitEdhProc exit result)
-                          (pgs { edh'in'tx = inTxAfter })
+      finishAssign tgtEnt key = do
+        modifyTVar' tgtEnt $ \em -> Map.insert key rhVal em
+        -- restore program state after assignment
+        join $ runReaderT (exitEdhProc exit result) pgsAfter
   case lhExpr of
     AttrExpr !addr -> case addr of
       DirectRef !addr' ->
@@ -512,7 +513,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
               $ EvalError "arg renaming to symbolic attr not supported"
           Just addr@(IndirectRef _ _) -> do
             join $ runReaderT
-              (assignEdhTarget True
+              (assignEdhTarget pgs
                                (AttrExpr addr)
                                (const $ return $ return ())
                                (callerScope, argVal)

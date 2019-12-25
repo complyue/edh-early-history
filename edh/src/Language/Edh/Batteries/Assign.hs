@@ -17,10 +17,9 @@ import           Language.Edh.Runtime
 assignProc :: EdhProcedure
 assignProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
   pgs <- ask
-  let inTxAfter = edh'in'tx pgs
   -- execution of the assignment always in a tx for atomicity
   local (\pgs' -> pgs' { edh'in'tx = True }) $ evalExpr rhExpr $ assignEdhTarget
-    inTxAfter
+    pgs
     lhExpr
     exit
 assignProc !argsSender _ _ =
