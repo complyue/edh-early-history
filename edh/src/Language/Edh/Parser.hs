@@ -475,10 +475,9 @@ parseBlock =
            )
         )
       , (do
-          srcPos <- getSourcePos
-          e      <- parseExpr
+          ss <- parseStmt
           notFollowedBy (symbol ":")
-          parseBlockRest mustBlock' $ StmtSrc (srcPos, ExprStmt e) : t
+          parseBlockRest mustBlock' $ ss : t
         )
       ]
 
