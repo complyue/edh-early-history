@@ -284,35 +284,34 @@ type EdhProg = ReaderT EdhProgState STM
 -- | The states of a program
 data EdhProgState = EdhProgState {
     edh'master'thread :: !ThreadId
-    , edh'main'queue :: !(TQueue EdhTxOp)
+    , edh'main'queue :: !(TQueue EdhTxTask)
     , edh'context :: !Context
     , edh'in'tx :: !Bool
     -- , edh'forker'thread :: !ThreadId
     -- , edh'fork'chan :: !(TChan xxx)
   }
 
--- | An operation to run in a new, separate stm transaction
-type EdhTxOp = ((Scope, EdhValue), (Scope, EdhValue) -> EdhProg (STM ()))
+-- | An atomic task forming a program
+type EdhTxTask
+  = ((Object, Scope, EdhValue), (Object, Scope, EdhValue) -> EdhProg (STM ()))
 
 -- | Type of a procedure in host language that can be called from Edh code.
 --
--- Edh is not tracking whether such procedures are pure (i.e. side-effect
--- free) or impure (i.e. world-changing), though writing only pure functions
--- conforming to this procedual interface in the host language (Haskell)
--- should be considered idiomatic).
+-- Note the caller context/scope can be obtained from the program state.
 type EdhProcedure -- such a procedure servs as the callee
   =  ArgsSender -- ^ the manifestation of how the caller wills to send args
+  -> Object -- ^ the target `this` object
   -> Scope -- ^ the scope from which the callee is addressed off
   -> EdhProcExit -- ^ the CPS exit to return a value from this procedure
   -> EdhProg (STM ())
 
 -- | The type for an Edh procedure's return, in continuation passing style.
-type EdhProcExit = (Scope, EdhValue) -> EdhProg (STM ())
+type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 
 -- | Convenient function to be used as short-hand to return from an Edh
 -- procedure (or functions with similar signature), this sets transaction
 -- boundaries wrt 'edh'in'tx' stated in the program's current state.
-exitEdhProc :: EdhProcExit -> (Scope, EdhValue) -> EdhProg (STM ())
+exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
 exitEdhProc exit result = do
   pgs <- ask
   let txq   = edh'main'queue pgs

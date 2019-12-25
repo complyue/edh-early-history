@@ -14,24 +14,33 @@ import           Language.Edh.Runtime
 import           Language.Edh.Batteries.Math
 import           Language.Edh.Batteries.Assign
 import           Language.Edh.Batteries.Utils
+import           Language.Edh.Batteries.Reflect
 
 
 installEdhBatteries :: MonadIO m => EdhWorld -> m ()
 installEdhBatteries world = liftIO $ do
 
-  operators <- mapM
+  !rootArtifacts <- mapM
     (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
-    [ (":"   , consProc)
-    , ("+"   , addProc)
-    , ("-"   , subsProc)
-    , ("*"   , mulProc)
-    , ("/"   , divProc)
-    , ("**"  , powProc)
-    , ("="   , assignProc)
-    , ("pack", packProc)
-    , ("++"  , concatProc)
-    , ("type", typeProc)
-    , ("dict", dictProc)
+    [ (":"    , consProc)
+    , ("+"    , addProc)
+    , ("-"    , subsProc)
+    , ("*"    , mulProc)
+    , ("/"    , divProc)
+    , ("**"   , powProc)
+    , ("="    , assignProc)
+    , ("pack" , packProc)
+    , ("++"   , concatProc)
+    , ("type" , typeProc)
+    , ("dict" , dictProc)
+    , ("scope", scopeObtainProc)
+    ]
+
+  !scopeArtifacts <- mapM
+    (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
+    [ ("eval"   , scopeEvalProc)
+    , ("extract", scopeExtractProc)
+    , ("implant", scopeImplantProc)
     ]
 
   atomically $ do
@@ -144,7 +153,7 @@ installEdhBatteries world = liftIO $ do
       ]
 
     installEdhAttrs rootEntity
-      $  operators
+      $  rootArtifacts
       ++ [
     -- math constants
     -- todo figure out proper ways to make these really **constant**,
@@ -154,4 +163,12 @@ installEdhBatteries world = liftIO $ do
              $ Decimal 1 (-40) 31415926535897932384626433832795028841971
            )
          ]
-  where rootEntity = (objEntity . worldRoot) world
+
+    installEdhAttrs scopeManiMethods scopeArtifacts
+
+ where
+  !rootEntity = objEntity $ worldRoot world
+  scopeManiMethods :: Entity
+  !scopeManiMethods = case classContext $ scopeClass world of
+    [(Scope !ent _ _)] -> ent
+    _                  -> error "world's scopeClass supers changed?!"

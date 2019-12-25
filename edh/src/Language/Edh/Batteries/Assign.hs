@@ -15,14 +15,14 @@ import           Language.Edh.Runtime
 
 -- | operator (=)
 assignProc :: EdhProcedure
-assignProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ !exit = do
+assignProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
   pgs <- ask
   -- execution of the assignment always in a tx for atomicity
   local (\pgs' -> pgs' { edh'in'tx = True }) $ evalExpr rhExpr $ assignEdhTarget
     pgs
     lhExpr
     exit
-assignProc !argsSender _ _ =
+assignProc !argsSender _ _ _ =
   throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
     (show argsSender)
 

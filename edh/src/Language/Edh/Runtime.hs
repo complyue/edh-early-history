@@ -43,14 +43,14 @@ runEdhProgram
   -> Module
   -> SeqStmts
   -> m (Either EvalError EdhValue)
-runEdhProgram w m rs = liftIO $ runEdhProgram' ctx rs
-  where ctx = moduleContext w m
+runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
+  where !ctx = moduleContext w m
 
 
 moduleContext :: EdhWorld -> Module -> Context
-moduleContext w m = Context { contextWorld = w
-                            , contextStack = moduScope :| [rootScope]
-                            }
+moduleContext !w !m = Context { contextWorld = w
+                              , contextStack = moduScope :| [rootScope]
+                              }
  where
   !mo        = moduleObject m
   !moduScope = Scope (objEntity mo) mo (classProcedure $ moduleClass w)
@@ -59,16 +59,17 @@ moduleContext w m = Context { contextWorld = w
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
-runEdhProgram' _   []    = return $ Right EdhNil
-runEdhProgram' ctx stmts = do
+runEdhProgram' _    []     = return $ Right EdhNil
+runEdhProgram' !ctx !stmts = do
   !final <- newEmptyTMVarIO
-  let wrapper :: EdhProg (STM ())
+  let !scope@(Scope _ this _) = contextScope ctx
+      wrapper :: EdhProg (STM ())
       wrapper = do
         let evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
-            evalStmts []       exit = exit (contextScope ctx, nil)
+            evalStmts []       exit = exit (this, scope, nil)
             evalStmts [s     ] exit = evalStmt s exit
             evalStmts (s : rs) exit = evalStmt s (const $ evalStmts rs exit)
-        evalStmts stmts $ \(_, !val) -> return $ putTMVar final val
+        evalStmts stmts $ \(_, _, !val) -> return $ putTMVar final val
   tryJust Just $ do
     runEdhProg ctx wrapper
     atomically $ readTMVar final
