@@ -297,33 +297,32 @@ evalExpr expr exit = do
               EdhArgsPack pk -> recvEdhArgs proc'args pk $ \(_, scopeObj) ->
                 case scopeObj of
                   EdhObject (Object ent' cls' [])
-                    | cls' == (scopeClass world)
-                    -> let !newThis = Object ent' cls []
-                                                                -- use this as the scope entity of instance ctor execution
-                       in  local
-                               (\pgs' -> pgs'
-                                                                -- set new object's scope
-                                 { edh'context = Context
-                                                   world
-                                                   (Scope ent' newThis <| stack)
-                                                                -- restore original tx state after args received
-                                 , edh'in'tx   = edh'in'tx pgs
-                                 }
-                               )
-                             $ evalStmt proc'body
-                             $ \(_, ctorRtn) -> case ctorRtn of
-                                                                -- allow a class procedure to explicitly return another
-                                                                -- object than newly constructed `this`.
-                                                                -- it can still return `nil` to break out the procedure
-                                                                -- fast.
-                                                                -- this is magically an advance feature.
-                                 EdhReturn rtnVal | rtnVal /= nil ->
-                                   exitEdhProc exit (scope, rtnVal)
-                -- no explicit return from class procedure, return the
-                -- newly constructed this object, instead of the last
-                -- value from the procedure execution.
-                                 _ ->
-                                   exitEdhProc exit (scope, EdhObject newThis)
+                    | cls' == (scopeClass world) -> do
+                      let !newThis = Object ent' cls []
+                      -- use this as the scope entity of instance ctor execution
+                      local
+                          (\pgs' -> pgs'
+                      -- set new object's scope
+                            { edh'context = Context
+                                              world
+                                              (Scope ent' newThis <| stack)
+                      -- restore original tx state after args received
+                            , edh'in'tx   = edh'in'tx pgs
+                            }
+                          )
+                        $ evalStmt proc'body
+                        $ \(_, ctorRtn) -> case ctorRtn of
+                      -- allow a class procedure to explicitly return another
+                      -- object than newly constructed `this`.
+                      -- it can still return `nil` to break out the procedure
+                      -- fast.
+                      -- this is magically an advance feature.
+                            EdhReturn rtnVal | rtnVal /= nil ->
+                              exitEdhProc exit (scope, rtnVal)
+                      -- no explicit return from class procedure, return the
+                      -- newly constructed this object, instead of the last
+                      -- value from the procedure execution.
+                            _ -> exitEdhProc exit (scope, EdhObject newThis)
                   _ -> error "bug"
               _ -> error "bug"
 
