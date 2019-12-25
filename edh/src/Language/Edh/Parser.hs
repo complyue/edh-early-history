@@ -420,7 +420,7 @@ parseLitExpr = choice
   , TypeLiteral MethodType <$ litSym "MethodType"
   , TypeLiteral GeneratorType <$ litSym "GeneratorType"
   , TypeLiteral FlowCtrlType <$ litSym "FlowCtrlType"
-  , TypeLiteral IteratorType <$ litSym "IteratorType"
+  , TypeLiteral GenrIterType <$ litSym "GenrIterType"
   , TypeLiteral SinkType <$ litSym "SinkType"
   , TypeLiteral ProxyType <$ litSym "ProxyType"
   , TypeLiteral TypeType <$ litSym "TypeType"

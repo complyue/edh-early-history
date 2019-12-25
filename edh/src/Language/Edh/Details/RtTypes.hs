@@ -219,16 +219,16 @@ instance Show Module where
   show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 
-data Iterator = Iterator {
+data GenrIter = GenrIter {
     iterScope :: !Scope
     , iterRestStmts :: ![StmtSrc]
   }
-instance Eq Iterator where
+instance Eq GenrIter where
   -- TODO prove there won't be concurrent executable iterators
   -- against the same entity, or tackle problems encountered
-  Iterator x'e _ == Iterator y'e _ = x'e == y'e
-instance Show Iterator where
-  show (Iterator _ _) = "[iterator]"
+  GenrIter x'e _ == GenrIter y'e _ = x'e == y'e
+instance Show GenrIter where
+  show (GenrIter _ _) = "[iterator]"
 
 
 -- | Pending evaluated statement, it can be later forced against a
@@ -410,7 +410,7 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
   -- * flow control
     | EdhBreak | EdhContinue
     | EdhCaseClose !EdhValue | EdhFallthrough
-    | EdhIterator !Iterator
+    | EdhGenrIter !GenrIter
     | EdhYield !EdhValue
     | EdhReturn !EdhValue
 
@@ -471,7 +471,7 @@ instance Show EdhValue where
   show EdhContinue      = "[continue]"
   show (EdhCaseClose v) = "[caseclose: " ++ show v ++ "]"
   show EdhFallthrough   = "[fallthrough]"
-  show (EdhIterator i)  = show i
+  show (EdhGenrIter i)  = show i
   show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
   show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
 
@@ -518,7 +518,7 @@ instance Eq EdhValue where
   EdhContinue     == EdhContinue     = True
   EdhCaseClose x  == EdhCaseClose y  = x == y
   EdhFallthrough  == EdhFallthrough  = True
-  EdhIterator x   == EdhIterator y   = x == y
+  EdhGenrIter x   == EdhGenrIter y   = x == y
 -- todo: regard a yielded/returned value equal to the value itself ?
   EdhYield    x'v == EdhYield    y'v = x'v == y'v
   EdhReturn   x'v == EdhReturn   y'v = x'v == y'v
@@ -574,7 +574,7 @@ edhTypeOf EdhBreak         = EdhType FlowCtrlType
 edhTypeOf EdhContinue      = EdhType FlowCtrlType
 edhTypeOf (EdhCaseClose _) = EdhType FlowCtrlType
 edhTypeOf EdhFallthrough   = EdhType FlowCtrlType
-edhTypeOf (EdhIterator _)  = EdhType FlowCtrlType
+edhTypeOf (EdhGenrIter _)  = EdhType FlowCtrlType
 edhTypeOf (EdhYield    _)  = EdhType FlowCtrlType
 edhTypeOf (EdhReturn   _)  = EdhType FlowCtrlType
 

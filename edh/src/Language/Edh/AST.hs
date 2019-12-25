@@ -169,7 +169,7 @@ data EdhTypeValue = TypeType
     | MethodType
     | GeneratorType
     | FlowCtrlType -- for break/continue/fallthrough/yield/return
-    | IteratorType
+    | GenrIterType
     | SinkType
     | ProxyType
   deriving (Eq, Ord, Show)
