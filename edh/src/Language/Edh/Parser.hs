@@ -209,7 +209,7 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
 parseClassStmt :: Parser Stmt
 parseClassStmt = do
   void $ symbol "class"
-  liftA2 ClassStmt parseAlphaName parseProcDecl
+  ClassStmt <$> parseProcDecl
 
 parseExtendsStmt :: Parser Stmt
 parseExtendsStmt = do
@@ -219,12 +219,12 @@ parseExtendsStmt = do
 parseMethodStmt :: Parser Stmt
 parseMethodStmt = do
   void $ symbol "method"
-  liftA2 MethodStmt parseAlphaName parseProcDecl
+  MethodStmt <$> parseProcDecl
 
 parseGeneratorStmt :: Parser Stmt
 parseGeneratorStmt = do
   void $ symbol "generator"
-  liftA2 GeneratorStmt parseAlphaName parseProcDecl
+  GeneratorStmt <$> parseProcDecl
 
 parseWhileStmt :: Parser Stmt
 parseWhileStmt = do
@@ -232,7 +232,7 @@ parseWhileStmt = do
   liftA2 WhileStmt parseExpr parseStmt
 
 parseProcDecl :: Parser ProcDecl
-parseProcDecl = liftA2 ProcDecl parseArgsReceiver parseStmt
+parseProcDecl = liftA3 ProcDecl parseAlphaName parseArgsReceiver parseStmt
 
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do

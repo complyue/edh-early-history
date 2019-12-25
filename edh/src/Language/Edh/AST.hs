@@ -25,8 +25,6 @@ data AttrAddressor =
 
 
 type ModuleId = FilePath
-type ClassName = AttrName
-type MethodName = AttrName
 
 
 type SeqStmts = [StmtSrc]
@@ -42,10 +40,10 @@ instance Show StmtSrc where
 data Stmt = VoidStmt
     | ImportStmt !ArgsReceiver !Expr
     | LetStmt !ArgsReceiver !ArgsSender
-    | ClassStmt !ClassName !ProcDecl
     | ExtendsStmt !Expr
-    | MethodStmt !MethodName !ProcDecl
-    | GeneratorStmt !MethodName !ProcDecl
+    | ClassStmt !ProcDecl
+    | MethodStmt !ProcDecl
+    | GeneratorStmt !ProcDecl
     | WhileStmt !Expr !StmtSrc
     | BreakStmt | ContinueStmt
     | FallthroughStmt
@@ -85,12 +83,14 @@ data ArgSender = UnpackPosArgs !Expr
     | SendKwArg !AttrName !Expr
   deriving (Show)
 
-data ProcDecl = ProcDecl { procedure'args :: !ArgsReceiver
+data ProcDecl = ProcDecl { procedure'name :: AttrName
+                        ,  procedure'args :: !ArgsReceiver
                         ,  procedure'body :: !StmtSrc
                         }
   deriving (Show)
 instance Eq ProcDecl where
-  ProcDecl _ x'body == ProcDecl _ y'body = x'body == y'body
+  ProcDecl x'name _ x'body == ProcDecl y'name _ y'body =
+    x'name == y'name && x'body == y'body
 
 
 data Prefix = PrefixPlus | PrefixMinus | Not

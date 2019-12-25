@@ -53,9 +53,9 @@ moduleContext w m = Context { contextWorld = w
                             }
  where
   !mo        = moduleObject m
-  !moduScope = Scope (objEntity mo) mo
+  !moduScope = Scope (objEntity mo) mo (classProcedure $ moduleClass w)
   !root      = worldRoot w
-  !rootScope = Scope (objEntity root) root
+  !rootScope = Scope (objEntity root) root (classProcedure $ objClass root)
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
@@ -89,35 +89,41 @@ createEdhWorld = liftIO $ do
                         }
     !worldClass = Class
       { classContext   = []
-      , className      = "<world>"
-      , classProcedure = ProcDecl { procedure'args = WildReceiver
+      , classProcedure = ProcDecl { procedure'name = "<world>"
+                                  , procedure'args = WildReceiver
                                   , procedure'body = StmtSrc (srcPos, VoidStmt)
                                   }
       }
-    !root =
-      Object { objEntity = worldEntity, objClass = worldClass, objSupers = [] }
+    !moduClassProc = ProcDecl { procedure'name = "<module>"
+                              , procedure'args = WildReceiver
+                              , procedure'body = StmtSrc (srcPos, VoidStmt)
+                              }
+    !scopeClassProc = ProcDecl { procedure'name = "<scope>"
+                               , procedure'args = WildReceiver
+                               , procedure'body = StmtSrc (srcPos, VoidStmt)
+                               }
+    !root = Object { objEntity = worldEntity
+                   , objClass  = worldClass
+                   , objSupers = []
+                   }
   opPD  <- newTMVarIO Map.empty
   modus <- newTVarIO Map.empty
   return $ EdhWorld
     { worldRoot      = root
-    , moduleClass    =
-      Class
-        { classContext   = [Scope moduManiMethods root]
-        , className      = "<module>"
-        , classProcedure = ProcDecl
-                             { procedure'args = WildReceiver
-                             , procedure'body = StmtSrc (srcPos, VoidStmt)
-                             }
-        }
-    , scopeClass     =
-      Class
-        { classContext   = [Scope scopeManiMethods root]
-        , className      = "<scope>"
-        , classProcedure = ProcDecl
-                             { procedure'args = WildReceiver
-                             , procedure'body = StmtSrc (srcPos, VoidStmt)
-                             }
-        }
+    , moduleClass    = Class
+                         { classContext   = [ Scope moduManiMethods
+                                                    root
+                                                    moduClassProc
+                                            ]
+                         , classProcedure = moduClassProc
+                         }
+    , scopeClass     = Class
+                         { classContext   = [ Scope scopeManiMethods
+                                                    root
+                                                    scopeClassProc
+                                            ]
+                         , classProcedure = scopeClassProc
+                         }
     , worldOperators = opPD
     , worldModules   = modus
     }

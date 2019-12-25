@@ -20,6 +20,8 @@ import           Foreign.Marshal.Alloc
 import           System.Mem.Weak
 import           System.IO.Unsafe
 
+import           Text.Megaparsec
+
 import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Control
@@ -133,9 +135,13 @@ data Scope = Scope {
     -- and is the underlying entity of 'thisObject' in a class procedure.
     scopeEntity :: !Entity
     , thisObject :: !Object -- ^ `this` object of current scope
+    , scopeProc :: !ProcDecl -- ^ the procedure holding this scope
   }
 instance Eq Scope where
-  Scope x's x'o == Scope y's y'o = x's == y's && x'o == y'o
+  Scope x'e _ x'p == Scope y'e _ y'p = x'e == y'e && x'p == y'p
+instance Show Scope where
+  show (Scope _ _ (ProcDecl pName _ (StmtSrc (!srcPos, _)))) =
+    "[scope: " ++ T.unpack pName ++ " @ " ++ sourcePosPretty srcPos ++ "]"
 
 
 -- | An object views an entity, with inheritance relationship 
@@ -167,47 +173,50 @@ instance Eq Object where
   -- equality by pointer to entity
   Object x'e _ _ == Object y'e _ _ = x'e == y'e
 instance Show Object where
-  show (Object _ (Class _ cn _) supers) =
+  show (Object _ (Class _ (ProcDecl cn _ _)) supers) =
     "[object: "
       ++ T.unpack cn
       ++ (if null supers
            then ""
-           else T.unpack $ " extends" <> T.concat
-             [ " " <> scn | (Object _ (Class _ scn _) _) <- supers ]
+           else
+             T.unpack
+             $  " extends"
+             <> T.concat
+                  [ " " <> scn
+                  | (Object _ (Class _ (ProcDecl scn _ _)) _) <- supers
+                  ]
          )
       ++ "]"
 
 data Class = Class {
     -- | the lexical context where this class procedure is defined
     classContext :: ![Scope]
-    , className :: !AttrName
     , classProcedure :: !ProcDecl
   }
 instance Eq Class where
-  Class x's _ x'pd == Class y's _ y'pd = x's == y's && x'pd == y'pd
+  Class x's x'pd == Class y's y'pd = x's == y's && x'pd == y'pd
 instance Show Class where
-  show (Class _ cn _) = "[class: " ++ T.unpack cn ++ "]"
+  show (Class _ (ProcDecl cn _ _)) = "[class: " ++ T.unpack cn ++ "]"
 
 data Method = Method {
     methodOwnerObject :: !Object
-    , methodName :: !AttrName
     , methodProcedure :: !ProcDecl
   }
 instance Eq Method where
-  Method x'o _ x'pd == Method y'o _ y'pd = x'o == y'o && x'pd == y'pd
+  Method x'o x'pd == Method y'o y'pd = x'o == y'o && x'pd == y'pd
 instance Show Method where
-  show (Method (Object _ (Class _ cn _) _) mn _) =
-    "[method: " ++ T.unpack cn ++ "#" ++ T.unpack mn ++ "]"
+  show (Method (Object _ (Class _ (ProcDecl cn _ _)) _) (ProcDecl mn _ _)) =
+    "[method: " ++ T.unpack cn ++ " :: " ++ T.unpack mn ++ "]"
 
 data GenrDef = GenrDef {
     generatorOwnerObject :: !Object
-    , generatorName :: !AttrName
     , generatorProcedure :: !ProcDecl
   }
 instance Eq GenrDef where
-  GenrDef x'o x'sp _ == GenrDef y'o y'sp _ = x'o == y'o && x'sp == y'sp
+  GenrDef x'o x'sp == GenrDef y'o y'sp = x'o == y'o && x'sp == y'sp
 instance Show GenrDef where
-  show (GenrDef _ _ _) = "[generator]"
+  show (GenrDef (Object _ (Class _ (ProcDecl cn _ _)) _) (ProcDecl mn _ _)) =
+    "[generator: " ++ T.unpack cn ++ " :: " ++ T.unpack mn ++ "]"
 
 data Module = Module {
     moduleObject :: !Object

@@ -40,6 +40,6 @@ data InterpretError = EdhParseError ParserError | EdhEvalError EvalError
     deriving (Eq, Typeable)
 instance Show InterpretError where
   show (EdhParseError err) = "⛔ " ++ errorBundlePretty err
-  show (EdhEvalError  err) = "💣 " ++ show err
+  show (EdhEvalError  err) = show err
 instance Exception InterpretError
 
