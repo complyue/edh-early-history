@@ -6,6 +6,7 @@ import           Prelude
 import           Control.Exception
 import           Control.Monad.State.Strict
 
+import           Data.Foldable
 import           Data.Void
 import           Data.Typeable
 import           Data.Text                      ( Text )
@@ -29,17 +30,35 @@ type Parser = ParsecT Void Text (State OpPrecDict)
 type ParserError = ParseErrorBundle Text Void
 
 
-newtype EvalError = EvalError Text
-    deriving (Eq, Typeable)
+data EdhErrorContext = EdhErrorContext {
+    edhErrorMsg :: !Text
+    , edhErrorLocation :: !Text
+    , edhErrorStack :: ![(Text, Text)]
+  } deriving (Eq, Typeable)
+
+newtype EvalError = EvalError EdhErrorContext
+  deriving (Eq, Typeable)
 instance Show EvalError where
-  show (EvalError msg) = T.unpack msg
+  show (EvalError (EdhErrorContext msg _ _)) = T.unpack msg
 instance Exception EvalError
 
 
-data InterpretError = EdhParseError ParserError | EdhEvalError EvalError
+newtype UsageError = UsageError Text
+  deriving (Eq, Typeable, Show)
+instance Exception UsageError
+
+
+data InterpretError = EdhParseError ParserError | EdhEvalError EvalError | EdhUsageError UsageError
     deriving (Eq, Typeable)
 instance Show InterpretError where
   show (EdhParseError err) = "⛔ " ++ errorBundlePretty err
-  show (EdhEvalError  err) = show err
+  show (EdhEvalError (EvalError (EdhErrorContext msg loc stack))) =
+    T.unpack $ stacktrace <> "\n💣 " <> msg <> "\n👉 " <> loc
+   where
+    stacktrace = foldl'
+      (\st (pname, ploc) -> st <> "\n📜 " <> pname <> " 🔎 " <> ploc)
+      ("💔" :: Text)
+      stack
+  show (EdhUsageError (UsageError msg)) = "🔮 " ++ T.unpack msg
 instance Exception InterpretError
 

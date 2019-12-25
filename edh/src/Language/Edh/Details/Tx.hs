@@ -13,13 +13,24 @@ import           Control.Monad.Reader
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
+import           Data.Text                      ( Text )
+
+import           Language.Edh.Control
 import           Language.Edh.Details.RtTypes
 
 
 -- | Throw from an Edh program, be cautious NOT to have any monadic action
 -- following such a throw, or it'll silently fail to work out.
-throwEdh :: Exception e => e -> EdhProg (STM ())
-throwEdh e = return $ throwSTM e
+throwEdh :: Exception e => (EdhErrorContext -> e) -> Text -> EdhProg (STM ())
+throwEdh !excCtor !msg = do
+  !pgs <- ask
+  return $ throwSTM (excCtor $ getEdhErrorContext pgs msg)
+
+-- | Throw from the stm operation of an Edh program.
+throwEdhFromSTM
+  :: Exception e => EdhProgState -> (EdhErrorContext -> e) -> Text -> STM a
+throwEdhFromSTM pgs !excCtor !msg =
+  throwSTM (excCtor $ getEdhErrorContext pgs msg)
 
 
 runEdhProg :: Context -> EdhProg (STM ()) -> IO ()
@@ -31,24 +42,24 @@ runEdhProg !ctx !prog = do
       !scope = contextScope ctx
       !obj   = thisObject scope
   -- queue the program for bootstrap
-  atomically $ writeTQueue mainQueue ((obj, scope, nil), const prog)
+  atomically $ writeTQueue mainQueue ((pgs, (obj, scope, nil)), const prog)
 -- drive transaction executions from the master thread.
 -- exceptions occurred in all threads started by this program will be re-thrown
 -- asynchronously to this thread, causing the whole program to abort.
-  driveEdhProg pgs
+  driveEdhProg mainQueue
  where
-  driveEdhProg :: EdhProgState -> IO ()
-  driveEdhProg pgs@(EdhProgState _ !mainQueue _ _) =
-    atomically (tryReadTQueue mainQueue) >>= \case
-      Nothing      -> return () -- program finished 
-      Just !txTask -> do
-        -- run this task
-        goSTM 0 txTask
-        -- loop another iteration
-        driveEdhProg pgs
+  driveEdhProg :: TQueue EdhTxTask -> IO ()
+  driveEdhProg mainQueue = atomically (tryReadTQueue mainQueue) >>= \case
+    Nothing      -> return () -- program finished 
+    Just !txTask -> do
+      -- run this task
+      goSTM 0 txTask
+
+      -- loop another iteration
+      driveEdhProg mainQueue
    where
     goSTM :: Int -> EdhTxTask -> IO ()
-    goSTM !rtc txTask@(!input, !task) = do
+    goSTM !rtc txTask@((!pgs, !input), !task) = do
       when (rtc > 0) $ trace (" ** stm retry #" <> show rtc) $ return ()
 
       stmDone <-

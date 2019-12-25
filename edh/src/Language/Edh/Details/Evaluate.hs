@@ -5,18 +5,15 @@ module Language.Edh.Details.Evaluate where
 import           Prelude
 -- import           Debug.Trace
 
-import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Concurrent.STM
 
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 import           Data.List.NonEmpty             ( (<|) )
 import qualified Data.List.NonEmpty            as NE
 
-import           Text.Megaparsec
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -26,21 +23,9 @@ import           Language.Edh.Details.Utils
 
 
 evalStmt :: StmtSrc -> EdhProcExit -> EdhProg (STM ())
-evalStmt (StmtSrc (!srcPos, !stmt)) !exit = do
-  !pgs <- ask
-  let stack      = contextStack $ edh'context pgs
-      stacktrace = foldr
-        (\(Scope _e _o (ProcDecl procName _ (StmtSrc (sp, _s)))) st ->
-          st <> "\n📜 " <> procName <> " 🔎 " <> T.pack (sourcePosPretty sp)
-        )
-        ("💔" :: Text)
-        (NE.toList stack)
-  !stmProg <- (evalStmt' stmt exit)
-  return $ catchSTM stmProg $ \e -> case fromException e of
-    Just (EvalError msg) ->
-      throwSTM $ EvalError $ stacktrace <> "\n💣 " <> msg <> "\n👉 " <> T.pack
-        (sourcePosPretty srcPos)
-    Nothing -> throwSTM e
+evalStmt ss@(StmtSrc (_, !stmt)) !exit =
+  local (\pgs -> pgs { edh'context = (edh'context pgs) { contextStmt = ss } })
+    $ evalStmt' stmt exit
 
 
 evalBlock :: [StmtSrc] -> EdhProcExit -> EdhProg (STM ())
@@ -80,8 +65,8 @@ evalExprs (x : xs) exit = evalExpr x $ \(this', scope', val) ->
 evalStmt' :: Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' stmt exit = do
   !pgs <- ask
-  let !ctx@(  Context _ !stack  ) = edh'context pgs
-      !scope@(Scope !ent !this _) = contextScope ctx
+  let !ctx@(  Context _ !stack _ _) = edh'context pgs
+      !scope@(Scope !ent !this _  ) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr expr exit
@@ -122,15 +107,12 @@ evalStmt' stmt exit = do
       join $ runReaderT (exitEdhProc exit (this, scope, cls)) pgs
 
     MethodStmt pd@(ProcDecl name _ _) -> return $ do
-      let
-        mth =
-          EdhMethod $ Method { methodOwnerObject = this, methodProcedure = pd }
+      let mth = EdhMethod $ Method { methodProcedure = pd }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
       join $ runReaderT (exitEdhProc exit (this, scope, mth)) pgs
 
     GeneratorStmt pd@(ProcDecl name _ _) -> return $ do
-      let gdf = EdhGenrDef
-            $ GenrDef { generatorOwnerObject = this, generatorProcedure = pd }
+      let gdf = EdhGenrDef $ GenrDef { generatorProcedure = pd }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
       join $ runReaderT (exitEdhProc exit (this, scope, gdf)) pgs
 
@@ -139,19 +121,19 @@ evalStmt' stmt exit = do
         exit
         (this, scope, EdhString $ "wana import " <> moduPath <> ".edh huh?")
       expr ->
-        throwEdh $ EvalError $ "don't know how to import " <> T.pack (show expr)
+        throwEdh EvalError $ "don't know how to import " <> T.pack (show expr)
 
     VoidStmt -> exitEdhProc exit (this, scope, nil)
 
     -- TODO comment out this once `case stmt` get total
-    _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
+    _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
 
 
 evalExpr :: Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr expr exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !stack) = edh'context pgs
-      !scope@(Scope _ !this _      ) = contextScope ctx
+  let !ctx@(  Context !world !stack _ _) = edh'context pgs
+      !scope@(Scope _ !this _          ) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -160,7 +142,7 @@ evalExpr expr exit = do
       NilLiteral      -> exitEdhProc exit (this, scope, nil)
       TypeLiteral v   -> exitEdhProc exit (this, scope, EdhType v)
       -- TODO impl this
-      SinkCtor        -> throwEdh $ EvalError "sink ctor not impl. yet"
+      SinkCtor        -> throwEdh EvalError "sink ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
       PrefixPlus  -> evalExpr expr' exit
@@ -168,13 +150,12 @@ evalExpr expr exit = do
         (this', scope', EdhDecimal v) ->
           exitEdhProc exit (this', scope', EdhDecimal (-v))
         (_, _, v) ->
-          throwEdh $ EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
+          throwEdh EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
       Not -> evalExpr expr' $ \case
         (this', scope', EdhBool v) ->
           exitEdhProc exit (this', scope', EdhBool $ not v)
         (_, _, v) ->
-          throwEdh
-            $  EvalError
+          throwEdh EvalError
             $  "Expect bool but got: "
             <> T.pack (show v)
             <> " ❌"
@@ -188,8 +169,8 @@ evalExpr expr exit = do
       AtoIso -> local (\s -> s { edh'in'tx = True }) $ evalExpr expr' exit
 
       -- TODO impl these
-      Go     -> throwEdh $ EvalError "goroutine starter not impl. yet"
-      Defer  -> throwEdh $ EvalError "defer scheduler not impl. yet"
+      Go     -> throwEdh EvalError "goroutine starter not impl. yet"
+      Defer  -> throwEdh EvalError "defer scheduler not impl. yet"
 
     IfExpr cond cseq alt -> evalExpr cond $ \case
       (_, _, EdhBool True ) -> evalStmt cseq exit
@@ -198,11 +179,7 @@ evalExpr expr exit = do
         _               -> exitEdhProc exit (this, scope, nil)
       (_, _, v) ->
         -- we are so strongly typed
-        throwEdh
-          $  EvalError
-          $  "Not a boolean value: "
-          <> T.pack (show v)
-          <> " ❌"
+        throwEdh EvalError $ "Not a boolean value: " <> T.pack (show v) <> " ❌"
 
     DictExpr xs -> -- make sure dict k:v pairs are evaluated in same tx
       local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, _, tv) ->
@@ -216,14 +193,12 @@ evalExpr expr exit = do
                 EdhDecimal k -> return $ ItemByNum k
                 EdhBool    k -> return $ ItemByBool k
                 k ->
-                  throwSTM
-                    $  EvalError
+                  throwEdhFromSTM pgs EvalError
                     $  "Invalid dict key: "
                     <> T.pack (show k)
                     <> " ❌"
               pv ->
-                throwSTM
-                  $  EvalError
+                throwEdhFromSTM pgs EvalError
                   $  "Invalid dict entry: "
                   <> T.pack (show pv)
                   <> " ❌"
@@ -261,23 +236,22 @@ evalExpr expr exit = do
       SupersRef ->
         exitEdhProc exit (this, scope, EdhTuple $ EdhObject <$> objSupers this)
       DirectRef !addr' -> return $ do
-        !key <- resolveAddr scope addr'
+        !key <- resolveAddr pgs addr'
         resolveEdhCtxAttr scope key >>= \case
-          Nothing ->
-            throwSTM $ EvalError $ "Not in scope: " <> T.pack (show addr')
+          Nothing -> throwEdhFromSTM pgs EvalError $ "Not in scope: " <> T.pack
+            (show addr')
           Just scope'@(Scope !ent' _obj _sp) -> do
             em <- readTVar ent'
             case Map.lookup key em of
-              Nothing -> throwSTM $ EvalError "attr resolving bug"
+              Nothing -> throwEdhFromSTM pgs EvalError "attr resolving bug"
               Just val ->
                 join $ runReaderT (exitEdhProc exit (this, scope', val)) pgs
       IndirectRef !tgtExpr !addr' -> evalExpr tgtExpr $ \case
         (_, _, EdhObject !obj) -> return $ do
-          !key <- resolveAddr scope addr'
+          !key <- resolveAddr pgs addr'
           resolveEdhObjAttr obj key >>= \case
             Nothing ->
-              throwSTM
-                $  EvalError
+              throwEdhFromSTM pgs EvalError
                 $  "No such attribute "
                 <> T.pack (show key)
                 <> " from "
@@ -285,11 +259,10 @@ evalExpr expr exit = do
             Just scope'@(Scope !ent' _obj' _) -> do
               em <- readTVar ent'
               case Map.lookup key em of
-                Nothing -> throwSTM $ EvalError "attr resolving bug"
+                Nothing -> throwEdhFromSTM pgs EvalError "attr resolving bug"
                 Just val ->
                   join $ runReaderT (exitEdhProc exit (obj, scope', val)) pgs
-        (_, _, v) ->
-          throwEdh $ EvalError $ "Not an object: " <> T.pack (show v)
+        (_, _, v) -> throwEdh EvalError $ "Not an object: " <> T.pack (show v)
 
 
     -- IndexExpr ixExpr tgtExpr ->
@@ -315,13 +288,15 @@ evalExpr expr exit = do
                       -- use this as the scope entity of instance ctor execution
                       local
                           (\pgs' -> pgs'
-                      -- set new object's scope
-                            { edh'context = Context
-                                              world
-                                              (  Scope rcvd'ent newThis clsProc
-                                              <| stack
-                                              )
-                      -- restore original tx state after args received
+                            -- set new object's scope
+                            { edh'context =
+                              (edh'context pgs')
+                                { contextStack = (Scope rcvd'ent newThis clsProc
+                                                 <| stack
+                                                 )
+                                , thatObject   = this
+                                }
+                              -- restore original tx state after args received
                             , edh'in'tx   = edh'in'tx pgs
                             }
                           )
@@ -345,7 +320,7 @@ evalExpr expr exit = do
               _ -> error "bug"
 
 
-      (_mth'this, _mth'scope, EdhMethod (Method ownerObj mthProc@(ProcDecl _mth'name mth'args mth'body)))
+      (mth'this, _mth'scope, EdhMethod (Method mthProc@(ProcDecl _mth'name mth'args mth'body)))
         ->
           -- ensure args sending and receiving happens within a same tx
           -- for atomicity of the call making
@@ -361,12 +336,14 @@ evalExpr expr exit = do
                        local
                         (\pgs' -> pgs'
                           -- set method's scope
-                          { edh'context = Context
-                                            world
-                                            (  Scope rcvd'ent ownerObj mthProc
-                                            <| stack
-                                            )
-                          -- restore original tx state after args received
+                          { edh'context =
+                            (edh'context pgs')
+                              { contextStack = (Scope rcvd'ent mth'this mthProc
+                                               <| stack
+                                               )
+                              , thatObject   = this
+                              }
+                            -- restore original tx state after args received
                           , edh'in'tx   = edh'in'tx pgs
                           }
                         )
@@ -387,8 +364,7 @@ evalExpr expr exit = do
       -- EdhGenrDef genrDef ->
 
       (_, _, val) ->
-        throwEdh
-          $  EvalError
+        throwEdh EvalError
           $  "Can not call: "
           <> T.pack (show val)
           <> " ❌ expressed with: "
@@ -398,8 +374,7 @@ evalExpr expr exit = do
     InfixExpr !opSym !lhExpr !rhExpr ->
       return $ resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
         Nothing ->
-          throwSTM
-            $  EvalError
+          throwEdhFromSTM pgs EvalError
             $  "Operator ("
             <> T.pack (show opSym)
             <> ") not in scope"
@@ -417,10 +392,11 @@ evalExpr expr exit = do
                 pgs
             -- TODO handle operator procedures etc.
             Just val ->
-              throwSTM $ EvalError $ "Not callable: " <> T.pack (show val)
+              throwEdhFromSTM pgs EvalError $ "Not callable: " <> T.pack
+                (show val)
 
 
-    _ -> throwEdh $ EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+    _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
 
 
 -- | assign an evaluated value to a target expression
@@ -450,27 +426,23 @@ assignEdhTarget pgsAfter lhExpr exit (_, _, rhVal) = do
   case lhExpr of
     AttrExpr !addr -> case addr of
       DirectRef !addr' ->
-        return $ resolveAddr callerScope addr' >>= \key -> finishAssign ent key
+        return $ resolveAddr pgs addr' >>= \key -> finishAssign ent key
       IndirectRef !tgtExpr !addr' -> case tgtExpr of
-        AttrExpr ThisRef -> return $ resolveAddr callerScope addr' >>= \key ->
-          finishAssign thisEnt key
+        AttrExpr ThisRef ->
+          return $ resolveAddr pgs addr' >>= \key -> finishAssign thisEnt key
         AttrExpr SupersRef ->
-          throwEdh $ EvalError "Can not assign an attribute to supers"
+          throwEdh EvalError "Can not assign an attribute to supers"
         _ -> evalExpr tgtExpr $ \(!_tgtThis, !_tgtScope, !tgtVal) ->
           case tgtVal of
             EdhObject (Object !tgtEnt _ _) ->
-              return $ resolveAddr callerScope addr' >>= \key ->
-                finishAssign tgtEnt key
-            _ ->
-              throwEdh $ EvalError $ "Invalid assignment target: " <> T.pack
-                (show tgtVal)
-      ThisRef   -> throwEdh $ EvalError "Can not assign to this"
-      SupersRef -> throwEdh $ EvalError "Can not assign to supers"
+              return $ resolveAddr pgs addr' >>= \key -> finishAssign tgtEnt key
+            _ -> throwEdh EvalError $ "Invalid assignment target: " <> T.pack
+              (show tgtVal)
+      ThisRef   -> throwEdh EvalError "Can not assign to this"
+      SupersRef -> throwEdh EvalError "Can not assign to supers"
     x ->
-      throwEdh
-        $  EvalError
-        $  "Invalid left hand value for assignment: "
-        <> T.pack (show x)
+      throwEdh EvalError $ "Invalid left hand value for assignment: " <> T.pack
+        (show x)
 
 
 -- The Edh call convention is so called call-by-repacking, i.e. a new pack of
@@ -534,8 +506,10 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                 , Map.insert (AttrByName attrName) argVal em
                 )
             SymbolicAttr _symName -> -- todo support this ?
-                                     throwSTM
-              $ EvalError "arg renaming to symbolic attr not supported"
+                                     throwEdhFromSTM
+              pgs
+              EvalError
+              "arg renaming to symbolic attr not supported"
           Just addr@(IndirectRef _ _) -> do
             join $ runReaderT
               (assignEdhTarget pgs
@@ -546,8 +520,9 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
               (pgs { edh'in'tx = True })
             return (ArgsPack posArgs'' kwArgs'', em)
           tgt ->
-            throwSTM $ EvalError $ "Invalid argument retarget: " <> T.pack
-              (show tgt)
+            throwEdhFromSTM pgs EvalError
+              $  "Invalid argument retarget: "
+              <> T.pack (show tgt)
      where
       resolveArgValue
         :: AttrName
@@ -570,7 +545,21 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                   (pgs { edh'in'tx = True })
                 defaultVal <- readTMVar defaultVar
                 return (defaultVal, posArgs', kwArgs'')
-              _ -> throwSTM $ EvalError $ "Missing argument: " <> argName
+              _ ->
+                throwEdhFromSTM pgs EvalError $ "Missing argument: " <> argName
+    woResidual :: ArgsPack -> EntityStore -> STM Entity
+    woResidual (ArgsPack !posResidual !kwResidual) em
+      | not (null posResidual)
+      = throwEdhFromSTM pgs EvalError
+        $  "Extraneous "
+        <> T.pack (show $ length posResidual)
+        <> " positional argument(s)"
+      | not (Map.null kwResidual)
+      = throwEdhFromSTM pgs EvalError
+        $  "Extraneous keyword arguments: "
+        <> T.unwords (Map.keys kwResidual)
+      | otherwise
+      = newTVar em
     doReturn :: Entity -> STM ()
     doReturn ent = join $ runReaderT
       (exitEdhProc
@@ -593,25 +582,10 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
         ent <- newTVar $ Map.mapKeys AttrByName kwArgs
         doReturn ent
       else
-        throwSTM
-        $  EvalError
+        throwEdhFromSTM pgs EvalError
         $  "Unexpected "
         <> T.pack (show $ length posArgs)
         <> " positional argument(s) to wild receiver"
- where
-  woResidual :: ArgsPack -> EntityStore -> STM Entity
-  woResidual (ArgsPack !posResidual !kwResidual) em
-    | not (null posResidual)
-    = throwSTM
-      $  EvalError
-      $  "Extraneous "
-      <> T.pack (show $ length posResidual)
-      <> " positional argument(s)"
-    | not (Map.null kwResidual)
-    = throwSTM $ EvalError $ "Extraneous keyword arguments: " <> T.unwords
-      (Map.keys kwResidual)
-    | otherwise
-    = newTVar em
 
 
 packEdhArgs :: ArgsSender -> EdhProcExit -> EdhProg (STM ())
@@ -631,6 +605,13 @@ packEdhArgs' (x : xs) exit = do
   !pgs <- ask
   let !ctx                     = edh'context pgs
       !scope@(Scope _ !this _) = contextScope ctx
+      dictKey2Kw :: ItemKey -> STM AttrName
+      dictKey2Kw = \case
+        ItemByStr name -> return name
+        k ->
+          throwEdhFromSTM pgs EvalError
+            $  "Invalid argument keyword from dict key: "
+            <> T.pack (show k)
   case x of
     UnpackPosArgs listExpr -> evalExpr listExpr $ \case
       (_, _, EdhList (List l)) -> packEdhArgs' xs $ \(_, _, pk) -> case pk of
@@ -644,7 +625,7 @@ packEdhArgs' (x : xs) exit = do
             pgs
         _ -> error "bug"
       (_, _, v) ->
-        throwEdh $ EvalError $ "Can not unpack args from: " <> T.pack (show v)
+        throwEdh EvalError $ "Can not unpack args from: " <> T.pack (show v)
     UnpackKwArgs dictExpr -> evalExpr dictExpr $ \case
       (_, _, EdhDict (Dict ds)) -> packEdhArgs' xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
@@ -662,7 +643,7 @@ packEdhArgs' (x : xs) exit = do
             pgs
         _ -> error "bug"
       (_, _, v) ->
-        throwEdh $ EvalError $ "Can not unpack kwargs from: " <> T.pack (show v)
+        throwEdh EvalError $ "Can not unpack kwargs from: " <> T.pack (show v)
     SendPosArg argExpr -> evalExpr argExpr $ \(_, _, val) ->
       packEdhArgs' xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
@@ -686,42 +667,32 @@ packEdhArgs' (x : xs) exit = do
             )
           )
         _ -> error "bug"
- where
-  dictKey2Kw :: ItemKey -> STM AttrName
-  dictKey2Kw = \case
-    ItemByStr name -> return name
-    k ->
-      throwSTM
-        $  EvalError
-        $  "Invalid argument keyword from dict key: "
-        <> T.pack (show k)
 
 
 -- | resolve an attribute addressor, either alphanumeric named or symbolic
-resolveAddr :: Scope -> AttrAddressor -> STM AttrKey
+resolveAddr :: EdhProgState -> AttrAddressor -> STM AttrKey
 resolveAddr _ (NamedAttr !attrName) = return (AttrByName attrName)
-resolveAddr !scope (SymbolicAttr !symName) =
-  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
-    Just scope' -> do
-      em <- readTVar (scopeEntity scope')
-      case Map.lookup (AttrByName symName) em of
-        Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
-        Just v ->
-          throwSTM
-            $  EvalError
-            $  "Not a symbol: "
-            <> T.pack (show v)
-            <> " as "
-            <> symName
-            <> " from "
-            <> T.pack (show $ thisObject scope') -- TODO this correct ?
-        Nothing -> error "bug in ctx attr resolving"
-    Nothing ->
-      throwSTM
-        $  EvalError
-        $  "No symbol named "
-        <> T.pack (show symName)
-        <> " available"
+resolveAddr !pgs (SymbolicAttr !symName) =
+  let scope = contextScope $ edh'context pgs
+  in  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
+        Just scope' -> do
+          em <- readTVar (scopeEntity scope')
+          case Map.lookup (AttrByName symName) em of
+            Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
+            Just v ->
+              throwEdhFromSTM pgs EvalError
+                $  "Not a symbol: "
+                <> T.pack (show v)
+                <> " as "
+                <> symName
+                <> " from "
+                <> T.pack (show $ thisObject scope') -- TODO this correct ?
+            Nothing -> error "bug in ctx attr resolving"
+        Nothing ->
+          throwEdhFromSTM pgs EvalError
+            $  "No symbol named "
+            <> T.pack (show symName)
+            <> " available"
 
 
 -- Edh attribute resolution

@@ -26,8 +26,7 @@ consProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
     evalExpr rhExpr
       $ \(_, _, rhVal) -> exitEdhProc exit (this, scope, EdhPair lhVal rhVal)
 consProc !argsSender _ _ _ =
-  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
-    (show argsSender)
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
 -- | utility pack(*args,**kwargs)
@@ -46,8 +45,7 @@ concatProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
       exit
       (this, scope, EdhString $ edhValueStr lhVal <> edhValueStr rhVal)
 concatProc !argsSender _ _ _ =
-  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
-    (show argsSender)
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
 -- | utility type(*args,**kwargs)

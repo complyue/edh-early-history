@@ -21,8 +21,8 @@ import           Language.Edh.Runtime
 scopeObtainProc :: EdhProcedure
 scopeObtainProc _ _ _ !exit = do
   !pgs <- ask
-  let (      Context !world !stack) = edh'context pgs
-      scope@(Scope !ent this _sp  ) = NE.head stack
+  let (      Context !world !stack !that _) = edh'context pgs
+      scope@(Scope !ent this _sp          ) = NE.head stack
 
   exitEdhProc exit (this, scope, EdhObject (Object ent (scopeClass world) []))
 

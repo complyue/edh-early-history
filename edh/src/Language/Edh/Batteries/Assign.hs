@@ -23,6 +23,5 @@ assignProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
     lhExpr
     exit
 assignProc !argsSender _ _ _ =
-  throwEdh $ EvalError $ "Unexpected operator args: " <> T.pack
-    (show argsSender)
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 

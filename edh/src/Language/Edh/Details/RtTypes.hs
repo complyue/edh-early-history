@@ -9,6 +9,7 @@ import           Control.Monad.Reader
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
+import           Data.Foldable
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
@@ -106,11 +107,23 @@ instance Show List where
 
 -- | The execution context of an Edh thread
 data Context = Context {
+    -- | the Edh world in context
     contextWorld :: !EdhWorld
+    -- | the call stack frames of Edh procedures
     , contextStack :: !(NonEmpty Scope)
+    -- | `that` object in context, the object triggering current
+    -- procedure call, it's the final descendent object when a
+    -- super method or constructor is in execution.
+    , thatObject :: Object
+    -- | current executing statement
+    , contextStmt :: !StmtSrc
   }
+instance Eq Context where
+  Context _ x'stack x'that x'ss == Context _ y'stack y'that y'ss =
+    x'stack == y'stack && x'that == y'that && x'ss == y'ss
 contextScope :: Context -> Scope
 contextScope = NE.head . contextStack
+
 
 -- Especially note that Edh has no block scope as in C
 -- family languages, JavaScript neither does before ES6,
@@ -135,7 +148,7 @@ data Scope = Scope {
     -- and is the underlying entity of 'thisObject' in a class procedure.
     scopeEntity :: !Entity
     , thisObject :: !Object -- ^ `this` object of current scope
-    , scopeProc :: !ProcDecl -- ^ the procedure holding this scope
+    , scopeProc :: !ProcDecl -- ^ the Edh procedure holding this scope
   }
 instance Eq Scope where
   Scope x'e _ x'p == Scope y'e _ y'p = x'e == y'e && x'p == y'p
@@ -198,25 +211,17 @@ instance Eq Class where
 instance Show Class where
   show (Class _ (ProcDecl cn _ _)) = "[class: " ++ T.unpack cn ++ "]"
 
-data Method = Method {
-    methodOwnerObject :: !Object
-    , methodProcedure :: !ProcDecl
-  }
-instance Eq Method where
-  Method x'o x'pd == Method y'o y'pd = x'o == y'o && x'pd == y'pd
+newtype Method = Method {
+    methodProcedure :: ProcDecl
+  } deriving (Eq)
 instance Show Method where
-  show (Method (Object _ (Class _ (ProcDecl cn _ _)) _) (ProcDecl mn _ _)) =
-    "[method: " ++ T.unpack cn ++ " :: " ++ T.unpack mn ++ "]"
+  show (Method (ProcDecl mn _ _)) = "[method: " ++ T.unpack mn ++ "]"
 
-data GenrDef = GenrDef {
-    generatorOwnerObject :: !Object
-    , generatorProcedure :: !ProcDecl
-  }
-instance Eq GenrDef where
-  GenrDef x'o x'sp == GenrDef y'o y'sp = x'o == y'o && x'sp == y'sp
+newtype GenrDef = GenrDef {
+    generatorProcedure :: ProcDecl
+  } deriving (Eq)
 instance Show GenrDef where
-  show (GenrDef (Object _ (Class _ (ProcDecl cn _ _)) _) (ProcDecl mn _ _)) =
-    "[generator: " ++ T.unpack cn ++ " :: " ++ T.unpack mn ++ "]"
+  show (GenrDef (ProcDecl mn _ _)) = "[generator: " ++ T.unpack mn ++ "]"
 
 data Module = Module {
     moduleObject :: !Object
@@ -228,16 +233,10 @@ instance Show Module where
   show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 
-data GenrIter = GenrIter {
-    iterScope :: !Scope
-    , iterRestStmts :: ![StmtSrc]
-  }
-instance Eq GenrIter where
-  -- TODO prove there won't be concurrent executable iterators
-  -- against the same entity, or tackle problems encountered
-  GenrIter x'e _ == GenrIter y'e _ = x'e == y'e
+newtype GenrIter = GenrIter Context
+  deriving (Eq)
 instance Show GenrIter where
-  show (GenrIter _ _) = "[iterator]"
+  show _ = "[iterator]"
 
 
 -- | Pending evaluated statement, it can be later forced against a
@@ -293,7 +292,9 @@ data EdhProgState = EdhProgState {
 
 -- | An atomic task forming a program
 type EdhTxTask
-  = ((Object, Scope, EdhValue), (Object, Scope, EdhValue) -> EdhProg (STM ()))
+  = ( (EdhProgState, (Object, Scope, EdhValue))
+    , (Object, Scope, EdhValue) -> EdhProg (STM ())
+    )
 
 -- | Type of a procedure in host language that can be called from Edh code.
 --
@@ -318,8 +319,22 @@ exitEdhProc exit result = do
       !inTx = edh'in'tx pgs
   return $ if inTx
     then join $ runReaderT (exit result) pgs
-    else writeTQueue txq (result, exit)
+    else writeTQueue txq ((pgs, result), exit)
 {-# INLINE exitEdhProc #-}
+
+-- | Construct an error context from program state and specified message
+getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
+getEdhErrorContext !pgs !msg =
+  let (Context !world !stack _ (StmtSrc (!sp, _))) = edh'context pgs
+      !moduClass = moduleClass world
+      !frames    = foldl'
+        (\sfs (Scope _e _o (ProcDecl procName _ (StmtSrc (spos, _)))) ->
+          (procName, T.pack (sourcePosPretty spos)) : sfs
+        )
+        []
+        (takeWhile (\(Scope _ o _) -> objClass o /= moduClass) $ NE.toList stack
+        )
+  in  EdhErrorContext msg (T.pack $ sourcePosPretty sp) frames
 
 
 -- | A pack of evaluated argument values with positional/keyword origin,
