@@ -83,11 +83,11 @@ evalStmt' stmt exit = do
         $ \(_, pkv) -> case pkv of
             EdhArgsPack pk -> recvEdhArgs argsRcvr pk $ \(_, scopeObj) ->
               case scopeObj of
-                EdhObject (Object ent' cls [])
-                  | cls == (scopeClass $ contextWorld ctx) -> return $ do
+                EdhObject (Object rcvd'ent rcvd'cls [])
+                  | rcvd'cls == (scopeClass $ contextWorld ctx) -> return $ do
                     -- overwrite current scope entity with attributes from
                     -- the received entity
-                    um <- readTVar ent'
+                    um <- readTVar rcvd'ent
                     modifyTVar' ent $ \em -> Map.union um em
                     -- let statement evaluates to nil always
                     join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
@@ -104,12 +104,12 @@ evalStmt' stmt exit = do
       evalExpr expr $ \(_, !val) -> exitEdhProc exit (scope, EdhReturn val)
 
     ClassStmt name pd -> return $ do
-      let mth = EdhClass $ Class { classScope     = NE.toList stack
-                                 , className      = name
-                                 , classProcedure = pd
-                                 }
-      modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
-      join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
+      let !cls = EdhClass $ Class { classContext   = NE.toList stack
+                                  , className      = name
+                                  , classProcedure = pd
+                                  }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName name) cls em
+      join $ runReaderT (exitEdhProc exit (scope, cls)) pgs
 
     MethodStmt name pd -> return $ do
       let mth = EdhMethod $ Method { methodOwnerObject = this
@@ -117,15 +117,15 @@ evalStmt' stmt exit = do
                                    , methodProcedure   = pd
                                    }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
-      join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
+      join $ runReaderT (exitEdhProc exit (scope, mth)) pgs
 
     GeneratorStmt name pd -> return $ do
-      let genr = EdhGenrDef $ GenrDef { generatorOwnerObject = this
-                                      , generatorName        = name
-                                      , generatorProcedure   = pd
-                                      }
-      modifyTVar' ent $ \em -> Map.insert (AttrByName name) genr em
-      join $ runReaderT (exitEdhProc exit (scope, nil)) pgs
+      let gdf = EdhGenrDef $ GenrDef { generatorOwnerObject = this
+                                     , generatorName        = name
+                                     , generatorProcedure   = pd
+                                     }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
+      join $ runReaderT (exitEdhProc exit (scope, gdf)) pgs
 
     ImportStmt _argsRcvr srcExpr -> case srcExpr of
       LitExpr (StringLiteral moduPath) -> exitEdhProc
@@ -296,32 +296,34 @@ evalExpr expr exit = do
           $ \(_, pkv) -> case pkv of
               EdhArgsPack pk -> recvEdhArgs proc'args pk $ \(_, scopeObj) ->
                 case scopeObj of
-                  EdhObject (Object ent' cls' [])
-                    | cls' == (scopeClass world) -> do
-                      let !newThis = Object ent' cls []
+                  EdhObject (Object rcvd'ent rcvd'cls [])
+                    | rcvd'cls == (scopeClass world) -> do
+                      let !newThis = Object rcvd'ent cls []
                       -- use this as the scope entity of instance ctor execution
                       local
                           (\pgs' -> pgs'
                       -- set new object's scope
                             { edh'context = Context
                                               world
-                                              (Scope ent' newThis <| stack)
+                                              (Scope rcvd'ent newThis <| stack)
                       -- restore original tx state after args received
                             , edh'in'tx   = edh'in'tx pgs
                             }
                           )
                         $ evalStmt proc'body
-                        $ \(_, ctorRtn) -> case ctorRtn of
-                      -- allow a class procedure to explicitly return another
-                      -- object than newly constructed `this`.
-                      -- it can still return `nil` to break out the procedure
-                      -- fast.
-                      -- this is magically an advance feature.
+                        $ \(_, ctorRtn) ->
+                          -- restore previous context after ctor returned 
+                                           local (const pgs) $ case ctorRtn of
+                          -- allow a class procedure to explicitly return another
+                          -- object than newly constructed `this`.
+                          -- it can still return `nil` to break out the procedure
+                          -- fast.
+                          -- this is magically an advance feature.
                             EdhReturn rtnVal | rtnVal /= nil ->
                               exitEdhProc exit (scope, rtnVal)
-                      -- no explicit return from class procedure, return the
-                      -- newly constructed this object, instead of the last
-                      -- value from the procedure execution.
+                          -- no explicit return from class procedure, return the
+                          -- newly constructed this object, instead of the last
+                          -- value from the procedure execution.
                             _ -> exitEdhProc exit (scope, EdhObject newThis)
                   _ -> error "bug"
               _ -> error "bug"
@@ -336,20 +338,24 @@ evalExpr expr exit = do
           $ \(_, pkv) -> case pkv of
               EdhArgsPack pk -> recvEdhArgs proc'args pk $ \(_, scopeObj) ->
                 case scopeObj of
-                  EdhObject (Object ent' cls []) | cls == (scopeClass world) ->
+                  EdhObject (Object rcvd'ent rcvd'cls [])
+                    | rcvd'cls == (scopeClass world)
+                    ->
                     -- use this as the scope entity of method execution
-                    local
+                       local
                         (\pgs' -> pgs'
                           -- set method's scope
                           { edh'context = Context
                                             world
-                                            (Scope ent' ownerObj <| stack)
+                                            (Scope rcvd'ent ownerObj <| stack)
                           -- restore original tx state after args received
                           , edh'in'tx   = edh'in'tx pgs
                           }
                         )
                       $ evalStmt proc'body
-                      $ \(_, mthRtn) -> case mthRtn of
+                      $ \(_, mthRtn) ->
+                         -- restore previous context after method returned
+                                        local (const pgs) $ case mthRtn of
                           EdhReturn rtnVal -> exitEdhProc exit (scope, rtnVal)
                           _                -> exitEdhProc exit (scope, mthRtn)
                   _ -> error "bug"
@@ -691,16 +697,14 @@ resolveAddr !scope (SymbolicAttr !symName) =
 -- Edh attribute resolution
 
 resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhCtxAttr !scope !addr = readTVar ent >>= \em -> if Map.member addr em
-  then -- directly present on current scope
-       return (Just scope)
-  else -- skip searching `this` object here, so within a method procedure you
-       -- have to be explicit if intend to address attribute off `this` object,
-       -- by writing `this.xxx`
-       resolveLexicalAttr (classScope $ objClass this) addr
- where
-  !ent  = scopeEntity scope
-  !this = thisObject scope
+resolveEdhCtxAttr scope@(Scope !ent !this) !addr = readTVar ent >>= \em ->
+  if Map.member addr em
+    then -- directly present on current scope
+         return (Just scope)
+    else -- skip searching `this` object here, so within a method procedure you
+         -- have to be explicit if intend to address attribute off `this` object,
+         -- by writing `this.xxx`
+         resolveLexicalAttr (classContext $ objClass this) addr
 
 resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
@@ -709,15 +713,19 @@ resolveLexicalAttr (scope@(Scope !ent !obj) : outerEntities) addr =
     then -- directly present on current scope
          return (Just scope)
     else -- go for the interesting attribute from inheritance hierarchy
-         -- of this object, so a module can `extends` some objects too,
-         -- in addition to the `import` mechanism
-         if ent == objEntity obj
-      then -- go directly to supers as entity of this object just searched
-           resolveEdhSuperAttr (objSupers obj) addr
-      else resolveEdhObjAttr obj addr >>= \case
-        Just scope'from'object -> return $ Just scope'from'object
-        -- go one level outer of the lexical stack
-        Nothing                -> resolveLexicalAttr outerEntities addr
+         -- of this context object, so a module can `extends` some objects
+         -- too, in addition to the `import` mechanism
+      (if ent == objEntity obj
+          -- go directly to supers as entity is just searched
+          then resolveEdhSuperAttr (objSupers obj) addr
+          -- context scope is different entity from this context object,
+          -- start next from this object
+          else resolveEdhObjAttr obj addr
+        )
+        >>= \case
+              Just scope'from'object -> return $ Just scope'from'object
+              -- go one level outer of the lexical stack
+              Nothing                -> resolveLexicalAttr outerEntities addr
 
 resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
 resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->

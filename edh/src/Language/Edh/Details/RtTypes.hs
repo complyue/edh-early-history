@@ -107,7 +107,6 @@ data Context = Context {
     contextWorld :: !EdhWorld
     , contextStack :: !(NonEmpty Scope)
   }
-
 contextScope :: Context -> Scope
 contextScope = NE.head . contextStack
 
@@ -179,7 +178,8 @@ instance Show Object where
       ++ "]"
 
 data Class = Class {
-    classScope :: ![Scope] -- ^ the scope this class procedure is defined
+    -- | the lexical context where this class procedure is defined
+    classContext :: ![Scope]
     , className :: !AttrName
     , classProcedure :: !ProcDecl
   }

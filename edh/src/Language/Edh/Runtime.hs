@@ -88,7 +88,7 @@ createEdhWorld = liftIO $ do
                         , sourceColumn = mkPos 1
                         }
     !worldClass = Class
-      { classScope     = []
+      { classContext   = []
       , className      = "<world>"
       , classProcedure = ProcDecl { procedure'args = WildReceiver
                                   , procedure'body = StmtSrc (srcPos, VoidStmt)
@@ -102,7 +102,7 @@ createEdhWorld = liftIO $ do
     { worldRoot      = root
     , moduleClass    =
       Class
-        { classScope     = [Scope moduManiMethods root]
+        { classContext   = [Scope moduManiMethods root]
         , className      = "<module>"
         , classProcedure = ProcDecl
                              { procedure'args = WildReceiver
@@ -111,7 +111,7 @@ createEdhWorld = liftIO $ do
         }
     , scopeClass     =
       Class
-        { classScope     = [Scope scopeManiMethods root]
+        { classContext   = [Scope scopeManiMethods root]
         , className      = "<scope>"
         , classProcedure = ProcDecl
                              { procedure'args = WildReceiver
