@@ -41,7 +41,7 @@ installEdhBatteries world = liftIO $ do
 
   !scopeArtifacts <- mapM
     (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
-    [("eval", scopeEvalProc)]
+    [("eval", scopeEvalProc), ("attrs", scopeAttrsProc), ("ctx", scopeCtxProc)]
 
   atomically $ do
 
@@ -169,6 +169,4 @@ installEdhBatteries world = liftIO $ do
  where
   !rootEntity = objEntity $ worldRoot world
   scopeManiMethods :: Entity
-  !scopeManiMethods = case classContext $ scopeClass world of
-    [(Scope !ent _ _)] -> ent
-    _                  -> error "world's scopeClass supers changed?!"
+  !scopeManiMethods = objEntity $ scopeSuper $ world

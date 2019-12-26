@@ -94,8 +94,55 @@ scopeObtainProc _ !that _ !exit = do
   contEdhSTM $ do
     -- put the original `this` object as the only super object of the scope
     -- object, for information needed by later eval request etc.
-    scopeObj <- viewAsEdhObject ent (scopeClass world) [this]
+    scopeObj <- viewAsEdhObject ent
+                                (objClass $ scopeSuper world)
+                                [scopeSuper world, this]
     exitEdhSTM pgs exit (that, scope, EdhObject scopeObj)
+
+
+-- | utility scope.attrs()
+-- get attribute types in the scope
+scopeAttrsProc :: EdhProcedure
+scopeAttrsProc _ !that _ !exit = do
+  !pgs <- ask
+  contEdhSTM $ do
+    em <- readTVar thatEnt
+    ad <-
+      newTVar
+      $ Map.fromAscList
+      $ [ (itemKeyOf ak, v) | (ak, v) <- Map.toAscList em ]
+    exitEdhSTM pgs
+               exit
+               (that, contextScope (edh'context pgs), EdhDict $ Dict ad)
+ where
+  thatEnt = objEntity that
+  itemKeyOf :: AttrKey -> ItemKey
+  itemKeyOf (AttrByName name) = ItemByStr name
+  itemKeyOf (AttrBySym  sym ) = ItemBySym sym
+
+
+-- | utility scope.ctx()
+-- get class context from `this` object of the scope
+scopeCtxProc :: EdhProcedure
+scopeCtxProc _ !that _ !exit = do
+  !pgs <- ask
+  let callerCtx@(Context !world _ _) = edh'context pgs
+  contEdhSTM $ do
+    supers <- readTVar $ objSupers that
+    case supers of
+      [_, this] -> do
+        wrappedObjs <-
+          sequence
+          $ (<$> (classContext $ objClass this))
+          $ \(Scope ent obj _) -> viewAsEdhObject
+              ent
+              (objClass $ scopeSuper world)
+              [scopeSuper world, obj]
+        exitEdhSTM
+          pgs
+          exit
+          (that, contextScope callerCtx, EdhTuple $ EdhObject <$> wrappedObjs)
+      _ -> error "<scope> bug - supers wrong"
 
 
 -- | utility scope.eval(expr1, expr2, kw3=expr3, kw4=expr4, ...)
@@ -146,7 +193,7 @@ scopeEvalProc !argsSender !that _ !exit = do
           else contEdhSTM $ do
             supers <- readTVar $ objSupers that
             case supers of
-              [this] ->
+              [_, this] ->
                 -- eval all exprs with the original scope as the only scope
                 -- atop the world
                 runEdhProg pgs
@@ -154,7 +201,9 @@ scopeEvalProc !argsSender !that _ !exit = do
                       Context
                         { contextWorld = world
                         , contextStack =
-                          Scope ent this (classProcedure $ scopeClass world)
+                          Scope ent
+                                this
+                                (classProcedure $ objClass $ scopeSuper world)
                             :| [rootScope]
                         , contextStmt  = voidStatement
                         }

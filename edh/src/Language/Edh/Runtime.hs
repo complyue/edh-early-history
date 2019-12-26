@@ -81,18 +81,19 @@ createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
   -- ultimate default methods/operators/values go into this
   worldEntity      <- newTVarIO Map.empty
-  -- methods supporting reflected module manipulation go into this
-  moduManiMethods  <- newTVarIO Map.empty
   -- methods supporting reflected scope manipulation go into this
   scopeManiMethods <- newTVarIO Map.empty
   rootSupers       <- newTVarIO []
-  let !worldClass = Class
-        { classContext   = []
-        , classProcedure = ProcDecl { procedure'name = "<world>"
-                                    , procedure'args = WildReceiver
-                                    , procedure'body = voidStatement
-                                    }
-        }
+  let !worldInitProc = ProcDecl { procedure'name = "<world>"
+                                , procedure'args = WildReceiver
+                                , procedure'body = voidStatement
+                                }
+      !worldClass = Class { classContext = [], classProcedure = worldInitProc }
+      !worldScope = Scope worldEntity root worldInitProc
+      !root       = Object { objEntity = worldEntity
+                           , objClass  = worldClass
+                           , objSupers = rootSupers
+                           }
       !moduClassProc = ProcDecl { procedure'name = "<module>"
                                 , procedure'args = WildReceiver
                                 , procedure'body = voidStatement
@@ -101,28 +102,19 @@ createEdhWorld = liftIO $ do
                                  , procedure'args = WildReceiver
                                  , procedure'body = voidStatement
                                  }
-      !root = Object { objEntity = worldEntity
-                     , objClass  = worldClass
-                     , objSupers = rootSupers
-                     }
+      !scopeClass =
+        Class { classContext = [worldScope], classProcedure = scopeClassProc }
   opPD  <- newTMVarIO Map.empty
   modus <- newTVarIO Map.empty
   return $ EdhWorld
     { worldRoot      = root
-    , moduleClass    = Class
-                         { classContext   = [ Scope moduManiMethods
-                                                    root
-                                                    moduClassProc
-                                            ]
-                         , classProcedure = moduClassProc
-                         }
-    , scopeClass     = Class
-                         { classContext   = [ Scope scopeManiMethods
-                                                    root
-                                                    scopeClassProc
-                                            ]
-                         , classProcedure = scopeClassProc
-                         }
+    , moduleClass    = Class { classContext   = [worldScope]
+                             , classProcedure = moduClassProc
+                             }
+    , scopeSuper     = Object { objEntity = scopeManiMethods
+                              , objClass  = scopeClass
+                              , objSupers = rootSupers
+                              }
     , worldOperators = opPD
     , worldModules   = modus
     }

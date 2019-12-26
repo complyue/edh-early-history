@@ -1,0 +1,18 @@
+
+{
+  method f(n) {
+    method g(m) {
+      scope()
+    }
+    return g(5)
+    // (scope(), g(7))
+  }
+
+  // f(3)
+}
+
+{
+  method f(n) {
+      scope()
+  }
+}

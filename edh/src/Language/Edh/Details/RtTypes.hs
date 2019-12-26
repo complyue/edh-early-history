@@ -237,8 +237,13 @@ data EdhWorld = EdhWorld {
     worldRoot :: !Object
     -- | all module objects in this world belong to this class
     , moduleClass :: !Class
-    -- | all scope wrapper objects in this world belong to this class
-    , scopeClass :: !Class
+    -- | all scope wrapper objects in this world belong to the same
+    -- class as 'scopeSuper' and have it as the top most super,
+    -- the bottom super of a scope wraper object is the original
+    -- `this` object of that scope, thus an attr addressor can be
+    -- used to read the attribute value out of the wrapped scope, when
+    -- the attr name does not conflict with scope wrapper methods
+    , scopeSuper :: !Object
     -- | all operators declared in this world, this also used as the
     -- _world lock_ in parsing source code to be executed in this world
     , worldOperators :: !(TMVar OpPrecDict)

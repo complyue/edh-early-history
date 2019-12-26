@@ -65,8 +65,8 @@ evalExprs that (x : xs) exit = evalExpr that x $ \(this', scope', val) ->
 evalStmt' :: Object -> Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' that stmt exit = do
   !pgs <- ask
-  let !ctx@(  Context _    !stack _) = edh'context pgs
-      !scope@(Scope   !ent !this  _) = contextScope ctx
+  let !ctx@(  Context !world !stack _) = edh'context pgs
+      !scope@(Scope   !ent   !this  _) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr that expr exit
@@ -80,7 +80,7 @@ evalStmt' that stmt exit = do
             EdhArgsPack pk -> recvEdhArgs argsRcvr pk $ \(_, _, scopeObj) ->
               case scopeObj of
                 EdhObject (Object rcvd'ent rcvd'cls _)
-                  | rcvd'cls == (scopeClass $ contextWorld ctx) -> return $ do
+                  | rcvd'cls == (objClass $ scopeSuper world) -> return $ do
                     -- overwrite current scope entity with attributes from
                     -- the received entity
                     um <- readTVar rcvd'ent
@@ -282,36 +282,36 @@ evalExpr that expr exit = do
               EdhArgsPack pk ->
                 recvEdhArgs proc'args pk $ \(_, _, scopeObj) -> case scopeObj of
                   EdhObject (Object rcvd'ent rcvd'cls _)
-                    | rcvd'cls == (scopeClass world) -> contEdhSTM $ do
-                      newThis <- viewAsEdhObject rcvd'ent cls []
-                      runEdhProg pgs
-                          -- set new object's scope
-                          { edh'context =
-                            (edh'context pgs)
-                              -- use this as the scope entity of instance ctor execution
-                              { contextStack = (  Scope rcvd'ent newThis clsProc
-                                               <| stack
-                                               )
-                              }
-                          -- restore original tx state after args received
-                          , edh'in'tx   = edh'in'tx pgs
-                          }
-                        $ evalStmt that' proc'body
-                        $ \(_, _, ctorRtn) ->
-                          -- restore previous context after ctor returned 
-                            local (const pgs) $ case ctorRtn of
-                          -- allow a class procedure to explicitly return other
-                          -- value than newly constructed `this` object
-                          -- it can still `return this to early stop the ctor proc
-                          -- this is magically an advanced feature
-                              EdhReturn rtnVal ->
-                                exitEdhProc exit (this, scope, rtnVal)
-                            -- no explicit return from class procedure, return the
-                            -- newly constructed this object, throw away the last
-                            -- value from the procedure execution
-                              _ -> exitEdhProc
-                                exit
-                                (this, scope, EdhObject newThis)
+                    | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
+                    $  do
+                         newThis <- viewAsEdhObject rcvd'ent cls []
+                         runEdhProg pgs
+                             -- set new object's scope
+                             { edh'context =
+                               (edh'context pgs)
+                                 -- use this as the scope entity of instance ctor execution
+                                 { contextStack =
+                                   (Scope rcvd'ent newThis clsProc <| stack)
+                                 }
+                             -- restore original tx state after args received
+                             , edh'in'tx   = edh'in'tx pgs
+                             }
+                           $ evalStmt that' proc'body
+                           $ \(_, _, ctorRtn) ->
+                             -- restore previous context after ctor returned 
+                               local (const pgs) $ case ctorRtn of
+                             -- allow a class procedure to explicitly return other
+                             -- value than newly constructed `this` object
+                             -- it can still `return this to early stop the ctor proc
+                             -- this is magically an advanced feature
+                                 EdhReturn rtnVal ->
+                                   exitEdhProc exit (this, scope, rtnVal)
+                               -- no explicit return from class procedure, return the
+                               -- newly constructed this object, throw away the last
+                               -- value from the procedure execution
+                                 _ -> exitEdhProc
+                                   exit
+                                   (this, scope, EdhObject newThis)
                   _ -> error "bug"
               _ -> error "bug"
 
@@ -327,7 +327,7 @@ evalExpr that expr exit = do
               EdhArgsPack pk -> recvEdhArgs mth'args pk $ \(_, _, scopeObj) ->
                 case scopeObj of
                   EdhObject (Object rcvd'ent rcvd'cls _)
-                    | rcvd'cls == (scopeClass world)
+                    | rcvd'cls == (objClass $ scopeSuper world)
                     ->
                       -- use direct containing object of the method in its
                       -- procedure execution
@@ -556,7 +556,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
       = newTVar em
     doReturn :: Entity -> STM ()
     doReturn ent = do
-      scopeObj <- viewAsEdhObject ent (scopeClass world) []
+      scopeObj <- viewAsEdhObject ent (objClass $ scopeSuper world) []
       -- execute outer code wrt what tx state originally is
       exitEdhSTM pgs exit (callerThis, callerScope, EdhObject scopeObj)
 
