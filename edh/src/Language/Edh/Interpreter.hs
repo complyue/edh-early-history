@@ -27,7 +27,7 @@ runEdhModule
   => EdhWorld
   -> ModuleId
   -> Text
-  -> m (Either InterpretError Module)
+  -> m (Either InterpretError Object)
 runEdhModule world moduId moduSource =
   liftIO
     $
@@ -49,11 +49,10 @@ runEdhModule world moduId moduSource =
               [ (AttrByName "__name__", moduIdAttrVal)
               , (AttrByName "__file__", EdhString "<adhoc>")
               ]
-            let !moduObj = Object { objEntity = entity
-                                  , objClass  = moduleClass world
-                                  , objSupers = moduSupers
-                                  }
-                !modu = Module { moduleObject = moduObj, moduleId = moduId }
+            let !modu = Object { objEntity = entity
+                               , objClass  = moduleClass world
+                               , objSupers = moduSupers
+                               }
 
             -- run statements from the module
             runEdhProgram world modu stmts >>= \case
@@ -65,7 +64,7 @@ runEdhModule world moduId moduSource =
 evalEdhSource
   :: MonadIO m
   => EdhWorld
-  -> Module
+  -> Object
   -> Text
   -> m (Either InterpretError EdhValue)
 evalEdhSource world modu code =
@@ -75,7 +74,7 @@ evalEdhSource world modu code =
       bracket (atomically $ takeTMVar wops) (atomically . tryPutTMVar wops)
     $ \opPD ->
         let (pr, opPD') =
-                runState (runParserT parseProgram (moduleId modu) code) opPD
+                runState (runParserT parseProgram "<adhoc>" code) opPD
         in  case pr of
               Left  !err   -> return $ Left $ EdhParseError err
               Right !stmts -> do

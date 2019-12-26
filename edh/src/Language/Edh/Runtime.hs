@@ -9,6 +9,7 @@ module Language.Edh.Runtime
   , runEdhProgram
   , runEdhProgram'
   , moduleContext
+  , voidStatement
 -- TODO cherrypick what artifacts to export as for user interface
   , module RT
   , module TX
@@ -40,21 +41,19 @@ import           Language.Edh.Details.Evaluate as EV
 runEdhProgram
   :: MonadIO m
   => EdhWorld
-  -> Module
+  -> Object
   -> SeqStmts
   -> m (Either EvalError EdhValue)
 runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
   where !ctx = moduleContext w m
 
 
-moduleContext :: EdhWorld -> Module -> Context
-moduleContext !w !m = Context
-  { contextWorld = w
-  , contextStack = moduScope :| [rootScope]
-  , contextStmt  = StmtSrc (_genesisSourcePosition, VoidStmt)
-  }
+moduleContext :: EdhWorld -> Object -> Context
+moduleContext !w !mo = Context { contextWorld = w
+                               , contextStack = moduScope :| [rootScope]
+                               , contextStmt  = voidStatement
+                               }
  where
-  !mo        = moduleObject m
   !moduScope = Scope (objEntity mo) mo (classProcedure $ moduleClass w)
   !root      = worldRoot w
   !rootScope = Scope (objEntity root) root (classProcedure $ objClass root)
@@ -87,29 +86,25 @@ createEdhWorld = liftIO $ do
   -- methods supporting reflected scope manipulation go into this
   scopeManiMethods <- newTVarIO Map.empty
   rootSupers       <- newTVarIO []
-  let
-    !worldClass = Class
-      { classContext   = []
-      , classProcedure =
-        ProcDecl { procedure'name = "<world>"
-                 , procedure'args = WildReceiver
-                 , procedure'body = StmtSrc (_genesisSourcePosition, VoidStmt)
-                 }
-      }
-    !moduClassProc = ProcDecl
-      { procedure'name = "<module>"
-      , procedure'args = WildReceiver
-      , procedure'body = StmtSrc (_genesisSourcePosition, VoidStmt)
-      }
-    !scopeClassProc = ProcDecl
-      { procedure'name = "<scope>"
-      , procedure'args = WildReceiver
-      , procedure'body = StmtSrc (_genesisSourcePosition, VoidStmt)
-      }
-    !root = Object { objEntity = worldEntity
-                   , objClass  = worldClass
-                   , objSupers = rootSupers
-                   }
+  let !worldClass = Class
+        { classContext   = []
+        , classProcedure = ProcDecl { procedure'name = "<world>"
+                                    , procedure'args = WildReceiver
+                                    , procedure'body = voidStatement
+                                    }
+        }
+      !moduClassProc = ProcDecl { procedure'name = "<module>"
+                                , procedure'args = WildReceiver
+                                , procedure'body = voidStatement
+                                }
+      !scopeClassProc = ProcDecl { procedure'name = "<scope>"
+                                 , procedure'args = WildReceiver
+                                 , procedure'body = voidStatement
+                                 }
+      !root = Object { objEntity = worldEntity
+                     , objClass  = worldClass
+                     , objSupers = rootSupers
+                     }
   opPD  <- newTMVarIO Map.empty
   modus <- newTVarIO Map.empty
   return $ EdhWorld
@@ -181,8 +176,12 @@ installEdhAttr :: Entity -> AttrKey -> EdhValue -> STM ()
 installEdhAttr e k v = modifyTVar' e $ \em -> Map.insert k v em
 
 
-_genesisSourcePosition :: SourcePos
-_genesisSourcePosition = SourcePos { sourceName   = "<Genesis>"
-                                   , sourceLine   = mkPos 1
-                                   , sourceColumn = mkPos 1
-                                   }
+voidStatement :: StmtSrc
+voidStatement = StmtSrc
+  ( SourcePos { sourceName   = "<Genesis>"
+              , sourceLine   = mkPos 1
+              , sourceColumn = mkPos 1
+              }
+  , VoidStmt
+  )
+

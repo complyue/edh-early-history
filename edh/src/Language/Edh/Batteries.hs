@@ -22,27 +22,26 @@ installEdhBatteries world = liftIO $ do
 
   !rootArtifacts <- mapM
     (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
-    [ (":"     , consProc)
-    , ("+"     , addProc)
-    , ("-"     , subsProc)
-    , ("*"     , mulProc)
-    , ("/"     , divProc)
-    , ("**"    , powProc)
-    , ("="     , assignProc)
-    , ("pack"  , packProc)
-    , ("++"    , concatProc)
-    , ("type"  , typeProc)
-    , ("dict"  , dictProc)
-    , ("supers", supersProc)
-    , ("scope" , scopeObtainProc)
+    [ (":"          , consProc)
+    , ("+"          , addProc)
+    , ("-"          , subsProc)
+    , ("*"          , mulProc)
+    , ("/"          , divProc)
+    , ("**"         , powProc)
+    , ("="          , assignProc)
+    , ("pack"       , packProc)
+    , ("++"         , concatProc)
+    , ("dict"       , dictProc)
+    , ("type"       , typeProc)
+    , ("constructor", ctorProc)
+    , ("supers"     , supersProc)
+    , ("scope"      , scopeObtainProc)
+    , ("makeOp"     , makeOpProc)
     ]
 
   !scopeArtifacts <- mapM
     (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
-    [ ("eval"   , scopeEvalProc)
-    , ("extract", scopeExtractProc)
-    , ("implant", scopeImplantProc)
-    ]
+    [("eval", scopeEvalProc)]
 
   atomically $ do
 

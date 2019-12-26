@@ -21,7 +21,7 @@ data AttrAddressor =
     --   then use it to address attributes against
     --   a left hand entity object
     | SymbolicAttr !AttrName
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 type ModuleId = FilePath
@@ -57,31 +57,31 @@ data Stmt = VoidStmt
     | YieldStmt !Expr
     | ReturnStmt !Expr
     | ExprStmt !Expr
-  deriving (Show)
+  deriving (Eq, Show)
 
 data AttrAddr = ThisRef | ThatRef
     | DirectRef !AttrAddressor
     | IndirectRef !Expr !AttrAddressor
-  deriving (Show)
+  deriving (Eq, Show)
 
 data ArgsReceiver = PackReceiver ![ArgReceiver]
     | SingleReceiver !ArgReceiver
     | WildReceiver
-  deriving (Show)
+  deriving (Eq, Show)
 data ArgReceiver = RecvRestPosArgs !AttrName
     | RecvRestKwArgs !AttrName
     | RecvRestPkArgs !AttrName
     | RecvArg !AttrName !(Maybe AttrAddr) !(Maybe Expr)
-  deriving (Show)
+  deriving (Eq, Show)
 
 data ArgsSender = PackSender ![ArgSender]
     | SingleSender !ArgSender
-  deriving (Show)
+  deriving (Eq, Show)
 data ArgSender = UnpackPosArgs !Expr
     | UnpackKwArgs !Expr
     | SendPosArg !Expr
     | SendKwArg !AttrName !Expr
-  deriving (Show)
+  deriving (Eq, Show)
 
 data ProcDecl = ProcDecl { procedure'name :: AttrName
                         ,  procedure'args :: !ArgsReceiver
@@ -97,7 +97,7 @@ data Prefix = PrefixPlus | PrefixMinus | Not
     | Guard -- similar to guard in Haskell
     | AtoIso -- atomically isolated
     | Go | Defer -- similar to goroutine in Go
-  deriving (Show)
+  deriving (Eq, Show)
 
 data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
     | IfExpr { if'condition :: !Expr
@@ -132,7 +132,7 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
     | CallExpr !Expr !ArgsSender
 
     | InfixExpr !OpSymbol !Expr !Expr
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 data Literal = NilLiteral
@@ -141,7 +141,7 @@ data Literal = NilLiteral
     | StringLiteral !Text
     | SinkCtor -- sink constructor
     | TypeLiteral !EdhTypeValue
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 type Precedence = Int
@@ -171,6 +171,6 @@ data EdhTypeValue = TypeType
     | FlowCtrlType -- for break/continue/fallthrough/yield/return
     | GenrIterType
     | SinkType
-    | ProxyType
+    | ExprType
   deriving (Eq, Ord, Show)
 

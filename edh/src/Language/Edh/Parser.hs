@@ -418,7 +418,7 @@ parseLitExpr = choice
   , TypeLiteral FlowCtrlType <$ litSym "FlowCtrlType"
   , TypeLiteral GenrIterType <$ litSym "GenrIterType"
   , TypeLiteral SinkType <$ litSym "SinkType"
-  , TypeLiteral ProxyType <$ litSym "ProxyType"
+  , TypeLiteral ExprType <$ litSym "ExprType"
   , TypeLiteral TypeType <$ litSym "TypeType"
   ]
   where litSym = hidden . symbol

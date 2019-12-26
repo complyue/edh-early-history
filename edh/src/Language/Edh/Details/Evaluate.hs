@@ -31,8 +31,8 @@ evalStmt that ss@(StmtSrc (_, !stmt)) !exit =
 evalBlock :: Object -> [StmtSrc] -> EdhProcExit -> EdhProg (STM ())
 evalBlock that [] !exit = do
   !pgs <- ask
-  let !ctx                     = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope ctx
+  let !ctx   = edh'context pgs
+      !scope = contextScope ctx
   exitEdhProc exit (that, scope, nil)
 evalBlock that [!ss] !exit = evalStmt that ss $ \result ->
   exitEdhProc exit $ case result of
@@ -245,7 +245,7 @@ evalExpr that expr exit = do
       IndirectRef !tgtExpr !addr' -> return $ do
         key <- resolveAddr pgs addr'
         runEdhProg pgs $ evalExpr that tgtExpr $ \case
-          (that', _, EdhObject !obj) ->
+          (_, _, EdhObject !obj) ->
             return $ resolveEdhObjAttr obj key >>= \case
               Nothing ->
                 throwEdhFromSTM pgs EvalError
@@ -272,7 +272,7 @@ evalExpr that expr exit = do
 
 
       -- calling a class (constructor) procedure
-      (that', _cls'home, EdhClass cls@(Class clsCtx clsProc@(ProcDecl _class'name proc'args proc'body)))
+      (that', _, EdhClass cls@(Class _ clsProc@(ProcDecl _class'name proc'args proc'body)))
         ->
           -- ensure args sending and receiving happens within a same tx for atomicity of
           -- the call making
@@ -283,7 +283,7 @@ evalExpr that expr exit = do
                 recvEdhArgs proc'args pk $ \(_, _, scopeObj) -> case scopeObj of
                   EdhObject (Object rcvd'ent rcvd'cls _)
                     | rcvd'cls == (scopeClass world) -> contEdhSTM $ do
-                      newThis <- Object rcvd'ent cls <$> newTVar []
+                      newThis <- viewAsEdhObject rcvd'ent cls []
                       runEdhProg pgs
                           -- set new object's scope
                           { edh'context =
@@ -556,14 +556,9 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
       = newTVar em
     doReturn :: Entity -> STM ()
     doReturn ent = do
-      supers <- newTVar []
-      exitEdhSTM
-        pgs -- execute outer code wrt what tx state originally is
-        exit
-        ( callerThis
-        , callerScope
-        , EdhObject $ Object ent (scopeClass world) supers
-        )
+      scopeObj <- viewAsEdhObject ent (scopeClass world) []
+      -- execute outer code wrt what tx state originally is
+      exitEdhSTM pgs exit (callerThis, callerScope, EdhObject scopeObj)
 
   -- execution of the args receiving always in a tx for atomicity
   local (\pgs' -> pgs' { edh'in'tx = True }) $ case argsRcvr of
@@ -596,13 +591,13 @@ packEdhArgs that argsSender exit =
 packEdhArgs' :: Object -> [ArgSender] -> EdhProcExit -> EdhProg (STM ())
 packEdhArgs' that [] exit = do
   !pgs <- ask
-  let !ctx                     = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope ctx
-  exit (this, scope, EdhArgsPack $ ArgsPack [] Map.empty)
+  let !ctx   = edh'context pgs
+      !scope = contextScope ctx
+  exit (that, scope, EdhArgsPack $ ArgsPack [] Map.empty)
 packEdhArgs' that (x : xs) exit = do
   !pgs <- ask
-  let !ctx                     = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope ctx
+  let !ctx   = edh'context pgs
+      !scope = contextScope ctx
       dictKey2Kw :: ItemKey -> STM AttrName
       dictKey2Kw = \case
         ItemByStr name -> return name
@@ -618,7 +613,7 @@ packEdhArgs' that (x : xs) exit = do
             ll <- readTVar l
             runEdhProg pgs $ exitEdhProc
               exit
-              (this, scope, EdhArgsPack (ArgsPack (posArgs ++ ll) kwArgs))
+              (that, scope, EdhArgsPack (ArgsPack (posArgs ++ ll) kwArgs))
           _ -> error "bug"
       (_, _, v) ->
         throwEdh EvalError $ "Can not unpack args from: " <> T.pack (show v)
@@ -630,7 +625,7 @@ packEdhArgs' that (x : xs) exit = do
             kvl <- forM (Map.toAscList dm) $ \(k, v) -> (, v) <$> dictKey2Kw k
             runEdhProg pgs $ exitEdhProc
               exit
-              ( this
+              ( that
               , scope
               , EdhArgsPack
                 (ArgsPack posArgs $ Map.union kwArgs $ Map.fromAscList kvl)
@@ -642,13 +637,13 @@ packEdhArgs' that (x : xs) exit = do
       packEdhArgs' that xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
           exit
-          (this, scope, EdhArgsPack (ArgsPack (val : posArgs) kwArgs))
+          (that, scope, EdhArgsPack (ArgsPack (val : posArgs) kwArgs))
         _ -> error "bug"
     SendKwArg kw argExpr -> evalExpr that argExpr $ \(_, _, val) ->
       packEdhArgs' that xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
           exit
-          ( this
+          ( that
           , scope
           , EdhArgsPack
             (ArgsPack posArgs $ Map.alter

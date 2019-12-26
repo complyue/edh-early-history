@@ -175,6 +175,11 @@ instance Show Object where
   show (Object _ (Class _ (ProcDecl cn _ _)) _) =
     "[object: " ++ T.unpack cn ++ "]"
 
+-- | View an entity as object of specified class with specified ancestors
+-- this is the black magic you want to avoid
+viewAsEdhObject :: Entity -> Class -> [Object] -> STM Object
+viewAsEdhObject ent cls supers = Object ent cls <$> newTVar supers
+
 data Class = Class {
     -- | the lexical context where this class procedure is defined
     classContext :: ![Scope]
@@ -196,15 +201,6 @@ newtype GenrDef = GenrDef {
   } deriving (Eq)
 instance Show GenrDef where
   show (GenrDef (ProcDecl mn _ _)) = "[generator: " ++ T.unpack mn ++ "]"
-
-data Module = Module {
-    moduleObject :: !Object
-    , moduleId :: !ModuleId
-  }
-instance Eq Module where
-  Module x'o _ == Module y'o _ = x'o == y'o
-instance Show Module where
-  show (Module _ mp) = "[module: " ++ mp ++ "]"
 
 
 newtype GenrIter = GenrIter Context
@@ -247,7 +243,7 @@ data EdhWorld = EdhWorld {
     -- _world lock_ in parsing source code to be executed in this world
     , worldOperators :: !(TMVar OpPrecDict)
     -- | all modules loaded into this world
-    , worldModules :: !(TVar (Map.Map ModuleId Module))
+    , worldModules :: !(TVar (Map.Map ModuleId Object))
   }
 instance Eq EdhWorld where
   EdhWorld x'root _ _ _ _ == EdhWorld y'root _ _ _ _ = x'root == y'root
@@ -399,7 +395,6 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
 
   -- * direct pointer (to entities) values
     | EdhObject !Object
-    | EdhModule !Module
 
   -- * mutable containers
     | EdhDict !Dict
@@ -436,7 +431,7 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     | EdhSink !EventSink
 
   -- * reflection
-    | EdhProxy !EdhValue
+    | EdhExpr !Expr
 
 edhValueStr :: EdhValue -> Text
 edhValueStr (EdhString s) = s
@@ -451,7 +446,6 @@ instance Show EdhValue where
   show (EdhSymbol  v) = show v
 
   show (EdhObject  v) = show v
-  show (EdhModule  v) = show v
 
   show (EdhDict    v) = show v
   show (EdhList    v) = show v
@@ -495,7 +489,7 @@ instance Show EdhValue where
 
   show (EdhSink     v)  = show v
 
-  show (EdhProxy    v)  = "[proxy: " ++ show v ++ "]"
+  show (EdhExpr     v)  = "[expr: " ++ show v ++ "]"
 
 -- Note:
 --
@@ -514,7 +508,6 @@ instance Eq EdhValue where
   EdhSymbol  x    == EdhSymbol  y    = x == y
 
   EdhObject  x    == EdhObject  y    = x == y
-  EdhModule  x    == EdhModule  y    = x == y
 
   EdhDict    x    == EdhDict    y    = x == y
   EdhList    x    == EdhList    y    = x == y
@@ -543,7 +536,7 @@ instance Eq EdhValue where
 
   EdhSink     x   == EdhSink     y   = x == y
 
-  EdhProxy    x'v == EdhProxy    y'v = x'v == y'v
+  EdhExpr     x'v == EdhExpr     y'v = x'v == y'v
 
 -- todo: support coercing equality ?
 --       * without this, we are a strongly typed dynamic language
@@ -575,7 +568,6 @@ edhTypeOf (EdhBool    _ )  = EdhType BoolType
 edhTypeOf (EdhString  _ )  = EdhType StringType
 edhTypeOf (EdhSymbol  _ )  = EdhType SymbolType
 edhTypeOf (EdhObject  _ )  = EdhType ObjectType
-edhTypeOf (EdhModule  _ )  = EdhType ModuleType
 edhTypeOf (EdhDict    _ )  = EdhType DictType
 edhTypeOf (EdhList    _ )  = EdhType ListType
 edhTypeOf (EdhPair _ _  )  = EdhType PairType
@@ -597,7 +589,7 @@ edhTypeOf (EdhYield    _)  = EdhType FlowCtrlType
 edhTypeOf (EdhReturn   _)  = EdhType FlowCtrlType
 
 edhTypeOf (EdhSink     _)  = EdhType SinkType
-edhTypeOf (EdhProxy    _)  = EdhType ProxyType
+edhTypeOf (EdhExpr     _)  = EdhType ExprType
 
 edhTypeOf (EdhType     _)  = EdhType TypeType
 

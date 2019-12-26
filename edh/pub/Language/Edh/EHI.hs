@@ -50,7 +50,6 @@ module Language.Edh.EHI
   , Object
   , Class
   , Method
-  , Module
   , GenrIter
     -- ** World changing tools
   , declareEdhOperators
@@ -107,9 +106,9 @@ runEdhWithoutBatteries (EdhInterpreter (ReaderT f)) =
   liftIO $ createEdhWorld >>= f
 
 
-newtype EdhSession a = EdhSession { unEdhS :: ReaderT (EdhWorld,Module) IO a }
+newtype EdhSession a = EdhSession { unEdhS :: ReaderT (EdhWorld, Object) IO a }
     deriving (Functor, Applicative, Monad,
-        MonadReader (EdhWorld, Module),
+        MonadReader (EdhWorld, Object),
         MonadIO, MonadFail)
 
 newtype EdhInterpreter a = EdhInterpreter { unEdh :: ReaderT EdhWorld IO a }

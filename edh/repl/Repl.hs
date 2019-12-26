@@ -22,9 +22,10 @@ doRead :: [Text] -> InputT IO (Maybe Text)
 doRead pendingLines =
   handleInterrupt (return $ Just "")
     $   withInterrupt
-    $   getInputLine case pendingLines of
+    $   (getInputLine $ case pendingLines of
           [] -> "Đ: "
           _  -> "Đ| " <> show (length pendingLines) <> ": "
+        )
     >>= \case
           Nothing -> case pendingLines of
             [] -> return Nothing
@@ -49,8 +50,8 @@ doRead pendingLines =
 
 
 doEval
-  :: EdhWorld -> Module -> Text -> InputT IO (Either InterpretError EdhValue)
-doEval world modu code = evalEdhSource world modu code
+  :: EdhWorld -> Object -> Text -> InputT IO (Either InterpretError EdhValue)
+doEval = evalEdhSource
 
 
 doPrint :: (Either InterpretError EdhValue) -> InputT IO ()
@@ -67,7 +68,7 @@ doPrint = \case
     _      -> outputStrLn $ show o
 
 
-doLoop :: EdhWorld -> Module -> InputT IO ()
+doLoop :: EdhWorld -> Object -> InputT IO ()
 doLoop world modu = (doRead []) >>= \case
   Nothing   -> return () -- reached EOF (end-of-feed)
   Just code -> if code == ""

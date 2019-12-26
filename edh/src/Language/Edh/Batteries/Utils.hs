@@ -53,18 +53,21 @@ concatProc !argsSender _ _ _ =
 
 -- | utility type(*args,**kwargs)
 typeProc :: EdhProcedure
-typeProc !argsSender !that !procScope !exit =
+typeProc !argsSender !that _ !exit = do
+  !pgs <- ask
+  let !callerCtx   = edh'context pgs
+      !callerScope = contextScope callerCtx
   packEdhArgs that argsSender
     $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) ->
         let !argsType = edhTypeOf <$> args
         in  if null kwargs
               then case argsType of
-                [t] -> exitEdhProc exit (that, procScope, t)
-                _   -> exitEdhProc exit (that, procScope, EdhTuple argsType)
+                [t] -> exitEdhProc exit (that, callerScope, t)
+                _   -> exitEdhProc exit (that, callerScope, EdhTuple argsType)
               else exitEdhProc
                 exit
                 ( that
-                , procScope
+                , callerScope
                 , EdhArgsPack $ ArgsPack argsType $ Map.map edhTypeOf kwargs
                 )
 
@@ -88,46 +91,3 @@ dictProc !argsSender that _ !exit = do
                 ]
               exitEdhSTM pgs exit (that, callerScope, EdhDict (Dict d))
 
-
--- | utility supers(*args,**kwargs)
-supersProc :: EdhProcedure
-supersProc !argsSender that _thisHome !exit = do
-  !pgs <- ask
-  let !callerCtx   = edh'context pgs
-      !callerScope = contextScope callerCtx
-      !argCnt      = case argsSender of
-        SingleSender _       -> 1
-        PackSender   senders -> length senders
-  if argCnt < 1
-    then contEdhSTM $ do
-      supers <- map EdhObject <$> (readTVar $ objSupers that)
-      exitEdhSTM pgs exit (that, callerScope, EdhTuple supers)
-    else
-      packEdhArgs that argsSender
-        $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> if null kwargs
-            then case args of
-              [v] -> contEdhSTM $ do
-                supers <- supersOf v
-                exitEdhSTM pgs exit (that, callerScope, supers)
-              _ -> contEdhSTM $ do
-                supersList <- sequence $ supersOf <$> args
-                exitEdhSTM pgs exit (that, callerScope, EdhTuple supersList)
-            else contEdhSTM $ do
-              supersDict <- sequence $ Map.map supersOf kwargs
-              let kwDict =
-                    Map.fromAscList
-                      $ (<$> Map.toAscList supersDict)
-                      $ \(attrName, val) -> (ItemByStr attrName, val)
-              supersList <- sequence $ supersOf <$> args
-              d          <- newTVar $ Map.union kwDict $ Map.fromAscList
-                [ (ItemByNum (fromIntegral i), t)
-                | (i, t) <- zip [(0 :: Int) ..] supersList
-                ]
-              exitEdhSTM pgs exit (that, callerScope, EdhDict (Dict d))
-
- where
-  supersOf :: EdhValue -> STM EdhValue
-  supersOf v = case v of
-    EdhObject o ->
-      map EdhObject <$> readTVar (objSupers o) >>= return . EdhTuple
-    _ -> return nil
