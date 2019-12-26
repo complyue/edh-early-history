@@ -266,7 +266,39 @@ data EdhProgState = EdhProgState {
     -- , edh'fork'chan :: !(TChan xxx)
   }
 
--- | An atomic task forming a program
+-- | Run an Edh program from within STM monad
+runEdhProg :: EdhProgState -> EdhProg (STM ()) -> STM ()
+runEdhProg pgs prog = join $ runReaderT prog pgs
+{-# INLINE runEdhProg #-}
+
+-- | Continue an Edh program with stm computation, there must be NO further
+-- action following this statement, or the stm computation is just lost.
+--
+-- Note: this is just `return`, but procedures writen in the host language
+-- (i.e. Haskell) with this instead of `return` will be more readable.
+contEdhSTM :: STM () -> EdhProg (STM ())
+contEdhSTM = return
+{-# INLINE contEdhSTM #-}
+
+-- | Exit an stm computation to the specified Edh continuation
+exitEdhSTM :: EdhProgState -> EdhProcExit -> (Object, Scope, EdhValue) -> STM ()
+exitEdhSTM pgs exit result = runEdhProg pgs $ exitEdhProc exit result
+{-# INLINE exitEdhSTM #-}
+
+-- | Convenient function to be used as short-hand to return from an Edh
+-- procedure (or functions with similar signature), this sets transaction
+-- boundaries wrt tx stated in the program's current state.
+exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
+exitEdhProc exit result = do
+  pgs <- ask
+  let txq   = edh'main'queue pgs
+      !inTx = edh'in'tx pgs
+  return $ if inTx
+    then join $ runReaderT (exit result) pgs
+    else writeTQueue txq ((pgs, result), exit)
+{-# INLINE exitEdhProc #-}
+
+-- | An atomic task, an Edh program is composed form many this kind of tasks.
 type EdhTxTask
   = ( (EdhProgState, (Object, Scope, EdhValue))
     , (Object, Scope, EdhValue) -> EdhProg (STM ())
@@ -277,26 +309,13 @@ type EdhTxTask
 -- Note the caller context/scope can be obtained from the program state.
 type EdhProcedure -- such a procedure servs as the callee
   =  ArgsSender -- ^ the manifestation of how the caller wills to send args
-  -> Object -- ^ the target object, i.e. 'thatObject' in context
+  -> Object -- ^ the target object, i.e. `that` object in context
   -> Scope -- ^ the scope from which the callee is addressed off
   -> EdhProcExit -- ^ the CPS exit to return a value from this procedure
   -> EdhProg (STM ())
 
 -- | The type for an Edh procedure's return, in continuation passing style.
 type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
-
--- | Convenient function to be used as short-hand to return from an Edh
--- procedure (or functions with similar signature), this sets transaction
--- boundaries wrt 'edh'in'tx' stated in the program's current state.
-exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
-exitEdhProc exit result = do
-  pgs <- ask
-  let txq   = edh'main'queue pgs
-      !inTx = edh'in'tx pgs
-  return $ if inTx
-    then join $ runReaderT (exit result) pgs
-    else writeTQueue txq ((pgs, result), exit)
-{-# INLINE exitEdhProc #-}
 
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext

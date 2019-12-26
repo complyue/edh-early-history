@@ -33,32 +33,32 @@ runEdhModule world moduId moduSource =
     $
   -- serialize parsing against 'worldOperators'
       bracket (atomically $ takeTMVar wops) (atomically . tryPutTMVar wops)
-    $ \opPD ->
+    $ \opPD -> do
+        moduSupers <- newTVarIO []
         let (pr, opPD') =
-                runState (runParserT parseProgram moduId moduSource) opPD
-        in
-          case pr of
-            Left  !err   -> return $ Left $ EdhParseError err
-            Right !stmts -> do
-              -- release world lock as soon as parsing done successfuly
-              atomically $ putTMVar wops opPD'
+              runState (runParserT parseProgram moduId moduSource) opPD
+        case pr of
+          Left  !err   -> return $ Left $ EdhParseError err
+          Right !stmts -> do
+            -- release world lock as soon as parsing done successfuly
+            atomically $ putTMVar wops opPD'
 
-              -- prepare the module meta data
-              let !moduIdAttrVal = EdhString $ T.pack moduId
-              !entity <- newTVarIO $ Map.fromList
-                [ (AttrByName "__name__", moduIdAttrVal)
-                , (AttrByName "__file__", EdhString "<adhoc>")
-                ]
-              let !moduObj = Object { objEntity = entity
-                                    , objClass  = moduleClass world
-                                    , objSupers = []
-                                    }
-                  !modu = Module { moduleObject = moduObj, moduleId = moduId }
+            -- prepare the module meta data
+            let !moduIdAttrVal = EdhString $ T.pack moduId
+            !entity <- newTVarIO $ Map.fromList
+              [ (AttrByName "__name__", moduIdAttrVal)
+              , (AttrByName "__file__", EdhString "<adhoc>")
+              ]
+            let !moduObj = Object { objEntity = entity
+                                  , objClass  = moduleClass world
+                                  , objSupers = moduSupers
+                                  }
+                !modu = Module { moduleObject = moduObj, moduleId = moduId }
 
-              -- run statements from the module
-              runEdhProgram world modu stmts >>= \case
-                Left  err -> return $ Left $ EdhEvalError err
-                Right _   -> return $ Right modu
+            -- run statements from the module
+            runEdhProgram world modu stmts >>= \case
+              Left  err -> return $ Left $ EdhEvalError err
+              Right _   -> return $ Right modu
   where !wops = worldOperators world
 
 

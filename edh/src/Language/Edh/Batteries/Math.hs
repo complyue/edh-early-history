@@ -17,14 +17,14 @@ import           Data.Lossless.Decimal
 
 -- | operator (+)
 addProc :: EdhProcedure
-addProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
+addProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit = do
   !pgs <- ask
-  let !callerCtx               = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope callerCtx
-  evalExpr lhExpr $ \(_, _, lhVal) -> case lhVal of
-    EdhDecimal lhNum -> evalExpr rhExpr $ \(_, _, rhVal) -> case rhVal of
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+    EdhDecimal lhNum -> evalExpr that rhExpr $ \(_, _, rhVal) -> case rhVal of
       EdhDecimal rhNum ->
-        exitEdhProc exit (this, scope, EdhDecimal $ lhNum + rhNum)
+        exitEdhProc exit (that, scope, EdhDecimal $ lhNum + rhNum)
       _ ->
         throwEdh EvalError
           $  "Invalid right-hand value for (+) operation: "
@@ -39,36 +39,38 @@ addProc !argsSender _ _ _ =
 
 -- | operator (-)
 subsProc :: EdhProcedure
-subsProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
-  !pgs <- ask
-  let !callerCtx               = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope callerCtx
-  evalExpr lhExpr $ \(_, _, lhVal) -> case lhVal of
-    EdhDecimal lhNum -> evalExpr rhExpr $ \(_, _, rhVal) -> case rhVal of
-      EdhDecimal rhNum ->
-        exitEdhProc exit (this, scope, EdhDecimal $ lhNum - rhNum)
+subsProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
+  do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+      EdhDecimal lhNum -> evalExpr that rhExpr $ \(_, _, rhVal) ->
+        case rhVal of
+          EdhDecimal rhNum ->
+            exitEdhProc exit (that, scope, EdhDecimal $ lhNum - rhNum)
+          _ ->
+            throwEdh EvalError
+              $  "Invalid right-hand value for (-) operation: "
+              <> T.pack (show rhVal)
       _ ->
         throwEdh EvalError
-          $  "Invalid right-hand value for (-) operation: "
-          <> T.pack (show rhVal)
-    _ ->
-      throwEdh EvalError
-        $  "Invalid left-hand value for (-) operation: "
-        <> T.pack (show lhVal)
+          $  "Invalid left-hand value for (-) operation: "
+          <> T.pack (show lhVal)
 subsProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
 -- | operator (*)
 mulProc :: EdhProcedure
-mulProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
+mulProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit = do
   !pgs <- ask
-  let !callerCtx               = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope callerCtx
-  evalExpr lhExpr $ \(_, _, lhVal) -> case lhVal of
-    EdhDecimal lhNum -> evalExpr rhExpr $ \(_, _, rhVal) -> case rhVal of
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+    EdhDecimal lhNum -> evalExpr that rhExpr $ \(_, _, rhVal) -> case rhVal of
       EdhDecimal rhNum ->
-        exitEdhProc exit (this, scope, EdhDecimal $ lhNum * rhNum)
+        exitEdhProc exit (that, scope, EdhDecimal $ lhNum * rhNum)
       _ ->
         throwEdh EvalError
           $  "Invalid right-hand value for (*) operation: "
@@ -83,14 +85,14 @@ mulProc !argsSender _ _ _ =
 
 -- | operator (/)
 divProc :: EdhProcedure
-divProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
+divProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit = do
   !pgs <- ask
-  let !callerCtx               = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope callerCtx
-  evalExpr lhExpr $ \(_, _, lhVal) -> case lhVal of
-    EdhDecimal lhNum -> evalExpr rhExpr $ \(_, _, rhVal) -> case rhVal of
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+    EdhDecimal lhNum -> evalExpr that rhExpr $ \(_, _, rhVal) -> case rhVal of
       EdhDecimal rhNum ->
-        exitEdhProc exit (this, scope, EdhDecimal $ lhNum / rhNum)
+        exitEdhProc exit (that, scope, EdhDecimal $ lhNum / rhNum)
       _ ->
         throwEdh EvalError
           $  "Invalid right-hand value for (/) operation: "
@@ -105,12 +107,12 @@ divProc !argsSender _ _ _ =
 
 -- | operator (**)
 powProc :: EdhProcedure
-powProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
+powProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit = do
   !pgs <- ask
-  let !callerCtx               = edh'context pgs
-      !scope@(Scope _ !this _) = contextScope callerCtx
-  evalExpr lhExpr $ \(_, _, lhVal) -> case lhVal of
-    EdhDecimal lhNum -> evalExpr rhExpr $ \(_, _, rhVal) -> case rhVal of
+  let !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+  evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+    EdhDecimal lhNum -> evalExpr that rhExpr $ \(_, _, rhVal) -> case rhVal of
       EdhDecimal (Decimal rh'd rh'e rh'n) -> if rh'd /= 1
         then
           throwEdh EvalError
@@ -118,7 +120,7 @@ powProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) _ _ !exit = do
           <> T.pack (show rhVal)
         else exitEdhProc
           exit
-          (this, scope, EdhDecimal $ lhNum ^^ (rh'n * 10 ^ rh'e))
+          (that, scope, EdhDecimal $ lhNum ^^ (rh'n * 10 ^ rh'e))
       _ ->
         throwEdh EvalError
           $  "Invalid right-hand value for (**) operation: "

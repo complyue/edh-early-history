@@ -51,7 +51,6 @@ moduleContext :: EdhWorld -> Module -> Context
 moduleContext !w !m = Context
   { contextWorld = w
   , contextStack = moduScope :| [rootScope]
-  , thatObject   = moduleObject m
   , contextStmt  = StmtSrc (_genesisSourcePosition, VoidStmt)
   }
  where
@@ -65,16 +64,17 @@ runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
 runEdhProgram' _    []     = return $ Right EdhNil
 runEdhProgram' !ctx !stmts = do
   !final <- newEmptyTMVarIO
-  let !scope@(Scope _ this _) = contextScope ctx
-      wrapper :: EdhProg (STM ())
-      wrapper = do
-        let evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
-            evalStmts []       exit = exit (this, scope, nil)
-            evalStmts [s     ] exit = evalStmt s exit
-            evalStmts (s : rs) exit = evalStmt s (const $ evalStmts rs exit)
-        evalStmts stmts $ \(_, _, !val) -> return $ putTMVar final val
+  let
+    !scope@(Scope _ this _) = contextScope ctx
+    wrapper :: EdhProg (STM ())
+    wrapper = do
+      let evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
+          evalStmts []       exit = exit (this, scope, nil)
+          evalStmts [s     ] exit = evalStmt this s exit
+          evalStmts (s : rs) exit = evalStmt this s (const $ evalStmts rs exit)
+      evalStmts stmts $ \(_, _, !val) -> return $ putTMVar final val
   tryJust Just $ do
-    runEdhProg ctx wrapper
+    driveEdhProg ctx wrapper
     atomically $ readTMVar final
 
 
@@ -86,6 +86,7 @@ createEdhWorld = liftIO $ do
   moduManiMethods  <- newTVarIO Map.empty
   -- methods supporting reflected scope manipulation go into this
   scopeManiMethods <- newTVarIO Map.empty
+  rootSupers       <- newTVarIO []
   let
     !worldClass = Class
       { classContext   = []
@@ -105,8 +106,10 @@ createEdhWorld = liftIO $ do
       , procedure'args = WildReceiver
       , procedure'body = StmtSrc (_genesisSourcePosition, VoidStmt)
       }
-    !root =
-      Object { objEntity = worldEntity, objClass = worldClass, objSupers = [] }
+    !root = Object { objEntity = worldEntity
+                   , objClass  = worldClass
+                   , objSupers = rootSupers
+                   }
   opPD  <- newTMVarIO Map.empty
   modus <- newTVarIO Map.empty
   return $ EdhWorld

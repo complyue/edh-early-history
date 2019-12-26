@@ -33,8 +33,8 @@ throwEdhFromSTM pgs !excCtor !msg =
   throwSTM (excCtor $ getEdhErrorContext pgs msg)
 
 
-runEdhProg :: Context -> EdhProg (STM ()) -> IO ()
-runEdhProg !ctx !prog = do
+driveEdhProg :: Context -> EdhProg (STM ()) -> IO ()
+driveEdhProg !ctx !prog = do
   -- prepare program state
   !masterTh  <- myThreadId
   !mainQueue <- newTQueueIO
@@ -46,17 +46,17 @@ runEdhProg !ctx !prog = do
 -- drive transaction executions from the master thread.
 -- exceptions occurred in all threads started by this program will be re-thrown
 -- asynchronously to this thread, causing the whole program to abort.
-  driveEdhProg mainQueue
+  driveProg mainQueue
  where
-  driveEdhProg :: TQueue EdhTxTask -> IO ()
-  driveEdhProg mainQueue = atomically (tryReadTQueue mainQueue) >>= \case
+  driveProg :: TQueue EdhTxTask -> IO ()
+  driveProg mainQueue = atomically (tryReadTQueue mainQueue) >>= \case
     Nothing      -> return () -- program finished 
     Just !txTask -> do
       -- run this task
       goSTM 0 txTask
 
       -- loop another iteration
-      driveEdhProg mainQueue
+      driveProg mainQueue
    where
     goSTM :: Int -> EdhTxTask -> IO ()
     goSTM !rtc txTask@((!pgs, !input), !task) = do
