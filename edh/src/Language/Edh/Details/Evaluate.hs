@@ -22,60 +22,60 @@ import           Language.Edh.Details.Tx
 import           Language.Edh.Details.Utils
 
 
-evalStmt :: StmtSrc -> EdhProcExit -> EdhProg (STM ())
-evalStmt ss@(StmtSrc (_, !stmt)) !exit =
+evalStmt :: Object -> StmtSrc -> EdhProcExit -> EdhProg (STM ())
+evalStmt that ss@(StmtSrc (_, !stmt)) !exit =
   local (\pgs -> pgs { edh'context = (edh'context pgs) { contextStmt = ss } })
-    $ evalStmt' stmt exit
+    $ evalStmt' that stmt exit
 
 
-evalBlock :: [StmtSrc] -> EdhProcExit -> EdhProg (STM ())
-evalBlock [] !exit = do
+evalBlock :: Object -> [StmtSrc] -> EdhProcExit -> EdhProg (STM ())
+evalBlock that [] !exit = do
   !pgs <- ask
   let !ctx                     = edh'context pgs
       !scope@(Scope _ !this _) = contextScope ctx
   exitEdhProc exit (this, scope, nil)
-evalBlock [!ss] !exit = evalStmt ss $ \result ->
+evalBlock that [!ss] !exit = evalStmt that ss $ \result ->
   exitEdhProc exit $ case result of
     (!this', !scope', EdhCaseClose !val) -> (this', scope', val)
     _ -> result
-evalBlock (ss : rest) !exit = evalStmt ss $ \result -> case result of
+evalBlock that (ss : rest) !exit = evalStmt that ss $ \result -> case result of
   (!this', !scope', EdhCaseClose !val) -> exitEdhProc exit (this', scope', val)
   brk@(_, _, EdhBreak) -> exitEdhProc exit brk
   ctn@(_, _, EdhContinue) -> exitEdhProc exit ctn
   rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
   yld@(_, _, EdhYield _) -> exitEdhProc exit yld
-  (_, _, EdhFallthrough) -> evalBlock rest exit
-  _ -> evalBlock rest exit
+  (_, _, EdhFallthrough) -> evalBlock that rest exit
+  _ -> evalBlock that rest exit
 
 
-evalExprs :: [Expr] -> EdhProcExit -> EdhProg (STM ())
+evalExprs :: Object -> [Expr] -> EdhProcExit -> EdhProg (STM ())
 -- here 'EdhTuple' is used for intermediate tag,
 -- not returning real tuple values as in Edh.
-evalExprs [] exit = do
+evalExprs _ [] exit = do
   !pgs <- ask
   let !ctx                     = edh'context pgs
       !scope@(Scope _ !this _) = contextScope ctx
   exit (this, scope, EdhTuple [])
-evalExprs (x : xs) exit = evalExpr x $ \(this', scope', val) ->
-  evalExprs xs $ \(_, _, tv) -> case tv of
+evalExprs that (x : xs) exit = evalExpr that x $ \(this', scope', val) ->
+  evalExprs that xs $ \(_, _, tv) -> case tv of
     EdhTuple l -> exitEdhProc exit (this', scope', EdhTuple (val : l))
     _          -> error "bug"
 
 
-evalStmt' :: Stmt -> EdhProcExit -> EdhProg (STM ())
-evalStmt' stmt exit = do
+evalStmt' :: Object -> Stmt -> EdhProcExit -> EdhProg (STM ())
+evalStmt' that stmt exit = do
   !pgs <- ask
-  let !ctx@(  Context _ !stack _ _) = edh'context pgs
-      !scope@(Scope !ent !this _  ) = contextScope ctx
+  let !ctx@(  Context _    !stack _) = edh'context pgs
+      !scope@(Scope   !ent !this  _) = contextScope ctx
   case stmt of
 
-    ExprStmt expr -> evalExpr expr exit
+    ExprStmt expr -> evalExpr that expr exit
 
     LetStmt argsRcvr argsSndr ->
       -- ensure args sending and receiving happens within a same tx
       -- for atomicity of the let statement
       local (\pgs' -> pgs' { edh'in'tx = True })
-        $ packEdhArgs argsSndr
+        $ packEdhArgs that argsSndr
         $ \(_, _, pkv) -> case pkv of
             EdhArgsPack pk -> recvEdhArgs argsRcvr pk $ \(_, _, scopeObj) ->
               case scopeObj of
@@ -94,9 +94,9 @@ evalStmt' stmt exit = do
     ContinueStmt    -> exitEdhProc exit (this, scope, EdhContinue)
     FallthroughStmt -> exitEdhProc exit (this, scope, EdhFallthrough)
 
-    YieldStmt expr  -> evalExpr expr $ \(this', scope', !val) ->
+    YieldStmt expr  -> evalExpr that expr $ \(this', scope', !val) ->
       exitEdhProc exit (this', scope', EdhYield val)
-    ReturnStmt expr -> evalExpr expr $ \(this', scope', !val) ->
+    ReturnStmt expr -> evalExpr that expr $ \(this', scope', !val) ->
       exitEdhProc exit (this', scope', EdhReturn val)
 
     ClassStmt pd@(ProcDecl name _ _) -> return $ do
@@ -129,11 +129,11 @@ evalStmt' stmt exit = do
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
 
 
-evalExpr :: Expr -> EdhProcExit -> EdhProg (STM ())
-evalExpr expr exit = do
+evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
+evalExpr that expr exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !stack that _) = edh'context pgs
-      !scope@(Scope _ !this _             ) = contextScope ctx
+  let !ctx@(  Context !world !stack _) = edh'context pgs
+      !scope@(Scope   _      !this  _) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -145,13 +145,13 @@ evalExpr expr exit = do
       SinkCtor        -> throwEdh EvalError "sink ctor not impl. yet"
 
     PrefixExpr prefix expr' -> case prefix of
-      PrefixPlus  -> evalExpr expr' exit
-      PrefixMinus -> evalExpr expr' $ \case
+      PrefixPlus  -> evalExpr that expr' exit
+      PrefixMinus -> evalExpr that expr' $ \case
         (this', scope', EdhDecimal v) ->
           exitEdhProc exit (this', scope', EdhDecimal (-v))
         (_, _, v) ->
           throwEdh EvalError $ "Can not negate: " <> T.pack (show v) <> " ❌"
-      Not -> evalExpr expr' $ \case
+      Not -> evalExpr that expr' $ \case
         (this', scope', EdhBool v) ->
           exitEdhProc exit (this', scope', EdhBool $ not v)
         (_, _, v) ->
@@ -164,25 +164,25 @@ evalExpr expr exit = do
       --      cooperate with the branch operator (->), find a way to
       --      tell it that this is guarded value, don't compare with
       --      thunk target value. but how ?
-      Guard  -> evalExpr expr' exit
+      Guard  -> evalExpr that expr' exit
 
-      AtoIso -> local (\s -> s { edh'in'tx = True }) $ evalExpr expr' exit
+      AtoIso -> local (\s -> s { edh'in'tx = True }) $ evalExpr that expr' exit
 
       -- TODO impl these
       Go     -> throwEdh EvalError "goroutine starter not impl. yet"
       Defer  -> throwEdh EvalError "defer scheduler not impl. yet"
 
-    IfExpr cond cseq alt -> evalExpr cond $ \case
-      (_, _, EdhBool True ) -> evalStmt cseq exit
+    IfExpr cond cseq alt -> evalExpr that cond $ \case
+      (_, _, EdhBool True ) -> evalStmt that cseq exit
       (_, _, EdhBool False) -> case alt of
-        Just elseClause -> evalStmt elseClause exit
+        Just elseClause -> evalStmt that elseClause exit
         _               -> exitEdhProc exit (this, scope, nil)
       (_, _, v) ->
         -- we are so strongly typed
         throwEdh EvalError $ "Not a boolean value: " <> T.pack (show v) <> " ❌"
 
     DictExpr xs -> -- make sure dict k:v pairs are evaluated in same tx
-      local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, _, tv) ->
+      local (\s -> s { edh'in'tx = True }) $ evalExprs that xs $ \(_, _, tv) ->
         case tv of
           EdhTuple l -> return $ do
             dpl <- forM l $ \case
@@ -209,7 +209,7 @@ evalExpr expr exit = do
           _ -> error "bug"
 
     ListExpr xs -> -- make sure list values are evaluated in same tx
-      local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, _, tv) ->
+      local (\s -> s { edh'in'tx = True }) $ evalExprs that xs $ \(_, _, tv) ->
         case tv of
           EdhTuple l -> return $ do
             ll <- List <$> newTVar l
@@ -217,16 +217,16 @@ evalExpr expr exit = do
           _ -> error "bug"
 
     TupleExpr xs -> -- make sure tuple values are evaluated in same tx
-      local (\s -> s { edh'in'tx = True }) $ evalExprs xs $ \(_, _, tv) ->
+      local (\s -> s { edh'in'tx = True }) $ evalExprs that xs $ \(_, _, tv) ->
         case tv of
           EdhTuple l -> exitEdhProc exit (this, scope, EdhTuple l)
           _          -> error "bug"
 
-    ParenExpr x     -> evalExpr x exit
+    ParenExpr x     -> evalExpr that x exit
 
     -- TODO this should check for Thunk, and implement
     --      break/fallthrough semantics
-    BlockExpr stmts -> evalBlock stmts exit
+    BlockExpr stmts -> evalBlock that stmts exit
 
     -- TODO impl this
     -- ForExpr ar iter todo -> undefined
@@ -245,7 +245,7 @@ evalExpr expr exit = do
               Nothing -> throwEdhFromSTM pgs EvalError "attr resolving bug"
               Just val ->
                 join $ runReaderT (exitEdhProc exit (this, scope', val)) pgs
-      IndirectRef !tgtExpr !addr' -> evalExpr tgtExpr $ \case
+      IndirectRef !tgtExpr !addr' -> evalExpr that tgtExpr $ \case
         (_, _, EdhObject !obj) -> return $ do
           !key <- resolveAddr pgs addr'
           resolveEdhObjAttr obj key >>= \case
@@ -266,7 +266,7 @@ evalExpr expr exit = do
 
     -- IndexExpr ixExpr tgtExpr ->
 
-    CallExpr procExpr argsSndr -> evalExpr procExpr $ \case
+    CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
 
       (this', scope', EdhHostProc (HostProcedure _name proc)) ->
         proc argsSndr this' scope' exit
@@ -277,7 +277,7 @@ evalExpr expr exit = do
           -- ensure args sending and receiving happens within a same tx for atomicity of
           -- the call making
            local (\pgs' -> pgs' { edh'in'tx = True })
-          $ packEdhArgs argsSndr
+          $ packEdhArgs that argsSndr
           $ \(_, _, pkv) -> case pkv of
               EdhArgsPack pk ->
                 recvEdhArgs proc'args pk $ \(_, _, scopeObj) -> case scopeObj of
@@ -293,13 +293,12 @@ evalExpr expr exit = do
                                 { contextStack = (Scope rcvd'ent newThis clsProc
                                                  <| stack
                                                  )
-                                , thatObject   = this
                                 }
                               -- restore original tx state after args received
                             , edh'in'tx   = edh'in'tx pgs
                             }
                           )
-                        $ evalStmt proc'body
+                        $ evalStmt that proc'body
                         $ \(_, _, ctorRtn) ->
                           -- restore previous context after ctor returned 
                             local (const pgs) $ case ctorRtn of
@@ -319,19 +318,20 @@ evalExpr expr exit = do
               _ -> error "bug"
 
 
-      (mth'this, _mth'scope, EdhMethod (Method mthProc@(ProcDecl _mth'name mth'args mth'body)))
+      (tgt'this, (Scope _ mth'this _), EdhMethod (Method mthProc@(ProcDecl _mth'name mth'args mth'body)))
         ->
           -- ensure args sending and receiving happens within a same tx
           -- for atomicity of the call making
            local (\pgs' -> pgs' { edh'in'tx = True })
-          $ packEdhArgs argsSndr
+          $ packEdhArgs that argsSndr
           $ \(_, _, pkv) -> case pkv of
               EdhArgsPack pk -> recvEdhArgs mth'args pk $ \(_, _, scopeObj) ->
                 case scopeObj of
                   EdhObject (Object rcvd'ent rcvd'cls [])
                     | rcvd'cls == (scopeClass world)
                     ->
-                    -- use this as the scope entity of method execution
+                      -- use direct containing object of the method in its
+                      -- procedure execution
                        local
                         (\pgs' -> pgs'
                           -- set method's scope
@@ -340,13 +340,14 @@ evalExpr expr exit = do
                               { contextStack = (Scope rcvd'ent mth'this mthProc
                                                <| stack
                                                )
-                              , thatObject   = this
                               }
                             -- restore original tx state after args received
                           , edh'in'tx   = edh'in'tx pgs
                           }
                         )
-                      $ evalStmt mth'body
+                        -- use the resolution target object as that in execution of 
+                        -- the method procedure
+                      $ evalStmt tgt'this mth'body
                       $ \(_, _, mthRtn) ->
                           -- restore previous context after method returned
                                            local (const pgs) $ case mthRtn of
@@ -406,38 +407,36 @@ evalExpr expr exit = do
 -- within the same tx, thus for atomicity of the whole assignment.
 assignEdhTarget
   :: EdhProgState
+  -> Object
   -> Expr
   -> EdhProcExit
   -> (Object, Scope, EdhValue)
   -> EdhProg (STM ())
-assignEdhTarget pgsAfter lhExpr exit (_, _, rhVal) = do
+assignEdhTarget pgsAfter that lhExpr exit (_, _, rhVal) = do
   !pgs <- ask
-  let !callerCtx@(  Context _ _ that _  ) = edh'context pgs
-      !callerScope@(Scope !ent !this _sp) = contextScope callerCtx
-      !thisEnt                            = objEntity this
-      thatEnt                             = objEntity that
-      -- assigment result as if come from the calling scope
-      !result                             = (this, callerScope, rhVal)
-      finishAssign :: Entity -> AttrKey -> STM ()
-      finishAssign tgtEnt key = do
+  let !callerCtx@(  Context _    _     _  ) = edh'context pgs
+      !callerScope@(Scope   !ent !this _sp) = contextScope callerCtx
+      finishAssign :: Object -> Entity -> AttrKey -> STM ()
+      finishAssign tgtObj tgtEnt key = do
         modifyTVar' tgtEnt $ \em -> Map.insert key rhVal em
         -- restore program state after assignment
-        join $ runReaderT (exitEdhProc exit result) pgsAfter
+        join $ runReaderT (exitEdhProc exit (tgtObj, callerScope, rhVal))
+                          pgsAfter
   case lhExpr of
     AttrExpr !addr -> case addr of
       DirectRef !addr' ->
-        return $ resolveAddr pgs addr' >>= \key -> finishAssign ent key
+        return $ resolveAddr pgs addr' >>= \key -> finishAssign this ent key
       IndirectRef !tgtExpr !addr' -> case tgtExpr of
-        AttrExpr ThisRef ->
-          return $ resolveAddr pgs addr' >>= \key -> finishAssign thisEnt key
-        AttrExpr ThatRef ->
-          return $ resolveAddr pgs addr' >>= \key -> finishAssign thatEnt key
-        _ -> evalExpr tgtExpr $ \(!_tgtThis, !_tgtScope, !tgtVal) ->
-          case tgtVal of
-            EdhObject (Object !tgtEnt _ _) ->
-              return $ resolveAddr pgs addr' >>= \key -> finishAssign tgtEnt key
-            _ -> throwEdh EvalError $ "Invalid assignment target: " <> T.pack
-              (show tgtVal)
+        AttrExpr ThisRef -> return $ resolveAddr pgs addr' >>= \key ->
+          finishAssign this (objEntity this) key
+        AttrExpr ThatRef -> return $ resolveAddr pgs addr' >>= \key ->
+          finishAssign that (objEntity that) key
+        _ -> evalExpr that tgtExpr $ \(!_, !_, !tgtVal) -> case tgtVal of
+          EdhObject tgtObj@(Object !tgtEnt _ _) ->
+            return $ resolveAddr pgs addr' >>= \key ->
+              finishAssign tgtObj tgtEnt key
+          _ -> throwEdh EvalError $ "Invalid assignment target: " <> T.pack
+            (show tgtVal)
       ThisRef -> throwEdh EvalError "Can not assign to this"
       ThatRef -> throwEdh EvalError "Can not assign to that"
     x ->
@@ -513,6 +512,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
           Just addr@(IndirectRef _ _) -> do
             join $ runReaderT
               (assignEdhTarget pgs
+                               callerThis
                                (AttrExpr addr)
                                (const $ return $ return ())
                                (callerThis, callerScope, argVal)
@@ -539,6 +539,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                 defaultVar <- newEmptyTMVar
                 join $ runReaderT
                   (evalExpr
+                    callerThis
                     defaultExpr
                     (\(_, _, val) -> return (putTMVar defaultVar val))
                   )
@@ -588,20 +589,20 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
         <> " positional argument(s) to wild receiver"
 
 
-packEdhArgs :: ArgsSender -> EdhProcExit -> EdhProg (STM ())
+packEdhArgs :: Object -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
 -- make sure values in a pack are evaluated in same tx
-packEdhArgs argsSender exit =
+packEdhArgs that argsSender exit =
   local (\s -> s { edh'in'tx = True }) $ case argsSender of
-    PackSender   argSenders -> packEdhArgs' argSenders exit
-    SingleSender argSender  -> packEdhArgs' [argSender] exit
+    PackSender   argSenders -> packEdhArgs' that argSenders exit
+    SingleSender argSender  -> packEdhArgs' that [argSender] exit
 
-packEdhArgs' :: [ArgSender] -> EdhProcExit -> EdhProg (STM ())
-packEdhArgs' [] exit = do
+packEdhArgs' :: Object -> [ArgSender] -> EdhProcExit -> EdhProg (STM ())
+packEdhArgs' that [] exit = do
   !pgs <- ask
   let !ctx                     = edh'context pgs
       !scope@(Scope _ !this _) = contextScope ctx
   exit (this, scope, EdhArgsPack $ ArgsPack [] Map.empty)
-packEdhArgs' (x : xs) exit = do
+packEdhArgs' that (x : xs) exit = do
   !pgs <- ask
   let !ctx                     = edh'context pgs
       !scope@(Scope _ !this _) = contextScope ctx
@@ -613,45 +614,47 @@ packEdhArgs' (x : xs) exit = do
             $  "Invalid argument keyword from dict key: "
             <> T.pack (show k)
   case x of
-    UnpackPosArgs listExpr -> evalExpr listExpr $ \case
-      (_, _, EdhList (List l)) -> packEdhArgs' xs $ \(_, _, pk) -> case pk of
-        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
-          ll <- readTVar l
-          join $ runReaderT
-            (exitEdhProc
-              exit
-              (this, scope, EdhArgsPack (ArgsPack (posArgs ++ ll) kwArgs))
-            )
-            pgs
-        _ -> error "bug"
+    UnpackPosArgs listExpr -> evalExpr that listExpr $ \case
+      (_, _, EdhList (List l)) -> packEdhArgs' that xs $ \(_, _, pk) ->
+        case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
+            ll <- readTVar l
+            join $ runReaderT
+              (exitEdhProc
+                exit
+                (this, scope, EdhArgsPack (ArgsPack (posArgs ++ ll) kwArgs))
+              )
+              pgs
+          _ -> error "bug"
       (_, _, v) ->
         throwEdh EvalError $ "Can not unpack args from: " <> T.pack (show v)
-    UnpackKwArgs dictExpr -> evalExpr dictExpr $ \case
-      (_, _, EdhDict (Dict ds)) -> packEdhArgs' xs $ \(_, _, pk) -> case pk of
-        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
-          dm  <- readTVar ds
-          kvl <- forM (Map.toAscList dm) $ \(k, v) -> (, v) <$> dictKey2Kw k
-          join $ runReaderT
-            (exitEdhProc
-              exit
-              ( this
-              , scope
-              , EdhArgsPack
-                (ArgsPack posArgs $ Map.union kwArgs $ Map.fromAscList kvl)
+    UnpackKwArgs dictExpr -> evalExpr that dictExpr $ \case
+      (_, _, EdhDict (Dict ds)) -> packEdhArgs' that xs $ \(_, _, pk) ->
+        case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
+            dm  <- readTVar ds
+            kvl <- forM (Map.toAscList dm) $ \(k, v) -> (, v) <$> dictKey2Kw k
+            join $ runReaderT
+              (exitEdhProc
+                exit
+                ( this
+                , scope
+                , EdhArgsPack
+                  (ArgsPack posArgs $ Map.union kwArgs $ Map.fromAscList kvl)
+                )
               )
-            )
-            pgs
-        _ -> error "bug"
+              pgs
+          _ -> error "bug"
       (_, _, v) ->
         throwEdh EvalError $ "Can not unpack kwargs from: " <> T.pack (show v)
-    SendPosArg argExpr -> evalExpr argExpr $ \(_, _, val) ->
-      packEdhArgs' xs $ \(_, _, pk) -> case pk of
+    SendPosArg argExpr -> evalExpr that argExpr $ \(_, _, val) ->
+      packEdhArgs' that xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
           exit
           (this, scope, EdhArgsPack (ArgsPack (val : posArgs) kwArgs))
         _ -> error "bug"
-    SendKwArg kw argExpr -> evalExpr argExpr $ \(_, _, val) ->
-      packEdhArgs' xs $ \(_, _, pk) -> case pk of
+    SendKwArg kw argExpr -> evalExpr that argExpr $ \(_, _, val) ->
+      packEdhArgs' that xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
           exit
           ( this
@@ -718,7 +721,7 @@ resolveLexicalAttr (scope@(Scope !ent !obj _sp) : outerEntities) addr =
          -- too, in addition to the `import` mechanism
       (if ent == objEntity obj
           -- go directly to supers as entity is just searched
-          then resolveEdhSuperAttr (objSupers obj) addr
+          then readTVar (objSupers obj) >>= resolveEdhSuperAttr addr
           -- context scope is different entity from this context object,
           -- start next from this object
           else resolveEdhObjAttr obj addr
@@ -732,15 +735,15 @@ resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
 resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->
   if Map.member addr em
     then return (Just $ Scope thisEnt this clsProc)
-    else resolveEdhSuperAttr (objSupers this) addr
+    else readTVar (objSupers this) >>= resolveEdhSuperAttr addr
  where
   !thisEnt = objEntity this
   clsProc  = classProcedure (objClass this)
 
-resolveEdhSuperAttr :: [Object] -> AttrKey -> STM (Maybe Scope)
-resolveEdhSuperAttr [] _ = return Nothing
-resolveEdhSuperAttr (super : restSupers) !addr =
+resolveEdhSuperAttr :: AttrKey -> [Object] -> STM (Maybe Scope)
+resolveEdhSuperAttr _ [] = return Nothing
+resolveEdhSuperAttr !addr (super : restSupers) =
   resolveEdhObjAttr super addr >>= \case
     Just scope -> return $ Just scope
-    Nothing    -> resolveEdhSuperAttr restSupers addr
+    Nothing    -> resolveEdhSuperAttr addr restSupers
 

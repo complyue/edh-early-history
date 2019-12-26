@@ -114,13 +114,11 @@ data Context = Context {
     -- | `that` object in context, the object triggering current
     -- procedure call, it's the final descendent object when a
     -- super method or constructor is in execution.
-    , thatObject :: Object
-    -- | current executing statement
     , contextStmt :: !StmtSrc
   }
 instance Eq Context where
-  Context _ x'stack x'that x'ss == Context _ y'stack y'that y'ss =
-    x'stack == y'stack && x'that == y'that && x'ss == y'ss
+  Context x'world x'stack x'ss == Context y'world y'stack y'ss =
+    x'world == y'world && x'stack == y'stack && x'ss == y'ss
 contextScope :: Context -> Scope
 contextScope = NE.head . contextStack
 
@@ -159,47 +157,23 @@ instance Show Scope where
 
 -- | An object views an entity, with inheritance relationship 
 -- to any number of super objects.
--- 
--- Note Edh objects are fat, every methods are stored per object,
--- this is essentially Go style type-embedding in contrast to
--- class based method resolution in traditional OO systems.
 data Object = Object {
-    -- | pointer to the stored attribute set of an entity
+    -- | the entity stores attribute set of the object
     objEntity :: !Entity
-
-    -- | the class (a.k.a constructor procedure) of an object
-    --
-    -- this serves information purpose in the class hierarchy,
-    -- not participanting in object attribute resolution, but
-    -- serves lexical attribute resolution.
+    -- | the class (a.k.a constructor) procedure of the object
     , objClass :: !Class
-
     -- | up-links for object inheritance hierarchy
-    , objSupers :: ![Object]
-
-    -- so there's black magic to use different class/supers to
-    -- view the same entity as another type of object, fooling
-    -- the rest of the world. JavaScript folks have been able
-    -- to do this for decades.
+    , objSupers :: !(TVar [Object])
   }
 instance Eq Object where
   -- equality by pointer to entity
   Object x'e _ _ == Object y'e _ _ = x'e == y'e
 instance Show Object where
-  show (Object _ (Class _ (ProcDecl cn _ _)) supers) =
-    "[object: "
-      ++ T.unpack cn
-      ++ (if null supers
-           then ""
-           else
-             T.unpack
-             $  " extends"
-             <> T.concat
-                  [ " " <> scn
-                  | (Object _ (Class _ (ProcDecl scn _ _)) _) <- supers
-                  ]
-         )
-      ++ "]"
+  -- it's not right to call 'atomically' here to read 'objSupers' for
+  -- the show, as 'show' may be called from an stm transaction, stm
+  -- will fail hard on encountering of nested 'atomically' calls.
+  show (Object _ (Class _ (ProcDecl cn _ _)) _) =
+    "[object: " ++ T.unpack cn ++ "]"
 
 data Class = Class {
     -- | the lexical context where this class procedure is defined
@@ -275,6 +249,8 @@ data EdhWorld = EdhWorld {
     -- | all modules loaded into this world
     , worldModules :: !(TVar (Map.Map ModuleId Module))
   }
+instance Eq EdhWorld where
+  EdhWorld x'root _ _ _ _ == EdhWorld y'root _ _ _ _ = x'root == y'root
 
 
 -- | The monad for running of an Edh program
@@ -325,7 +301,7 @@ exitEdhProc exit result = do
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
 getEdhErrorContext !pgs !msg =
-  let (Context !world !stack _ (StmtSrc (!sp, _))) = edh'context pgs
+  let (Context !world !stack (StmtSrc (!sp, _))) = edh'context pgs
       !moduClass = moduleClass world
       !frames    = foldl'
         (\sfs (Scope _e _o (ProcDecl procName _ (StmtSrc (spos, _)))) ->
