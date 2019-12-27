@@ -7,7 +7,7 @@
     return (scope(), g(5))
   }
 
-  f(3)
+  let (s1, s2) = (*f(3))
 }
 
 

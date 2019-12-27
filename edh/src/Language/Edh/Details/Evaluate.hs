@@ -625,6 +625,11 @@ packEdhArgs' that (x : xs) exit = do
             <> T.pack (show k)
   case x of
     UnpackPosArgs listExpr -> evalExpr that listExpr $ \case
+      (_, _, EdhTuple l) -> packEdhArgs' that xs $ \(_, _, pk) -> case pk of
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+          exit
+          (that, scope, EdhArgsPack (ArgsPack (posArgs ++ l) kwArgs))
+        _ -> error "bug"
       (_, _, EdhList (List l)) -> packEdhArgs' that xs $ \(_, _, pk) ->
         case pk of
           EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
