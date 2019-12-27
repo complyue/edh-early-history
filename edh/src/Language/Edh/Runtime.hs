@@ -27,7 +27,10 @@ import           Control.Concurrent.STM
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
-import           Data.List.NonEmpty             ( NonEmpty(..) )
+import           Data.List.NonEmpty             ( NonEmpty(..)
+                                                , (<|)
+                                                )
+import qualified Data.List.NonEmpty            as NE
 
 import           Text.Megaparsec
 
@@ -50,16 +53,15 @@ runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
 
 moduleContext :: EdhWorld -> Object -> Context
 moduleContext !w !mo = Context { contextWorld = w
-                               , callStack = moduScope :| [rootScope]
+                               , callStack    = moduScope <| rootScope
                                , contextStmt  = voidStatement
                                }
  where
   !moduScope = Scope (objEntity mo)
                      mo
-                     (classLexiStack $ moduleClass w)
+                     (NE.toList rootScope)
                      (classProcedure $ moduleClass w)
-  !root      = worldRoot w
-  !rootScope = Scope (objEntity root) root [] (classProcedure $ objClass root)
+  !rootScope = (classLexiStack $ moduleClass w)
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
@@ -87,33 +89,35 @@ createEdhWorld = liftIO $ do
   -- methods supporting reflected scope manipulation go into this
   scopeManiMethods <- newTVarIO Map.empty
   rootSupers       <- newTVarIO []
-  let !worldInitProc = ProcDecl { procedure'name = "<world>"
-                                , procedure'args = WildReceiver
-                                , procedure'body = voidStatement
-                                }
-      !worldClass =
-        Class { classLexiStack = [], classProcedure = worldInitProc }
-      !worldScope = Scope worldEntity root [] worldInitProc
-      !root       = Object { objEntity = worldEntity
-                           , objClass  = worldClass
-                           , objSupers = rootSupers
-                           }
-      !moduClassProc = ProcDecl { procedure'name = "<module>"
-                                , procedure'args = WildReceiver
-                                , procedure'body = voidStatement
-                                }
-      !scopeClassProc = ProcDecl { procedure'name = "<scope>"
-                                 , procedure'args = WildReceiver
-                                 , procedure'body = voidStatement
-                                 }
-      !scopeClass = Class { classLexiStack  = [worldScope]
-                          , classProcedure = scopeClassProc
-                          }
+  let
+    !worldInitProc = ProcDecl { procedure'name = "<world>"
+                              , procedure'args = WildReceiver
+                              , procedure'body = voidStatement
+                              }
+    !worldScope = Scope worldEntity root [] worldInitProc
+    !worldClass = Class { classLexiStack = worldScope :| []
+                        , classProcedure = worldInitProc
+                        }
+    !root = Object { objEntity = worldEntity
+                   , objClass  = worldClass
+                   , objSupers = rootSupers
+                   }
+    !moduClassProc = ProcDecl { procedure'name = "<module>"
+                              , procedure'args = WildReceiver
+                              , procedure'body = voidStatement
+                              }
+    !scopeClassProc = ProcDecl { procedure'name = "<scope>"
+                               , procedure'args = WildReceiver
+                               , procedure'body = voidStatement
+                               }
+    !scopeClass = Class { classLexiStack = worldScope :| []
+                        , classProcedure = scopeClassProc
+                        }
   opPD  <- newTMVarIO Map.empty
   modus <- newTVarIO Map.empty
   return $ EdhWorld
     { worldRoot      = root
-    , moduleClass    = Class { classLexiStack  = [worldScope]
+    , moduleClass    = Class { classLexiStack = worldScope :| []
                              , classProcedure = moduClassProc
                              }
     , scopeSuper     = Object { objEntity = scopeManiMethods

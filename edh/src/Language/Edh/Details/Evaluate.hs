@@ -65,8 +65,8 @@ evalExprs that (x : xs) exit = evalExpr that x $ \(this', scope', val) ->
 evalStmt' :: Object -> Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' that stmt exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !stack _) = edh'context pgs
-      !scope@(Scope !ent !this _ _   ) = contextScope ctx
+  let !ctx@(  Context !world !call'stack _) = edh'context pgs
+      !scope@(Scope !ent !this _ _        ) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr that expr exit
@@ -100,20 +100,21 @@ evalStmt' that stmt exit = do
       exitEdhProc exit (this', scope', EdhReturn val)
 
     ClassStmt pd@(ProcDecl name _ _) -> return $ do
-      let !cls = EdhClass
-            $ Class { classLexiStack = NE.toList stack, classProcedure = pd }
+      let
+        !cls =
+          EdhClass $ Class { classLexiStack = call'stack, classProcedure = pd }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) cls em
       exitEdhSTM pgs exit (this, scope, cls)
 
     MethodStmt pd@(ProcDecl name _ _) -> return $ do
-      let mth = EdhMethod $ Method { methodLexiStack  = NE.toList stack
-                                   , methodProcedure = pd
-                                   }
+      let
+        mth = EdhMethod
+          $ Method { methodLexiStack = call'stack, methodProcedure = pd }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
       exitEdhSTM pgs exit (this, scope, mth)
 
     GeneratorStmt pd@(ProcDecl name _ _) -> return $ do
-      let gdf = EdhGenrDef $ GenrDef { generatorLexiStack  = NE.toList stack
+      let gdf = EdhGenrDef $ GenrDef { generatorLexiStack = call'stack
                                      , generatorProcedure = pd
                                      }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
@@ -135,8 +136,8 @@ evalStmt' that stmt exit = do
 evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr that expr exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !stack _) = edh'context pgs
-      !scope@(Scope _ !this _ _      ) = contextScope ctx
+  let !ctx@(  Context !world !call'stack _) = edh'context pgs
+      !scope@(Scope _ !this _ _           ) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -240,7 +241,7 @@ evalExpr that expr exit = do
         resolveEdhCtxAttr scope key >>= \case
           Nothing -> throwEdhFromSTM pgs EvalError $ "Not in scope: " <> T.pack
             (show addr')
-          Just scope'@(Scope !ent' _obj _stack _sp) -> do
+          Just scope'@(Scope !ent' _ _ _) -> do
             em <- readTVar ent'
             case Map.lookup key em of
               Nothing  -> error "attr resolving bug"
@@ -256,7 +257,7 @@ evalExpr that expr exit = do
                   <> T.pack (show key)
                   <> " from "
                   <> T.pack (show obj)
-              Just scope'@(Scope !ent' _obj' _ _) -> do
+              Just scope'@(Scope !ent' _ _ _) -> do
                 em <- readTVar ent'
                 case Map.lookup key em of
                   Nothing  -> error "attr resolving bug"
@@ -270,12 +271,12 @@ evalExpr that expr exit = do
     CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
 
       -- calling a host procedure
-      (that', hp'home, EdhHostProc (HostProcedure _name proc)) ->
+      (that', hp'home, EdhHostProc (HostProcedure _ proc)) ->
         proc argsSndr that' hp'home exit
 
 
       -- calling a class (constructor) procedure
-      (that', _, EdhClass cls@(Class clsCtx clsProc@(ProcDecl _class'name proc'args proc'body)))
+      (that', _, EdhClass cls@(Class clsCtx clsProc@(ProcDecl _ proc'args proc'body)))
         ->
           -- ensure args sending and receiving happens within a same tx for atomicity of
           -- the call making
@@ -294,8 +295,11 @@ evalExpr that expr exit = do
                                (edh'context pgs)
                                  -- use this as the scope entity of instance ctor execution
                                  { callStack =
-                                   (  Scope rcvd'ent newThis clsCtx clsProc
-                                   <| stack
+                                   (  Scope rcvd'ent
+                                            newThis
+                                            (NE.toList clsCtx)
+                                            clsProc
+                                   <| call'stack
                                    )
                                  }
                              -- restore original tx state after args received
@@ -322,7 +326,7 @@ evalExpr that expr exit = do
 
 
       -- calling a method procedure
-      (that', (Scope _ mth'this _ _), EdhMethod (Method mthCtx mthProc@(ProcDecl _mth'name mth'args mth'body)))
+      (that', (Scope _ mth'this _ _), EdhMethod (Method mthCtx mthProc@(ProcDecl _ mth'args mth'body)))
         ->
           -- ensure args sending and receiving happens within a same tx
           -- for atomicity of the call making
@@ -342,7 +346,11 @@ evalExpr that expr exit = do
                           { edh'context =
                             (edh'context pgs)
                               { callStack =
-                                (Scope rcvd'ent mth'this mthCtx mthProc <| stack
+                                (  Scope rcvd'ent
+                                         mth'this
+                                         (NE.toList mthCtx)
+                                         mthProc
+                                <| call'stack
                                 )
                               }
                             -- restore original tx state after args received
@@ -388,7 +396,7 @@ evalExpr that expr exit = do
             $  "Operator ("
             <> T.pack (show opSym)
             <> ") not in scope"
-        Just scope'@(Scope !ent' _obj _stack _sp) -> do
+        Just scope'@(Scope !ent' _ _ _) -> do
           em <- readTVar ent'
           case Map.lookup (AttrByName opSym) em of
             Nothing -> error "attr resolving bug"
@@ -398,8 +406,8 @@ evalExpr that expr exit = do
                 this
                 scope'
                 exit
-            -- TODO handle operator procedures etc.
             Just val ->
+              -- TODO handle operator procedures etc.
               throwEdhFromSTM pgs EvalError $ "Not callable: " <> T.pack
                 (show val)
 
@@ -422,8 +430,8 @@ assignEdhTarget
   -> EdhProg (STM ())
 assignEdhTarget pgsAfter that lhExpr exit (_, _, rhVal) = do
   !pgs <- ask
-  let !callerCtx@(  Context _ _ _              ) = edh'context pgs
-      !callerScope@(Scope !ent !this _stack _sp) = contextScope callerCtx
+  let !callerCtx@(  Context _ _ _       ) = edh'context pgs
+      !callerScope@(Scope !ent !this _ _) = contextScope callerCtx
       finishAssign :: Object -> Entity -> AttrKey -> STM ()
       finishAssign tgtObj tgtEnt key = do
         modifyTVar' tgtEnt $ \em -> Map.insert key rhVal em
@@ -697,23 +705,23 @@ resolveAddr !pgs (SymbolicAttr !symName) =
 -- Edh attribute resolution
 
 resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhCtxAttr scope@(Scope !ent !_this lex'stack _sp) !addr =
+resolveEdhCtxAttr scope@(Scope !ent _ lexi'stack _) !addr =
   readTVar ent >>= \em -> if Map.member addr em
     then -- directly present on current scope
          return (Just scope)
-    else resolveLexicalAttr lex'stack addr
+    else resolveLexicalAttr lexi'stack addr
 
 resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (scope@(Scope !ent !obj _stack _sp) : outerEntities) addr =
+resolveLexicalAttr (scope@(Scope !ent !obj _ _) : outerScopes) addr =
   readTVar ent >>= \em -> if Map.member addr em
     then -- directly present on current scope
          return (Just scope)
     else -- go for the interesting attribute from inheritance hierarchy
-         -- of this context object, so a module can `extends` some objects
-         -- too, in addition to the `import` mechanism
+         -- of this context object, so a module as an object, can `extends`
+         -- some objects too, in addition to the `import` mechanism
       (if ent == objEntity obj
-          -- go directly to supers as entity is just searched
+          -- go directly to supers as entity has just got negative result
           then readTVar (objSupers obj) >>= resolveEdhSuperAttr addr
           -- context scope is different entity from this context object,
           -- start next from this object
@@ -722,13 +730,17 @@ resolveLexicalAttr (scope@(Scope !ent !obj _stack _sp) : outerEntities) addr =
         >>= \case
               Just scope'from'object -> return $ Just scope'from'object
               -- go one level outer of the lexical stack
-              Nothing                -> resolveLexicalAttr outerEntities addr
+              Nothing                -> resolveLexicalAttr outerScopes addr
 
 resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
 resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->
   if Map.member addr em
     then return
-      (Just $ Scope thisEnt this (classLexiStack $ objClass this) clsProc)
+      (Just $ Scope thisEnt
+                    this
+                    (NE.toList $ classLexiStack $ objClass this)
+                    clsProc
+      )
     else readTVar (objSupers this) >>= resolveEdhSuperAttr addr
  where
   !thisEnt = objEntity this

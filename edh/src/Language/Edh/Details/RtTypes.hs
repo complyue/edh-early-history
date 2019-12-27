@@ -189,7 +189,7 @@ viewAsEdhObject ent cls supers = Object ent cls <$> newTVar supers
 
 data Class = Class {
     -- | the lexical context where this class procedure is defined
-    classLexiStack :: ![Scope]
+    classLexiStack :: !(NonEmpty Scope)
     , classProcedure :: !ProcDecl
   }
 instance Eq Class where
@@ -198,14 +198,14 @@ instance Show Class where
   show (Class _ (ProcDecl cn _ _)) = "[class: " ++ T.unpack cn ++ "]"
 
 data Method = Method {
-    methodLexiStack :: ![Scope]
+    methodLexiStack :: !(NonEmpty Scope)
     , methodProcedure :: !ProcDecl
   } deriving (Eq)
 instance Show Method where
   show (Method _ (ProcDecl mn _ _)) = "[method: " ++ T.unpack mn ++ "]"
 
 data GenrDef = GenrDef {
-    generatorLexiStack :: ![Scope]
+    generatorLexiStack :: !(NonEmpty Scope)
     , generatorProcedure :: !ProcDecl
   } deriving (Eq)
 instance Show GenrDef where
@@ -333,7 +333,7 @@ getEdhErrorContext !pgs !msg =
   let (Context !world !stack (StmtSrc (!sp, _))) = edh'context pgs
       !moduClass = moduleClass world
       !frames    = foldl'
-        (\sfs (Scope _e _o _s (ProcDecl procName _ (StmtSrc (spos, _)))) ->
+        (\sfs (Scope _ _ _ (ProcDecl procName _ (StmtSrc (spos, _)))) ->
           (procName, T.pack (sourcePosPretty spos)) : sfs
         )
         []

@@ -4,15 +4,17 @@
     method g(m) {
       scope()
     }
-    return g(5)
-    // (scope(), g(7))
+    return (scope(), g(5))
   }
 
-  // f(3)
+  f(3)
 }
+
 
 {
   method f(n) {
-      scope()
+      method g (m) {
+        return m+n
+      }
   }
 }

@@ -163,7 +163,7 @@ parseAttrAddr = do
             AttrExpr ThisRef -> return ThisRef
             AttrExpr ThatRef -> return ThatRef
             AttrExpr r1      -> return r1
-            _expr            -> error "bug"
+            _                -> error "bug"
 
 
 parseArgsSender :: Parser ArgsSender
@@ -583,8 +583,8 @@ parseNextOp e1 prec leftCtor = optional parsePackSender >>= \case
     Just opSym -> do
       opPD <- get
       case Map.lookup opSym opPD of
-        Nothing -> fail $ "undeclared operator: " <> T.unpack opSym
-        Just (opPrec, _opDeclPos) -> parseExprPrec opPrec $ \nextExpr ->
+        Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
+        Just (opPrec, _) -> parseExprPrec opPrec $ \nextExpr ->
           if prec < opPrec
             then leftCtor $ InfixExpr opSym e1 nextExpr
             else InfixExpr opSym (leftCtor e1) nextExpr

@@ -89,37 +89,46 @@ supersProc !argsSender that _ !exit = do
 scopeObtainProc :: EdhProcedure
 scopeObtainProc _ !that _ !exit = do
   !pgs <- ask
-  let
-    (      Context !world !call'stack _) = edh'context pgs
-    scope@(Scope ent this lex'stack _  ) = NE.head call'stack
-  -- save the lexical context in the fake class of the wrapper object
-    !wrapperClass =
-      (objClass $ scopeSuper world) { classLexiStack = lex'stack }
+  let (Context !world !call'stack _) = edh'context pgs
+      !scope                         = NE.head call'stack
   contEdhSTM $ do
+    wrapperObj <- mkScopeWrapper world scope
+    exitEdhSTM pgs
+               exit
+               (that, contextScope $ edh'context pgs, EdhObject wrapperObj)
+
+mkScopeWrapper :: EdhWorld -> Scope -> STM Object
+mkScopeWrapper world (Scope !ent !this !lexi'stack _) = do
     -- use an object to wrap the very entity, the entity is same as of this's 
     -- in case we are in a class procedure, but not if we are in a method proc
-    entWrapper <- viewAsEdhObject ent wrapperClass []
-    -- a scope wrapper object is itself a blank bucket, can be used to store
-    -- arbitrary attributes
-    wrapperEnt <- newTVar Map.empty
-    -- the wrapper object itself is a bunch of magical makeups
-    wrapperObj <- viewAsEdhObject
-      wrapperEnt
-      wrapperClass
-      [
-    -- put the 'scopeSuper' object as the top super, this is where the builtin
-    -- scope manipulation methods are resolved
-        scopeSuper world
-    -- put the object wrapping the entity (different than this's entity for
-    -- a method procedure's scope) as the middle super object, so attributes
-    -- not shadowed by those manually assigned ones to 'wrapperEnt', or scope
-    -- manipulation methods, can be read off directly from the wrapper object
-      , entWrapper
-    -- put the original `this` object as the bottom super object, for
-    -- information needed later, e.g. eval
-      , this
-      ]
-    exitEdhSTM pgs exit (that, scope, EdhObject wrapperObj)
+  entWrapper <- viewAsEdhObject ent wrapperClass []
+  -- a scope wrapper object is itself a blank bucket, can be used to store
+  -- arbitrary attributes
+  wrapperEnt <- newTVar Map.empty
+  -- the wrapper object itself is a bunch of magical makeups
+  wrapperObj <- viewAsEdhObject
+    wrapperEnt
+    wrapperClass
+    [
+  -- put the 'scopeSuper' object as the top super, this is where the builtin
+  -- scope manipulation methods are resolved
+      scopeSuper world
+  -- put the object wrapping the entity (different than this's entity for
+  -- a method procedure's scope) as the middle super object, so attributes
+  -- not shadowed by those manually assigned ones to 'wrapperEnt', or scope
+  -- manipulation methods, can be read off directly from the wrapper object
+    , entWrapper
+  -- put the original `this` object as the bottom super object, for
+  -- information needed later, e.g. eval
+    , this
+    ]
+  return wrapperObj
+ where
+-- save the lexical context in the fake class of the wrapper object
+  !wrapperClass = case lexi'stack of
+    lexi'top : lexi'rest ->
+      (objClass $ scopeSuper world) { classLexiStack = lexi'top :| lexi'rest }
+    _ -> error "bug empty lexical stack"
 
 
 -- | utility scope.attrs()
@@ -139,7 +148,7 @@ scopeAttrsProc _ !that _ !exit = do
         exitEdhSTM pgs
                    exit
                    (that, contextScope (edh'context pgs), EdhDict $ Dict ad)
-      _ -> error "bug "
+      _ -> error "bug <scope> supers wrong"
  where
   itemKeyOf :: AttrKey -> ItemKey
   itemKeyOf (AttrByName name) = ItemByStr name
@@ -154,13 +163,9 @@ scopeStackProc _ !that _ !exit = do
   let callerCtx@(Context !world _ _) = edh'context pgs
   contEdhSTM $ do
     wrappedObjs <-
-      sequence $ (<$> (classLexiStack $ objClass that)) $ \(Scope _ obj _ _) ->
-        do
-          wrapperEnt <- newTVar Map.empty
-          -- TODO this is not right !
-          viewAsEdhObject wrapperEnt
-                          (objClass $ scopeSuper world)
-                          [scopeSuper world, obj]
+      sequence
+      $ (<$> (NE.toList $ classLexiStack $ objClass that))
+      $ mkScopeWrapper world
     exitEdhSTM
       pgs
       exit
@@ -173,11 +178,8 @@ scopeEvalProc :: EdhProcedure
 scopeEvalProc !argsSender !that _ !exit = do
   !pgs <- ask
   let
-    callerCtx@(  Context !world _ _) = edh'context pgs
-    callerScope@(Scope !ent _ _ _  ) = contextScope $ callerCtx
-    !root                            = worldRoot world
-    !rootScope =
-      Scope (objEntity root) root [] (classProcedure $ objClass root)
+    callerCtx@(Context !world _ _) = edh'context pgs
+    callerScope                    = contextScope $ callerCtx
     evalThePack
       :: [EdhValue]
       -> Map.Map AttrName EdhValue
@@ -213,27 +215,18 @@ scopeEvalProc !argsSender !that _ !exit = do
           then exitEdhProc
             exit
             (that, callerScope, EdhArgsPack $ ArgsPack [] Map.empty)
-          else contEdhSTM $ do
-            supers <- readTVar $ objSupers that
-            case supers of
-              [_, this] ->
-                -- eval all exprs with the original scope as the only scope
-                -- atop the world
-                runEdhProg pgs
-                    { edh'context =
-                      Context
-                        { contextWorld = world
-                        , callStack    =
-                          Scope ent
-                                this
-                                (classLexiStack $ objClass this)
-                                (classProcedure $ objClass $ scopeSuper world)
-                            :| [rootScope]
-                        , contextStmt  = voidStatement
-                        }
-                    }
-                  $ evalThePack [] Map.empty args kwargs
-              _ -> error "<scope> bug - supers wrong"
+          else
+            contEdhSTM
+            $
+              -- eval all exprs with the original lexical scope as call stack
+              runEdhProg pgs
+                { edh'context = Context
+                                  { contextWorld = world
+                                  , callStack = (classLexiStack $ objClass that)
+                                  , contextStmt = voidStatement
+                                  }
+                }
+            $ evalThePack [] Map.empty args kwargs
 
 
 -- | utility makeOp(lhExpr, opSym, rhExpr)

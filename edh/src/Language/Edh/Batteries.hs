@@ -41,7 +41,10 @@ installEdhBatteries world = liftIO $ do
 
   !scopeArtifacts <- mapM
     (\(sym, hp) -> (AttrByName sym, ) . EdhHostProc <$> mkHostProc sym hp)
-    [("eval", scopeEvalProc), ("attrs", scopeAttrsProc), ("ctx", scopeCtxProc)]
+    [ ("eval" , scopeEvalProc)
+    , ("attrs", scopeAttrsProc)
+    , ("stack", scopeStackProc)
+    ]
 
   atomically $ do
 

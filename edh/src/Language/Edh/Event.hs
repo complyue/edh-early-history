@@ -17,7 +17,7 @@ newEventSink = do
   return EventSink { evs'mrv = mrv, evs'chan = chan }
 
 mostRecentEvent :: MonadIO m => EventSink -> m EdhValue
-mostRecentEvent _sink@(EventSink mrv _chan) = liftIO $ readTVarIO mrv
+mostRecentEvent (EventSink mrv _) = liftIO $ readTVarIO mrv
 
 publishEvent :: EventSink -> EdhValue -> STM ()
 publishEvent (EventSink mrv chan) val = do
