@@ -236,8 +236,13 @@ parseOpDeclOvrdStmt = do
   srcLoc   <- getSourcePos
   opSym    <- parseOpLit
   precDecl <- optional $ L.decimal <* sc
-  procDecl <- parseProcDecl
-  opPD     <- get
+  -- todo restrict forms of valid args receiver for operators, e.g. 
+  --  * 2 pos-args - simple lh/rh value receiving operator
+  --  * 3 pos-args - caller scope + lh/rh expr receiving operator
+  argRcvr  <- parseArgsReceiver
+  body     <- parseStmt
+  let procDecl = ProcDecl opSym argRcvr body
+  opPD <- get
   case precDecl of
     Nothing -> do
       case Map.lookup opSym opPD of
@@ -411,7 +416,6 @@ parseLitExpr = choice
   , TypeLiteral StringType <$ litSym "StringType"
   , TypeLiteral SymbolType <$ litSym "SymbolType"
   , TypeLiteral ObjectType <$ litSym "ObjectType"
-  , TypeLiteral ModuleType <$ litSym "ModuleType"
   , TypeLiteral DictType <$ litSym "DictType"
   , TypeLiteral ListType <$ litSym "ListType"
   , TypeLiteral TupleType <$ litSym "TupleType"
@@ -420,6 +424,7 @@ parseLitExpr = choice
   , TypeLiteral HostProcType <$ litSym "HostProcType"
   , TypeLiteral ClassType <$ litSym "ClassType"
   , TypeLiteral MethodType <$ litSym "MethodType"
+  , TypeLiteral OperatorType <$ litSym "OperatorType"
   , TypeLiteral GeneratorType <$ litSym "GeneratorType"
   , TypeLiteral FlowCtrlType <$ litSym "FlowCtrlType"
   , TypeLiteral GenrIterType <$ litSym "GenrIterType"

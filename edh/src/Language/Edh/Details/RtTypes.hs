@@ -210,7 +210,8 @@ data Operator = Operator {
     , operatorPredecessor :: !(Maybe Operator)
   } deriving (Eq)
 instance Show Operator where
-  show (Operator _ (ProcDecl mn _ _) _) = "[operator: " ++ T.unpack mn ++ "]"
+  show (Operator _ (ProcDecl opSym _ _) _) =
+    "[operator: (" ++ T.unpack opSym ++ ")]"
 
 data GenrDef = GenrDef {
     generatorLexiStack :: !(NonEmpty Scope)
