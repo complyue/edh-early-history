@@ -164,8 +164,12 @@ scopeStackProc _ !that _ !exit = do
   contEdhSTM $ do
     wrappedObjs <-
       sequence
-      $ (<$> (NE.toList $ classLexiStack $ objClass that))
-      $ mkScopeWrapper world
+      $   mkScopeWrapper world
+      -- the world scope at bottom of any lexical stack has empty lexical stack
+      -- itself, and is not to be wrapped
+      <$> (NE.takeWhile (not . null . lexiStack) $ classLexiStack $ objClass
+            that
+          )
     exitEdhSTM
       pgs
       exit
