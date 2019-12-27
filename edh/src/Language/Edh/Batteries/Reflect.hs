@@ -21,8 +21,8 @@ import           Language.Edh.Runtime
 ctorProc :: EdhProcedure
 ctorProc !argsSender !that _ !exit = do
   !pgs <- ask
-  let callerCtx                    = edh'context pgs
-      callerScope@(Scope _ this _) = contextScope callerCtx
+  let callerCtx                      = edh'context pgs
+      callerScope@(Scope _ this _ _) = contextScope callerCtx
   packEdhArgs that argsSender
     $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) ->
         let !argsCls = edhClassOf <$> args
@@ -89,15 +89,37 @@ supersProc !argsSender that _ !exit = do
 scopeObtainProc :: EdhProcedure
 scopeObtainProc _ !that _ !exit = do
   !pgs <- ask
-  let (      Context !world !stack _) = edh'context pgs
-      scope@(Scope   !ent   this   _) = NE.head stack
+  let
+    (      Context !world !call'stack _) = edh'context pgs
+    scope@(Scope ent this lex'stack _  ) = NE.head call'stack
+  -- save the lexical context in the fake class of the wrapper object
+    !wrapperClass =
+      (objClass $ scopeSuper world) { classLexiStack = lex'stack }
   contEdhSTM $ do
-    -- put the original `this` object as the only super object of the scope
-    -- object, for information needed by later eval request etc.
-    scopeObj <- viewAsEdhObject ent
-                                (objClass $ scopeSuper world)
-                                [scopeSuper world, this]
-    exitEdhSTM pgs exit (that, scope, EdhObject scopeObj)
+    -- use an object to wrap the very entity, the entity is same as of this's 
+    -- in case we are in a class procedure, but not if we are in a method proc
+    entWrapper <- viewAsEdhObject ent wrapperClass []
+    -- a scope wrapper object is itself a blank bucket, can be used to store
+    -- arbitrary attributes
+    wrapperEnt <- newTVar Map.empty
+    -- the wrapper object itself is a bunch of magical makeups
+    wrapperObj <- viewAsEdhObject
+      wrapperEnt
+      wrapperClass
+      [
+    -- put the 'scopeSuper' object as the top super, this is where the builtin
+    -- scope manipulation methods are resolved
+        scopeSuper world
+    -- put the object wrapping the entity (different than this's entity for
+    -- a method procedure's scope) as the middle super object, so attributes
+    -- not shadowed by those manually assigned ones to 'wrapperEnt', or scope
+    -- manipulation methods, can be read off directly from the wrapper object
+      , entWrapper
+    -- put the original `this` object as the bottom super object, for
+    -- information needed later, e.g. eval
+      , this
+      ]
+    exitEdhSTM pgs exit (that, scope, EdhObject wrapperObj)
 
 
 -- | utility scope.attrs()
@@ -106,43 +128,43 @@ scopeAttrsProc :: EdhProcedure
 scopeAttrsProc _ !that _ !exit = do
   !pgs <- ask
   contEdhSTM $ do
-    em <- readTVar thatEnt
-    ad <-
-      newTVar
-      $ Map.fromAscList
-      $ [ (itemKeyOf ak, v) | (ak, v) <- Map.toAscList em ]
-    exitEdhSTM pgs
-               exit
-               (that, contextScope (edh'context pgs), EdhDict $ Dict ad)
+    supers <- readTVar $ objSupers that
+    case supers of
+      [_, ent'wrapper, _wrapped'this] -> do
+        em <- readTVar (objEntity ent'wrapper)
+        ad <-
+          newTVar
+          $ Map.fromAscList
+          $ [ (itemKeyOf ak, v) | (ak, v) <- Map.toAscList em ]
+        exitEdhSTM pgs
+                   exit
+                   (that, contextScope (edh'context pgs), EdhDict $ Dict ad)
+      _ -> error "bug "
  where
-  thatEnt = objEntity that
   itemKeyOf :: AttrKey -> ItemKey
   itemKeyOf (AttrByName name) = ItemByStr name
   itemKeyOf (AttrBySym  sym ) = ItemBySym sym
 
 
--- | utility scope.ctx()
--- get class context from `this` object of the scope
-scopeCtxProc :: EdhProcedure
-scopeCtxProc _ !that _ !exit = do
+-- | utility scope.stack()
+-- get lexical context from the wrapped scope
+scopeStackProc :: EdhProcedure
+scopeStackProc _ !that _ !exit = do
   !pgs <- ask
   let callerCtx@(Context !world _ _) = edh'context pgs
   contEdhSTM $ do
-    supers <- readTVar $ objSupers that
-    case supers of
-      [_, this] -> do
-        wrappedObjs <-
-          sequence
-          $ (<$> (classContext $ objClass this))
-          $ \(Scope ent obj _) -> viewAsEdhObject
-              ent
-              (objClass $ scopeSuper world)
-              [scopeSuper world, obj]
-        exitEdhSTM
-          pgs
-          exit
-          (that, contextScope callerCtx, EdhTuple $ EdhObject <$> wrappedObjs)
-      _ -> error "<scope> bug - supers wrong"
+    wrappedObjs <-
+      sequence $ (<$> (classLexiStack $ objClass that)) $ \(Scope _ obj _ _) ->
+        do
+          wrapperEnt <- newTVar Map.empty
+          -- TODO this is not right !
+          viewAsEdhObject wrapperEnt
+                          (objClass $ scopeSuper world)
+                          [scopeSuper world, obj]
+    exitEdhSTM
+      pgs
+      exit
+      (that, contextScope callerCtx, EdhTuple $ EdhObject <$> wrappedObjs)
 
 
 -- | utility scope.eval(expr1, expr2, kw3=expr3, kw4=expr4, ...)
@@ -152,9 +174,10 @@ scopeEvalProc !argsSender !that _ !exit = do
   !pgs <- ask
   let
     callerCtx@(  Context !world _ _) = edh'context pgs
-    callerScope@(Scope   !ent   _ _) = contextScope $ callerCtx
+    callerScope@(Scope !ent _ _ _  ) = contextScope $ callerCtx
     !root                            = worldRoot world
-    !rootScope = Scope (objEntity root) root (classProcedure $ objClass root)
+    !rootScope =
+      Scope (objEntity root) root [] (classProcedure $ objClass root)
     evalThePack
       :: [EdhValue]
       -> Map.Map AttrName EdhValue
@@ -200,9 +223,10 @@ scopeEvalProc !argsSender !that _ !exit = do
                     { edh'context =
                       Context
                         { contextWorld = world
-                        , contextStack =
+                        , callStack    =
                           Scope ent
                                 this
+                                (classLexiStack $ objClass this)
                                 (classProcedure $ objClass $ scopeSuper world)
                             :| [rootScope]
                         , contextStmt  = voidStatement

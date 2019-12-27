@@ -110,7 +110,7 @@ data Context = Context {
     -- | the Edh world in context
     contextWorld :: !EdhWorld
     -- | the call stack frames of Edh procedures
-    , contextStack :: !(NonEmpty Scope)
+    , callStack :: !(NonEmpty Scope)
     -- | `that` object in context, the object triggering current
     -- procedure call, it's the final descendent object when a
     -- super method or constructor is in execution.
@@ -120,38 +120,45 @@ instance Eq Context where
   Context x'world x'stack x'ss == Context y'world y'stack y'ss =
     x'world == y'world && x'stack == y'stack && x'ss == y'ss
 contextScope :: Context -> Scope
-contextScope = NE.head . contextStack
+contextScope = NE.head . callStack
 
 
 -- Especially note that Edh has no block scope as in C
 -- family languages, JavaScript neither does before ES6,
 -- Python neither does until now (2019).
 --
--- So there're only 2 types of scope in Edh: `module scope` and
--- `procedure scope`, and there are only 2 types of procedures:
--- `class procedure` and `method procedure` (where
--- `generator procedure`) is a special type of `method procedure`.
+-- There is only `procedure scope` in Edh, and there are only 2 types
+-- of procedures:
+--  * class (constructor) procedure
+--  * method procedure
+-- Note that module scope is a special kind of class procedure, think
+-- it as the module object's constructor procedure; and generator
+-- procedure is a special kind of method procedure.
 --
--- Every procedure call will have an entity created, which is
--- pushed to top of scope stack as well, and:
+-- Every procedure call will create a new scope, with a new entity created
+-- for it, and:
 --
---  * if it is a class procedure call, a new object of this class
---    is allocated viewing the same entity as for the scope, and
---    `thisObject` on the stack top is updated to it;
+--  * if it is a class procedure call, a new object of this class is also
+--    allocated viewing the entity, serving `this` object of the scope;
 --
---  * if it is a methd procedure call, `thisObject` remains the
---    same as previous stack frame.
+--  * if it is a methd procedure call, no new object is created, and the
+--    scope inherits `this` object from the outer scope.
+--
 data Scope = Scope {
     -- | the entity of current scope, it's unique in a method procedure,
     -- and is the underlying entity of 'thisObject' in a class procedure.
     scopeEntity :: !Entity
-    , thisObject :: !Object -- ^ `this` object of current scope
-    , scopeProc :: !ProcDecl -- ^ the Edh procedure holding this scope
+    -- | `this` object of current scope
+    , thisObject :: !Object
+    -- | the lexical context in which the executing procedure is defined
+    , lexiStack :: ![Scope]
+    -- | the Edh procedure holding this scope
+    , scopeProc :: !ProcDecl
   }
 instance Eq Scope where
-  Scope x'e _ x'p == Scope y'e _ y'p = x'e == y'e && x'p == y'p
+  Scope x'e _ _ x'p == Scope y'e _ _ y'p = x'e == y'e && x'p == y'p
 instance Show Scope where
-  show (Scope _ _ (ProcDecl pName _ (StmtSrc (!srcPos, _)))) =
+  show (Scope _ _ _ (ProcDecl pName _ (StmtSrc (!srcPos, _)))) =
     "[scope: " ++ T.unpack pName ++ " @ " ++ sourcePosPretty srcPos ++ "]"
 
 
@@ -182,7 +189,7 @@ viewAsEdhObject ent cls supers = Object ent cls <$> newTVar supers
 
 data Class = Class {
     -- | the lexical context where this class procedure is defined
-    classContext :: ![Scope]
+    classLexiStack :: ![Scope]
     , classProcedure :: !ProcDecl
   }
 instance Eq Class where
@@ -190,17 +197,19 @@ instance Eq Class where
 instance Show Class where
   show (Class _ (ProcDecl cn _ _)) = "[class: " ++ T.unpack cn ++ "]"
 
-newtype Method = Method {
-    methodProcedure :: ProcDecl
+data Method = Method {
+    methodLexiStack :: ![Scope]
+    , methodProcedure :: !ProcDecl
   } deriving (Eq)
 instance Show Method where
-  show (Method (ProcDecl mn _ _)) = "[method: " ++ T.unpack mn ++ "]"
+  show (Method _ (ProcDecl mn _ _)) = "[method: " ++ T.unpack mn ++ "]"
 
-newtype GenrDef = GenrDef {
-    generatorProcedure :: ProcDecl
+data GenrDef = GenrDef {
+    generatorLexiStack :: ![Scope]
+    , generatorProcedure :: !ProcDecl
   } deriving (Eq)
 instance Show GenrDef where
-  show (GenrDef (ProcDecl mn _ _)) = "[generator: " ++ T.unpack mn ++ "]"
+  show (GenrDef _ (ProcDecl mn _ _)) = "[generator: " ++ T.unpack mn ++ "]"
 
 
 newtype GenrIter = GenrIter Context
@@ -324,11 +333,12 @@ getEdhErrorContext !pgs !msg =
   let (Context !world !stack (StmtSrc (!sp, _))) = edh'context pgs
       !moduClass = moduleClass world
       !frames    = foldl'
-        (\sfs (Scope _e _o (ProcDecl procName _ (StmtSrc (spos, _)))) ->
+        (\sfs (Scope _e _o _s (ProcDecl procName _ (StmtSrc (spos, _)))) ->
           (procName, T.pack (sourcePosPretty spos)) : sfs
         )
         []
-        (takeWhile (\(Scope _ o _) -> objClass o /= moduClass) $ NE.toList stack
+        ( takeWhile (\(Scope _ o _ _) -> objClass o /= moduClass)
+        $ NE.toList stack
         )
   in  EdhErrorContext msg (T.pack $ sourcePosPretty sp) frames
 

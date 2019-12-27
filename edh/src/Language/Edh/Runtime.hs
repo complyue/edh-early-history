@@ -50,13 +50,16 @@ runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
 
 moduleContext :: EdhWorld -> Object -> Context
 moduleContext !w !mo = Context { contextWorld = w
-                               , contextStack = moduScope :| [rootScope]
+                               , callStack = moduScope :| [rootScope]
                                , contextStmt  = voidStatement
                                }
  where
-  !moduScope = Scope (objEntity mo) mo (classProcedure $ moduleClass w)
+  !moduScope = Scope (objEntity mo)
+                     mo
+                     (classLexiStack $ moduleClass w)
+                     (classProcedure $ moduleClass w)
   !root      = worldRoot w
-  !rootScope = Scope (objEntity root) root (classProcedure $ objClass root)
+  !rootScope = Scope (objEntity root) root [] (classProcedure $ objClass root)
 
 
 runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
@@ -64,7 +67,7 @@ runEdhProgram' _    []     = return $ Right EdhNil
 runEdhProgram' !ctx !stmts = do
   !final <- newEmptyTMVarIO
   let
-    !scope@(Scope _ this _) = contextScope ctx
+    !scope@(Scope _ this _ _) = contextScope ctx
     wrapper :: EdhProg (STM ())
     wrapper = do
       let evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
@@ -88,8 +91,9 @@ createEdhWorld = liftIO $ do
                                 , procedure'args = WildReceiver
                                 , procedure'body = voidStatement
                                 }
-      !worldClass = Class { classContext = [], classProcedure = worldInitProc }
-      !worldScope = Scope worldEntity root worldInitProc
+      !worldClass =
+        Class { classLexiStack = [], classProcedure = worldInitProc }
+      !worldScope = Scope worldEntity root [] worldInitProc
       !root       = Object { objEntity = worldEntity
                            , objClass  = worldClass
                            , objSupers = rootSupers
@@ -102,13 +106,14 @@ createEdhWorld = liftIO $ do
                                  , procedure'args = WildReceiver
                                  , procedure'body = voidStatement
                                  }
-      !scopeClass =
-        Class { classContext = [worldScope], classProcedure = scopeClassProc }
+      !scopeClass = Class { classLexiStack  = [worldScope]
+                          , classProcedure = scopeClassProc
+                          }
   opPD  <- newTMVarIO Map.empty
   modus <- newTVarIO Map.empty
   return $ EdhWorld
     { worldRoot      = root
-    , moduleClass    = Class { classContext   = [worldScope]
+    , moduleClass    = Class { classLexiStack  = [worldScope]
                              , classProcedure = moduClassProc
                              }
     , scopeSuper     = Object { objEntity = scopeManiMethods
