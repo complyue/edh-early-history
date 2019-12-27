@@ -204,6 +204,14 @@ data Method = Method {
 instance Show Method where
   show (Method _ (ProcDecl mn _ _)) = "[method: " ++ T.unpack mn ++ "]"
 
+data Operator = Operator {
+    operatorLexiStack :: !(NonEmpty Scope)
+    , operatorProcedure :: !ProcDecl
+    , operatorPredecessor :: !(Maybe Operator)
+  } deriving (Eq)
+instance Show Operator where
+  show (Operator _ (ProcDecl mn _ _) _) = "[operator: " ++ T.unpack mn ++ "]"
+
 data GenrDef = GenrDef {
     generatorLexiStack :: !(NonEmpty Scope)
     , generatorProcedure :: !ProcDecl
@@ -433,6 +441,7 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
   -- * precedure definitions
     | EdhClass !Class
     | EdhMethod !Method
+    | EdhOperator !Operator
     | EdhGenrDef !GenrDef
 
   -- * flow control
@@ -492,6 +501,7 @@ instance Show EdhValue where
 
   show (EdhClass    v)  = show v
   show (EdhMethod   v)  = show v
+  show (EdhOperator v)  = show v
   show (EdhGenrDef  v)  = show v
 
   show EdhBreak         = "[break]"
@@ -538,6 +548,7 @@ instance Eq EdhValue where
 
   EdhClass    x   == EdhClass    y   = x == y
   EdhMethod   x   == EdhMethod   y   = x == y
+  EdhOperator x   == EdhOperator y   = x == y
   EdhGenrDef  x   == EdhGenrDef  y   = x == y
 
   EdhBreak        == EdhBreak        = True
@@ -593,6 +604,7 @@ edhTypeOf (EdhThunk    _)  = EdhType ThunkType
 edhTypeOf (EdhHostProc _)  = EdhType HostProcType
 edhTypeOf (EdhClass    _)  = EdhType ClassType
 edhTypeOf (EdhMethod   _)  = EdhType MethodType
+edhTypeOf (EdhOperator _)  = EdhType OperatorType
 edhTypeOf (EdhGenrDef  _)  = EdhType GeneratorType
 
 edhTypeOf EdhBreak         = EdhType FlowCtrlType

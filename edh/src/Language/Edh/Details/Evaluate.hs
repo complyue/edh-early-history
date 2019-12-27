@@ -28,6 +28,8 @@ evalStmt that ss@(StmtSrc (_, !stmt)) !exit =
     $ evalStmt' that stmt exit
 
 
+-- TODO this should check for Thunk, and implement
+--      break/fallthrough semantics
 evalBlock :: Object -> [StmtSrc] -> EdhProcExit -> EdhProg (STM ())
 evalBlock that [] !exit = do
   !pgs <- ask
@@ -112,6 +114,33 @@ evalStmt' that stmt exit = do
           $ Method { methodLexiStack = call'stack, methodProcedure = pd }
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
       exitEdhSTM pgs exit (this, scope, mth)
+
+    OpDeclStmt opSym _ opProc -> return $ do
+      let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
+                                      , operatorProcedure   = opProc
+                                      , operatorPredecessor = Nothing
+                                      }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName opSym) op em
+      exitEdhSTM pgs exit (this, scope, op)
+
+    OpOvrdStmt opSym opProc -> return $ do
+      let findPredecessor :: STM (Maybe Operator)
+          findPredecessor = do
+            resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
+              Nothing                  -> return Nothing
+              Just (Scope !ent' _ _ _) -> do
+                em <- readTVar ent'
+                case Map.lookup (AttrByName opSym) em of
+                  Nothing               -> error "attr resolving bug"
+                  Just (EdhOperator op) -> return $ Just op
+                  _                     -> return Nothing
+      predecessor <- findPredecessor
+      let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
+                                      , operatorProcedure   = opProc
+                                      , operatorPredecessor = predecessor
+                                      }
+      modifyTVar' ent $ \em -> Map.insert (AttrByName opSym) op em
+      exitEdhSTM pgs exit (this, scope, op)
 
     GeneratorStmt pd@(ProcDecl name _ _) -> return $ do
       let gdf = EdhGenrDef $ GenrDef { generatorLexiStack = call'stack
@@ -226,8 +255,6 @@ evalExpr that expr exit = do
 
     ParenExpr x     -> evalExpr that x exit
 
-    -- TODO this should check for Thunk, and implement
-    --      break/fallthrough semantics
     BlockExpr stmts -> evalBlock that stmts exit
 
     -- TODO impl this
@@ -276,7 +303,7 @@ evalExpr that expr exit = do
 
 
       -- calling a class (constructor) procedure
-      (that', _, EdhClass cls@(Class clsCtx clsProc@(ProcDecl _ proc'args proc'body)))
+      (that', _, EdhClass cls@(Class cls'lexi'stack clsProc@(ProcDecl _ proc'args proc'body)))
         ->
           -- ensure args sending and receiving happens within a same tx for atomicity of
           -- the call making
@@ -297,7 +324,7 @@ evalExpr that expr exit = do
                                  { callStack =
                                    (  Scope rcvd'ent
                                             newThis
-                                            (NE.toList clsCtx)
+                                            (NE.toList cls'lexi'stack)
                                             clsProc
                                    <| call'stack
                                    )
@@ -326,7 +353,7 @@ evalExpr that expr exit = do
 
 
       -- calling a method procedure
-      (that', (Scope _ mth'this _ _), EdhMethod (Method mthCtx mthProc@(ProcDecl _ mth'args mth'body)))
+      (that', (Scope _ mth'this _ _), EdhMethod (Method mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
         ->
           -- ensure args sending and receiving happens within a same tx
           -- for atomicity of the call making
@@ -348,7 +375,7 @@ evalExpr that expr exit = do
                               { callStack =
                                 (  Scope rcvd'ent
                                          mth'this
-                                         (NE.toList mthCtx)
+                                         (NE.toList mth'lexi'stack)
                                          mthProc
                                 <| call'stack
                                 )
@@ -400,14 +427,14 @@ evalExpr that expr exit = do
           em <- readTVar ent'
           case Map.lookup (AttrByName opSym) em of
             Nothing -> error "attr resolving bug"
-            Just (EdhHostProc (HostProcedure !_name !proc)) ->
-              runEdhProg pgs $ proc
-                (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
-                this
-                scope'
-                exit
+            Just (EdhHostProc (HostProcedure _ !proc)) -> runEdhProg pgs $ proc
+              (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
+              this
+              scope'
+              exit
+            Just (EdhOperator (Operator op'lexi'stack opProc@(ProcDecl _ op'args op'body) op'pred))
+              -> undefined -- TODO handle operator procedures
             Just val ->
-              -- TODO handle operator procedures etc.
               throwEdhFromSTM pgs EvalError $ "Not callable: " <> T.pack
                 (show val)
 

@@ -157,7 +157,6 @@ data EdhTypeValue = TypeType
     | StringType
     | SymbolType
     | ObjectType
-    | ModuleType
     | DictType
     | ListType
     | PairType
@@ -168,10 +167,10 @@ data EdhTypeValue = TypeType
     | HostProcType
     | ClassType
     | MethodType
+    | OperatorType
     | GeneratorType
     | FlowCtrlType -- for break/continue/fallthrough/yield/return
     | GenrIterType
     | SinkType
     | ExprType
   deriving (Eq, Ord, Show)
-
