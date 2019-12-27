@@ -287,6 +287,11 @@ parseReturnStmt = do
   void $ symbol "return"
   ReturnStmt <$> parseExpr
 
+parseThrowStmt :: Parser Stmt
+parseThrowStmt = do
+  void $ symbol "throw"
+  ThrowStmt <$> parseExpr
+
 
 parseStmt :: Parser StmtSrc
 parseStmt = do
@@ -311,6 +316,7 @@ parseStmt = do
     -- TODO validate yield must within a generator procedure
           , parseYieldStmt
           , parseReturnStmt
+          , parseThrowStmt
           , parseVoidStmt
           , ExprStmt <$> parseExpr
           ]

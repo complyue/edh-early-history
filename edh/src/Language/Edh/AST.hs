@@ -54,6 +54,7 @@ data Stmt = VoidStmt
         , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]
         , try'finally :: !(Maybe StmtSrc)
         }
+    | ThrowStmt !Expr
     | YieldStmt !Expr
     | ReturnStmt !Expr
     | ExprStmt !Expr
