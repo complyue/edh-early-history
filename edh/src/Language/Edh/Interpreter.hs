@@ -67,14 +67,15 @@ evalEdhSource
   -> Object
   -> Text
   -> m (Either InterpretError EdhValue)
-evalEdhSource world modu code =
-  liftIO
-    $
+evalEdhSource world modu code = liftIO $ do
+  mem <- readTVarIO (objEntity modu)
+  let moduName = T.unpack $ case Map.lookup (AttrByName "__name__") mem of
+        Just (EdhString name) -> name
+        _                     -> "<adhoc>"
   -- serialize parsing against 'worldOperators'
-      bracket (atomically $ takeTMVar wops) (atomically . tryPutTMVar wops)
+  bracket (atomically $ takeTMVar wops) (atomically . tryPutTMVar wops)
     $ \opPD ->
-        let (pr, opPD') =
-                runState (runParserT parseProgram "<adhoc>" code) opPD
+        let (pr, opPD') = runState (runParserT parseProgram moduName code) opPD
         in  case pr of
               Left  !err   -> return $ Left $ EdhParseError err
               Right !stmts -> do
