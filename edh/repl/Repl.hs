@@ -4,6 +4,7 @@ module Repl where
 
 import           Prelude
 import           Debug.Trace
+import           Text.Printf
 
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
@@ -24,7 +25,7 @@ doRead pendingLines =
     $   withInterrupt
     $   (getInputLine $ case pendingLines of
           [] -> "Đ: "
-          _  -> "Đ| " <> show (length pendingLines) <> ": "
+          _  -> "Đ| " <> printf "%3d" (length pendingLines) <> ": "
         )
     >>= \case
           Nothing -> case pendingLines of
