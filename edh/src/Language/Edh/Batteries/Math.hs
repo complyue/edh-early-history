@@ -134,39 +134,82 @@ powProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
+-- | operator (&&)
+logicalAndProc :: EdhProcedure
+logicalAndProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit
+  = do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+      EdhBool lhBool -> evalExpr that rhExpr $ \(_, _, rhVal) -> case rhVal of
+        EdhBool rhBool ->
+          exitEdhProc exit (that, scope, EdhBool $ lhBool && rhBool)
+        _ -> throwEdh EvalError $ "Invalid right-hand value type: " <> T.pack
+          (show $ edhTypeOf rhVal)
+      _ -> throwEdh EvalError $ "Invalid left-hand value type: " <> T.pack
+        (show $ edhTypeOf lhVal)
+logicalAndProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+-- | operator (||)
+logicalOrProc :: EdhProcedure
+logicalOrProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit
+  = do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+      EdhBool lhBool -> evalExpr that rhExpr $ \(_, _, rhVal) -> case rhVal of
+        EdhBool rhBool ->
+          exitEdhProc exit (that, scope, EdhBool $ lhBool || rhBool)
+        _ -> throwEdh EvalError $ "Invalid right-hand value type: " <> T.pack
+          (show $ edhTypeOf rhVal)
+      _ -> throwEdh EvalError $ "Invalid left-hand value type: " <> T.pack
+        (show $ edhTypeOf lhVal)
+logicalOrProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+
 -- | operator (~=)
 valEqProc :: EdhProcedure
 valEqProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
   do
     !pgs <- ask
-    let
-      !callerCtx = edh'context pgs
-      !scope     = contextScope callerCtx
-      cmpVals :: EdhValue -> EdhValue -> STM ()
-      cmpVals lhVal rhVal = do
-        if lhVal == rhVal
-          then exitEdhSTM pgs exit (that, scope, true)
-          else case lhVal of
-            EdhList (List lhll) -> do
-              case rhVal of
-                EdhList (List rhll) -> do
-                  lhl <- readTVar lhll
-                  rhl <- readTVar rhll
-                  exitEdhSTM pgs exit (that, scope, EdhBool $ lhl == rhl)
-                _ -> exitEdhSTM pgs exit (that, scope, false)
-            EdhDict (Dict lhd) -> do
-              case rhVal of
-                EdhDict (Dict rhd) -> do
-                  lhm <- readTVar lhd
-                  rhm <- readTVar rhd
-                  exitEdhSTM pgs exit (that, scope, EdhBool $ lhm == rhm)
-                _ -> exitEdhSTM pgs exit (that, scope, false)
-            _ -> exitEdhSTM pgs exit (that, scope, false)
-    evalExpr that lhExpr
-      $ \(_, _, lhVal) -> evalExpr that rhExpr $ \(_, _, rhVal) ->
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+        cmp2List :: [EdhValue] -> [EdhValue] -> STM Bool
+        cmp2List []      []      = return True
+        cmp2List (_ : _) []      = return False
+        cmp2List []      (_ : _) = return False
+        cmp2List (lhVal : lhRest) (rhVal : rhRest) =
+          if lhVal == rhVal then cmp2List lhRest rhRest else return False
+        cmp2Val :: EdhValue -> EdhValue -> STM Bool
+        cmp2Val lhVal rhVal = do
           if lhVal == rhVal
-            then exitEdhProc exit (that, scope, true)
-            else contEdhSTM $ cmpVals lhVal rhVal
+            then return True
+            else case lhVal of
+              EdhList (List lhll) -> do
+                case rhVal of
+                  EdhList (List rhll) -> do
+                    lhl <- readTVar lhll
+                    rhl <- readTVar rhll
+                    cmp2List lhl rhl
+                  _ -> return False
+              EdhDict (Dict lhd) -> do
+                case rhVal of
+                  EdhDict (Dict rhd) -> do
+                    lhm <- readTVar lhd
+                    rhm <- readTVar rhd
+                    -- TODO deep equal test for dict
+                    return $ lhm == rhm
+                  _ -> return False
+              _ -> return False
+    evalExpr that lhExpr $ \(_, _, lhVal) ->
+      evalExpr that rhExpr $ \(_, _, rhVal) -> if lhVal == rhVal
+        then exitEdhProc exit (that, scope, true)
+        else contEdhSTM $ cmp2Val lhVal rhVal >>= \conclusion ->
+          exitEdhSTM pgs exit (that, scope, EdhBool conclusion)
 valEqProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 

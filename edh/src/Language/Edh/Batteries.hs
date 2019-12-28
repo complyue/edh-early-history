@@ -28,6 +28,8 @@ installEdhBatteries world = liftIO $ do
     , ("*"          , mulProc)
     , ("/"          , divProc)
     , ("**"         , powProc)
+    , ("&&"         , logicalAndProc)
+    , ("||"         , logicalOrProc)
     , ("~="         , valEqProc)
     , ("=="         , idEqProc)
     , (">"          , isGtProc)

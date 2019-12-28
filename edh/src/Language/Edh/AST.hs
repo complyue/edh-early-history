@@ -48,7 +48,7 @@ data Stmt = VoidStmt
     | BreakStmt | ContinueStmt
     | FallthroughStmt
     | OpDeclStmt !OpSymbol !Precedence !ProcDecl
-    | OpOvrdStmt !OpSymbol !ProcDecl
+    | OpOvrdStmt !OpSymbol !ProcDecl !Precedence
     | TryStmt {
         try'trunk :: !StmtSrc
         , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]

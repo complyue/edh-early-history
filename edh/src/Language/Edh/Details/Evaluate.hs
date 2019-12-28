@@ -115,29 +115,33 @@ evalStmt' that stmt exit = do
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
       exitEdhSTM pgs exit (this, scope, mth)
 
-    OpDeclStmt opSym _ opProc -> return $ do
+    OpDeclStmt opSym opPrec opProc -> return $ do
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
                                       , operatorProcedure   = opProc
                                       , operatorPredecessor = Nothing
+                                      , operatorPrecedence  = opPrec
                                       }
       modifyTVar' ent $ \em -> Map.insert (AttrByName opSym) op em
       exitEdhSTM pgs exit (this, scope, op)
 
-    OpOvrdStmt opSym opProc -> return $ do
-      let findPredecessor :: STM (Maybe Operator)
+    OpOvrdStmt opSym opProc opPrec -> return $ do
+      let findPredecessor :: STM (Maybe EdhValue)
           findPredecessor = do
             resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
               Nothing                  -> return Nothing
               Just (Scope !ent' _ _ _) -> do
                 em <- readTVar ent'
                 case Map.lookup (AttrByName opSym) em of
-                  Nothing               -> error "attr resolving bug"
-                  Just (EdhOperator op) -> return $ Just op
-                  _                     -> return Nothing
+                  Nothing                       -> error "attr resolving bug"
+                  Just hostProc@(EdhHostProc _) -> return $ Just hostProc
+                  Just edhProc@( EdhOperator _) -> return $ Just edhProc
+                  -- TODO should really throw EvalError here ?
+                  _                             -> return Nothing
       predecessor <- findPredecessor
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
                                       , operatorProcedure   = opProc
                                       , operatorPredecessor = predecessor
+                                      , operatorPrecedence  = opPrec
                                       }
       modifyTVar' ent $ \em -> Map.insert (AttrByName opSym) op em
       exitEdhSTM pgs exit (this, scope, op)
@@ -427,13 +431,62 @@ evalExpr that expr exit = do
           em <- readTVar ent'
           case Map.lookup (AttrByName opSym) em of
             Nothing -> error "attr resolving bug"
+            -- run an operator implemented in Haskell
             Just (EdhHostProc (HostProcedure _ !proc)) -> runEdhProg pgs $ proc
               (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
-              this
+              this -- with current this object as the operator's that object
               scope'
               exit
-            Just (EdhOperator (Operator op'lexi'stack opProc@(ProcDecl _ op'args op'body) op'pred))
-              -> undefined -- TODO handle operator procedures
+            -- run an operator implemented in Edh
+            Just (EdhOperator (Operator op'lexi'stack opProc@(ProcDecl _ op'args op'body) op'pred _))
+              -> case op'args of
+                -- 2 pos-args - simple lh/rh value receiving operator
+                (PackReceiver [RecvArg lhName Nothing Nothing, RecvArg rhName Nothing Nothing])
+                  -> runEdhProg pgs $ evalExpr that lhExpr $ \(_, _, lhVal) ->
+                    evalExpr that rhExpr $ \(_, _, rhVal) -> contEdhSTM $ do
+                      opEnt <-
+                        newTVar
+                        $  Map.fromList
+                        $  [ (AttrByName lhName, lhVal)
+                           , (AttrByName rhName, rhVal)
+                           ]
+                        ++ case op'pred of
+-- put the overridden (predecessor) operator in the overriding operator's scope entity
+                             Nothing       -> []
+                             Just predProc -> [(AttrByName opSym, predProc)]
+-- push operator procedure's scope to call stack
+                      runEdhProg pgs
+                          { edh'context =
+                            (edh'context pgs)
+                              { callStack =
+                                (  Scope opEnt
+                                         this
+                                         (NE.toList op'lexi'stack)
+                                         opProc
+                                <| call'stack
+                                )
+                              }
+                          }
+                        $ evalStmt that op'body
+-- pop call stack after operator proc returned
+                        $ \(_, _, opRtn) -> local (const pgs) $ exitEdhProc
+                            exit
+                            ( that
+                            , scope
+                            , case opRtn of
+                              -- explicit return
+                              EdhReturn rtnVal -> rtnVal
+                              -- no explicit return, assuming it returns the last
+                              -- value from procedure execution
+                              _                -> opRtn
+                            )
+
+                -- 3 pos-args - caller scope + lh/rh expr receiving operator
+                -- TODO
+                _ ->
+                  throwEdhFromSTM pgs EvalError
+                    $  "Invalid operator signature: "
+                    <> T.pack (show op'args)
             Just val ->
               throwEdhFromSTM pgs EvalError $ "Not callable: " <> T.pack
                 (show val)

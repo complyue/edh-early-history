@@ -246,9 +246,8 @@ parseOpDeclOvrdStmt = do
   case precDecl of
     Nothing -> do
       case Map.lookup opSym opPD of
-        Nothing -> fail $ "undeclared operator: " <> T.unpack opSym
-        _       -> return ()
-      return $ OpOvrdStmt opSym procDecl
+        Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
+        Just (opPrec, _) -> return $ OpOvrdStmt opSym procDecl opPrec
     Just opPrec -> do
       when (opPrec < 0 || opPrec >= 10)
            (fail $ "invalid operator precedence: " <> show opPrec)

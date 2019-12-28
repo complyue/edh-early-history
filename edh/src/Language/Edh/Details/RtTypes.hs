@@ -207,11 +207,17 @@ instance Show Method where
 data Operator = Operator {
     operatorLexiStack :: !(NonEmpty Scope)
     , operatorProcedure :: !ProcDecl
-    , operatorPredecessor :: !(Maybe Operator)
+    -- the overridden operator procedure
+    , operatorPredecessor :: !(Maybe EdhValue)
+    -- todo this is some redundant, as the precedences are always available
+    -- from 'worldOperators', but being an 'MVar' that's non-trivial to read
+    -- safely from a pure 'show' function. can remove this field once we
+    -- switched to a better introspection tool for operators at runtime.
+    , operatorPrecedence :: !Precedence
   } deriving (Eq)
 instance Show Operator where
-  show (Operator _ (ProcDecl opSym _ _) _) =
-    "[operator: (" ++ T.unpack opSym ++ ")]"
+  show (Operator _ (ProcDecl opSym _ _) _ prec) =
+    "[operator: (" ++ T.unpack opSym ++ ") " ++ show prec ++ " ]"
 
 data GenrDef = GenrDef {
     generatorLexiStack :: !(NonEmpty Scope)
@@ -339,14 +345,13 @@ type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
 getEdhErrorContext !pgs !msg =
-  let (Context !world !stack (StmtSrc (!sp, _))) = edh'context pgs
-      !moduClass = moduleClass world
-      !frames    = foldl'
+  let (Context _ !stack (StmtSrc (!sp, _))) = edh'context pgs
+      !frames                               = foldl'
         (\sfs (Scope _ _ _ (ProcDecl procName _ (StmtSrc (spos, _)))) ->
           (procName, T.pack (sourcePosPretty spos)) : sfs
         )
         []
-        ( takeWhile (\(Scope _ o _ _) -> objClass o /= moduClass)
+        ( takeWhile (\(Scope _ _ lexi'stack _) -> not (null lexi'stack))
         $ NE.toList stack
         )
   in  EdhErrorContext msg (T.pack $ sourcePosPretty sp) frames
