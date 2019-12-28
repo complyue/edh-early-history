@@ -184,3 +184,99 @@ idEqProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
 idEqProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
+
+-- | operator (>)
+isGtProc :: EdhProcedure
+isGtProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
+  do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) ->
+      evalExpr that rhExpr $ \(_, _, rhVal) ->
+        contEdhSTM $ doEdhComparison pgs exit that scope lhVal rhVal $ \case
+          GT -> True
+          _  -> False
+isGtProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+-- | operator (>=)
+isGeProc :: EdhProcedure
+isGeProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
+  do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) ->
+      evalExpr that rhExpr $ \(_, _, rhVal) ->
+        contEdhSTM $ doEdhComparison pgs exit that scope lhVal rhVal $ \case
+          GT -> True
+          EQ -> True
+          _  -> False
+isGeProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+-- | operator (<)
+isLtProc :: EdhProcedure
+isLtProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
+  do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) ->
+      evalExpr that rhExpr $ \(_, _, rhVal) ->
+        contEdhSTM $ doEdhComparison pgs exit that scope lhVal rhVal $ \case
+          LT -> True
+          _  -> False
+isLtProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+-- | operator (<=)
+isLeProc :: EdhProcedure
+isLeProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
+  do
+    !pgs <- ask
+    let !callerCtx = edh'context pgs
+        !scope     = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) ->
+      evalExpr that rhExpr $ \(_, _, rhVal) ->
+        contEdhSTM $ doEdhComparison pgs exit that scope lhVal rhVal $ \case
+          LT -> True
+          EQ -> True
+          _  -> False
+isLeProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+
+doEdhComparison
+  :: EdhProgState
+  -> EdhProcExit
+  -> Object
+  -> Scope
+  -> EdhValue
+  -> EdhValue
+  -> (Ordering -> Bool)
+  -> STM ()
+doEdhComparison pgs exit that scope lhVal rhVal cm =
+  compareEdhValue lhVal rhVal >>= \case
+    Nothing ->
+      throwEdhFromSTM pgs EvalError
+        $  "Not comparable: "
+        <> T.pack (show $ edhTypeOf lhVal)
+        <> " vs "
+        <> T.pack (show $ edhTypeOf rhVal)
+    Just ord -> exitEdhSTM pgs exit (that, scope, EdhBool $ cm ord)
+
+compareEdhValue :: EdhValue -> EdhValue -> STM (Maybe Ordering)
+compareEdhValue lhVal rhVal = case lhVal of
+  EdhDecimal lhNum -> case rhVal of
+    EdhDecimal rhNum -> return $ Just $ compare lhNum rhNum
+    _                -> return Nothing
+  EdhString lhStr -> case rhVal of
+    EdhString rhStr -> return $ Just $ compare lhStr rhStr
+    _               -> return Nothing
+  EdhBool lhCnd -> case rhVal of
+    EdhBool rhCnd -> return $ Just $ compare lhCnd rhCnd
+    _             -> return Nothing
+  _ -> return Nothing
+
