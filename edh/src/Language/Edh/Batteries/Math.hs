@@ -8,6 +8,7 @@ import           Control.Monad.Reader
 import           Control.Concurrent.STM
 
 import qualified Data.Text                     as T
+import qualified Data.Map.Strict               as Map
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -176,35 +177,47 @@ valEqProc :: EdhProcedure
 valEqProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
   do
     !pgs <- ask
-    let !callerCtx = edh'context pgs
-        !scope     = contextScope callerCtx
-        cmp2List :: [EdhValue] -> [EdhValue] -> STM Bool
-        cmp2List []      []      = return True
-        cmp2List (_ : _) []      = return False
-        cmp2List []      (_ : _) = return False
-        cmp2List (lhVal : lhRest) (rhVal : rhRest) =
-          if lhVal == rhVal then cmp2List lhRest rhRest else return False
-        cmp2Val :: EdhValue -> EdhValue -> STM Bool
-        cmp2Val lhVal rhVal = do
-          if lhVal == rhVal
-            then return True
-            else case lhVal of
-              EdhList (List lhll) -> do
-                case rhVal of
-                  EdhList (List rhll) -> do
-                    lhl <- readTVar lhll
-                    rhl <- readTVar rhll
-                    cmp2List lhl rhl
-                  _ -> return False
-              EdhDict (Dict lhd) -> do
-                case rhVal of
-                  EdhDict (Dict rhd) -> do
-                    lhm <- readTVar lhd
-                    rhm <- readTVar rhd
-                    -- TODO deep equal test for dict
-                    return $ lhm == rhm
-                  _ -> return False
-              _ -> return False
+    let
+      !callerCtx = edh'context pgs
+      !scope     = contextScope callerCtx
+      cmp2List :: [EdhValue] -> [EdhValue] -> STM Bool
+      cmp2List []      []      = return True
+      cmp2List (_ : _) []      = return False
+      cmp2List []      (_ : _) = return False
+      cmp2List (lhVal : lhRest) (rhVal : rhRest) =
+        cmp2Val lhVal rhVal >>= \case
+          False -> return False
+          True  -> cmp2List lhRest rhRest
+      cmp2Map :: [(ItemKey, EdhValue)] -> [(ItemKey, EdhValue)] -> STM Bool
+      cmp2Map []      []      = return True
+      cmp2Map (_ : _) []      = return False
+      cmp2Map []      (_ : _) = return False
+      cmp2Map ((lhKey, lhVal) : lhRest) ((rhKey, rhVal) : rhRest) =
+        if lhKey /= rhKey
+          then return False
+          else cmp2Val lhVal rhVal >>= \case
+            False -> return False
+            True  -> cmp2Map lhRest rhRest
+      cmp2Val :: EdhValue -> EdhValue -> STM Bool
+      cmp2Val lhVal rhVal = do
+        if lhVal == rhVal
+          then return True
+          else case lhVal of
+            EdhList (List lhll) -> do
+              case rhVal of
+                EdhList (List rhll) -> do
+                  lhl <- readTVar lhll
+                  rhl <- readTVar rhll
+                  cmp2List lhl rhl
+                _ -> return False
+            EdhDict (Dict lhd) -> do
+              case rhVal of
+                EdhDict (Dict rhd) -> do
+                  lhm <- readTVar lhd
+                  rhm <- readTVar rhd
+                  cmp2Map (Map.toAscList lhm) (Map.toAscList rhm)
+                _ -> return False
+            _ -> return False
     evalExpr that lhExpr $ \(_, _, lhVal) ->
       evalExpr that rhExpr $ \(_, _, rhVal) -> if lhVal == rhVal
         then exitEdhProc exit (that, scope, true)
