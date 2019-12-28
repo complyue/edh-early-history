@@ -1,5 +1,5 @@
 
-module Language.Edh.Batteries.Utils where
+module Language.Edh.Batteries.Data where
 
 import           Prelude
 -- import           Debug.Trace

@@ -11,9 +11,9 @@ import           Data.Lossless.Decimal         as D
 
 import           Language.Edh.Runtime
 
+import           Language.Edh.Batteries.Data
 import           Language.Edh.Batteries.Math
 import           Language.Edh.Batteries.Assign
-import           Language.Edh.Batteries.Utils
 import           Language.Edh.Batteries.Reflect
 
 
@@ -28,6 +28,8 @@ installEdhBatteries world = liftIO $ do
     , ("*"          , mulProc)
     , ("/"          , divProc)
     , ("**"         , powProc)
+    , ("~="         , valEqProc)
+    , ("=="         , idEqProc)
     , ("="          , assignProc)
     , ("pack"       , packProc)
     , ("++"         , concatProc)
