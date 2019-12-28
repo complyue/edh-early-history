@@ -9,6 +9,8 @@ import           Control.Applicative     hiding ( many
                                                 )
 import           Control.Monad
 import           Control.Monad.State.Strict
+
+import qualified Data.Char                     as Char
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Scientific
@@ -50,7 +52,9 @@ isDigit :: Char -> Bool
 isDigit = flip elem ['0' .. '9']
 
 isOperatorChar :: Char -> Bool
-isOperatorChar = flip elem ("=~!@#$%^&|:<>?+-*/" :: [Char])
+isOperatorChar c = if (c > toEnum 128)
+  then Char.isSymbol c
+  else elem c $ ("=~!@#$%^&|:<>?+-*/" :: [Char])
 
 
 parseProgram :: Parser SeqStmts
