@@ -331,33 +331,6 @@ parseStmt = do
     <*  trailingColon
 
 
--- Notes:
---  * (+)/(-) prefix should have highest precedence
---  * (not) should have a precedence slightly higher than (&&) (||)
---  * guard (|) should have a precedence no smaller than the branch op (->)
---  * (ai) should have lowest precedence
---  * (go)/(defer) can apply only to a call or loop
-
-parsePrefixExpr :: Parser Expr
-parsePrefixExpr = choice
-  [ (symbol "+" >> parseExprPrec 9 (PrefixExpr PrefixPlus))
-  , (symbol "-" >> parseExprPrec 9 (PrefixExpr PrefixMinus))
-  , (symbol "not" >> parseExprPrec 4 (PrefixExpr Not))
-  , (symbol "|" >> parseExprPrec 1 (PrefixExpr Guard))
-  , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
-  , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
-  , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
-  ]
- where
-  requireCallOrLoop = do
-    o <- getOffset
-    e <- parseExpr
-    case e of
-      ce@(CallExpr _ _ ) -> return ce
-      le@(ForExpr _ _ _) -> return le
-      _                  -> setOffset o >> fail "a call/for required here"
-
-
 parseIfExpr :: Parser Expr
 parseIfExpr = do
   void $ symbol "if"
@@ -457,8 +430,8 @@ parseOpLit :: Parser Text
 parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 
 
-parseIndexExpr :: Parser Expr
-parseIndexExpr = between (symbol "[") (symbol "]") parseExpr
+parseIndexer :: Parser Expr
+parseIndexer = between (symbol "[") (symbol "]") parseExpr
 
 parseBlockOrDict :: Parser Expr
 parseBlockOrDict = choice [(try $ parseBlock), parseDict]
@@ -533,73 +506,75 @@ parseOpAddrOrTupleOrParen =
 parseExpr :: Parser Expr
 parseExpr = parseExprPrec 0 id
 
--- prefix operators are hardcoded, only three: + - not
 
--- other operators must be infix binary operators, they can be declared
--- and/or overridden everywhere, while they are left assosciative only
+-- Notes:
+--  * (+)/(-) prefix should have highest precedence
+--  * (not) should have a precedence slightly higher than (&&) (||)
+--  * guard (|) should have a precedence no smaller than the branch op (->)
+--  * (ai) should have lowest precedence
+--  * (go)/(defer) can apply only to a call or loop
+
+parsePrefixExpr :: Parser Expr
+parsePrefixExpr = choice
+  [ (symbol "+" >> parseExprPrec 9 (PrefixExpr PrefixPlus))
+  , (symbol "-" >> parseExprPrec 9 (PrefixExpr PrefixMinus))
+  , (symbol "not" >> parseExprPrec 4 (PrefixExpr Not))
+  , (symbol "|" >> parseExprPrec 1 (PrefixExpr Guard))
+  , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
+  , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
+  , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
+  ]
+ where
+  requireCallOrLoop = do
+    o <- getOffset
+    e <- parseExpr
+    case e of
+      ce@(CallExpr _ _ ) -> return ce
+      le@(ForExpr _ _ _) -> return le
+      _                  -> setOffset o >> fail "a call/for required here"
+
 
 parseExprPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
-parseExprPrec prec leftCtor = choice
-  [ parsNonIdxNonCallPrec prec leftCtor
-  , parseIdxNonCallPrec prec leftCtor
-  , parseIdxCallPrec prec leftCtor
-  ]
-
-parsNonIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
-parsNonIdxNonCallPrec prec leftCtor = do
-  e1 <- choice
-    [ -- non-idexable, non-callable exprs
-      parseIfExpr
-    , parseCaseExpr
-    , parseForExpr
-    , parsePrefixExpr -- can only be bool or decimal
+parseExprPrec leftPrec leftCtor = do
+  leftExpr <- choice
+    [ parsePrefixExpr
     , LitExpr <$> parseLitExpr
-    ]
-  parseNextOp e1 prec leftCtor
-
-parseIdxNonCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
-parseIdxNonCallPrec prec leftCtor = do
-  e1 <- choice
-    [ -- possibly indexable, non-callable exprs
-      parseListExpr
+    , parseForExpr
+    , parseIfExpr
+    , parseCaseExpr
+    , parseListExpr
     , parseBlockOrDict
-    ]
-  optional parseIndexExpr >>= \case
-    -- 10 should be highest precedence
-    Just idxVal -> parseNextOp (IndexExpr idxVal e1) 10 leftCtor
-    Nothing     -> parseNextOp e1 prec leftCtor
-
-parseIdxCallPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
-parseIdxCallPrec prec leftCtor = do
-  addrExpr <- choice
-    [ -- possibly callable exprs
-      parseOpAddrOrTupleOrParen
+    , parseOpAddrOrTupleOrParen
     , AttrExpr <$> parseAttrAddr
     ]
-  optional (lookAhead $ symbol "," <|> symbol ";") >>= \case
-    Just _  -> return $ leftCtor addrExpr
-    Nothing -> optional parseIndexExpr >>= \case
-      -- 10 should be highest precedence
-      Just idxVal -> parseNextOp (IndexExpr idxVal addrExpr) 10 leftCtor
-      Nothing     -> optional parsePackSender >>= \case
-        Just packSender ->
-          -- 10 should be highest precedence
-          parseNextOp (CallExpr addrExpr packSender) 10 leftCtor
-        Nothing -> parseNextOp addrExpr prec leftCtor
+  parseRestExpr leftExpr leftPrec leftCtor
 
-parseNextOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
-parseNextOp e1 prec leftCtor = optional parsePackSender >>= \case
-  Just packSender ->
-    -- 10 should be highest precedence
-    parseNextOp (CallExpr e1 packSender) 10 leftCtor
-  Nothing -> optional parseOpLit >>= \case
-    Nothing    -> return $ leftCtor e1
-    Just opSym -> do
-      opPD <- get
-      case Map.lookup opSym opPD of
-        Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
-        Just (opPrec, _) -> parseExprPrec opPrec $ \nextExpr ->
-          if prec < opPrec
-            then leftCtor $ InfixExpr opSym e1 nextExpr
-            else InfixExpr opSym (leftCtor e1) nextExpr
+
+parseRestExpr :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
+parseRestExpr leftExpr leftPrec leftCtor = choice
+  [ parseIndexer
+    >>= (\idxVal -> parseRestExpr (IndexExpr idxVal leftExpr) leftPrec leftCtor)
+  , parsePackSender
+    >>= (\packSender ->
+          parseRestExpr (CallExpr leftExpr packSender) leftPrec leftCtor
+        )
+  , parseInfixOp leftExpr leftPrec leftCtor
+  , return $ leftCtor leftExpr
+  ]
+
+
+-- besides hardcoded prefix operators, all other operators are infix binary
+-- operators, they can be declared and further overridden everywhere,
+-- while they are left-assosciative only
+
+parseInfixOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
+parseInfixOp leftExpr leftPrec leftCtor = do
+  opSym <- parseOpLit
+  opPD  <- get
+  case Map.lookup opSym opPD of
+    Nothing             -> fail $ "undeclared operator: " <> T.unpack opSym
+    Just (rightPrec, _) -> parseExprPrec rightPrec $ \rightExpr ->
+      if leftPrec < rightPrec
+        then leftCtor $ InfixExpr opSym leftExpr rightExpr
+        else InfixExpr opSym (leftCtor leftExpr) rightExpr
 
