@@ -1,28 +1,33 @@
-{
 
-  // Some fancy chars to be used as operators
+  // Some fancy chars can be used in operators
   //
   // ++ "⁉️❇️‼️♾️☢️☣️™️©️®️⚡▢◆◇◈◉◎☆★☼♻⎔⌬⏣♠️♥️♦️♣️▲▶▼◀"
   // ++ "🔀🔁🔂⏩⏪🔼⏫🔽⏬⏹️"
   // ++ "🌀📢📣🔔🔕🎵⭕"
   // ++ "🆔🆘🆚"
 
+
+{
   operator != (lhv, rhv) not (lhv == rhv)
 
   // TODO consider not including (!~=) in default batteries,
   // to discourage deep-value based equality test over all
   operator !~= 4 (lhv, rhv) not (lhv ~= rhv)
 
-  operator &= (lhv, rhv) {
+  operator &> (lhv, rhv) {
     if lhv != false && lhv != nil && lhv != ''
       then rhv
       else nil
   }
 
-  operator |= (lhv, rhv) {
+  operator |> (lhv, rhv) {
     if lhv == false || lhv == nil || lhv == ''
       then rhv
       else nil
   }
 
 }
+
+method f (n) { r = n>5 &> n*7 |> n*3; r/11 }
+
+( f(2), f(8) )

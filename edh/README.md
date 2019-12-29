@@ -413,7 +413,7 @@ onCnd and oneThing or theOther
 well in **Edh** you do:
 
 ```haskell
-onCnd &= oneThing |= theOther
+onCnd &> oneThing |> theOther
 ```
 
 ### operator override / creation
@@ -426,7 +426,7 @@ implemented as overridable operators:
 - logical arithmetic
   - (`&&`), (`||`)
 - ternary
-  - (`&=`), (`|=`)
+  - (`&>`), (`|>`)
 - list/dict/tuple comprehension/concatenation
   - (`=<`)
 - list/dict prepend/insert

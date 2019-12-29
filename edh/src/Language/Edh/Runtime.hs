@@ -10,6 +10,8 @@ module Language.Edh.Runtime
   , runEdhProgram'
   , moduleContext
   , voidStatement
+  , mkHostProc
+  , mkHostOper
 -- TODO cherrypick what artifacts to export as for user interface
   , module RT
   , module TX
@@ -23,6 +25,11 @@ import           Control.Exception
 import           Control.Monad.Except
 
 import           Control.Concurrent.STM
+import           GHC.Conc                       ( unsafeIOToSTM )
+
+import           Foreign.C.String
+import           Foreign.Marshal.Alloc
+import           System.Mem.Weak
 
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
@@ -167,6 +174,28 @@ declareEdhOperators world declLoc opps = do
         <> op
         )
       else return (prevPrec, prevDeclLoc)
+
+
+mkHostProc :: Text -> EdhProcedure -> STM EdhValue
+mkHostProc !d !p = do
+  !s <- unsafeIOToSTM $ newCString $ T.unpack d
+  let !hp = HostProcedure { hostProc'name = s, hostProc'proc = p }
+  unsafeIOToSTM $ addFinalizer hp $ free s
+  return $ EdhHostProc hp
+
+mkHostOper :: EdhWorld -> OpSymbol -> EdhProcedure -> STM EdhValue
+mkHostOper world opSym proc =
+  Map.lookup opSym <$> (readTMVar $ worldOperators world) >>= \case
+    Nothing ->
+      throwSTM
+        $  UsageError
+        $  "No precedence declared in the world for operator: "
+        <> opSym
+    Just (prec, _) -> do
+      !s <- unsafeIOToSTM $ newCString $ T.unpack opSym
+      let !hp = HostProcedure s proc
+      unsafeIOToSTM $ addFinalizer hp $ free s
+      return $ EdhHostOper prec hp
 
 
 installEdhAttrs :: Entity -> [(AttrKey, EdhValue)] -> STM ()

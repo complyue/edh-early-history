@@ -432,11 +432,12 @@ evalExpr that expr exit = do
           case Map.lookup (AttrByName opSym) em of
             Nothing -> error "attr resolving bug"
             -- run an operator implemented in Haskell
-            Just (EdhHostProc (HostProcedure _ !proc)) -> runEdhProg pgs $ proc
-              (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
-              this -- with current this object as the operator's that object
-              scope'
-              exit
+            Just (EdhHostOper _ (HostProcedure _ !proc)) ->
+              runEdhProg pgs $ proc
+                (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
+                this -- with current this object as the operator's that object
+                scope'
+                exit
             -- run an operator implemented in Edh
             Just (EdhOperator (Operator op'lexi'stack opProc@(ProcDecl _ op'args op'body) op'pred _))
               -> case op'args of
@@ -488,8 +489,11 @@ evalExpr that expr exit = do
                     $  "Invalid operator signature: "
                     <> T.pack (show op'args)
             Just val ->
-              throwEdhFromSTM pgs EvalError $ "Not callable: " <> T.pack
-                (show val)
+              throwEdhFromSTM pgs EvalError
+                $  "Not callable: "
+                <> T.pack (show val)
+                <> " expressed with: "
+                <> T.pack (show expr)
 
 
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)

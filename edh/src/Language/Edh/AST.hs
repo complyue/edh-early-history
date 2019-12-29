@@ -165,6 +165,7 @@ data EdhTypeValue = TypeType
     | BlockType
     | ThunkType
     | HostProcType
+    | HostOperType
     | ClassType
     | MethodType
     | OperatorType
