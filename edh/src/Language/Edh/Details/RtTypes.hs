@@ -500,7 +500,7 @@ instance Show EdhValue where
 
   show (EdhHostProc v) = show v
   show (EdhHostOper prec (HostProcedure pn _)) =
-    "[hostop: " ++ show prec ++ " " ++ nm ++ " ]"
+    "[hostop: " ++ show prec ++ " (" ++ nm ++ ") ]"
     where nm = unsafePerformIO $ peekCString pn
 
 
