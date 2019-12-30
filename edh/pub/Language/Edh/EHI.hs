@@ -61,8 +61,6 @@ where
 import           Prelude
 
 import           Control.Exception
-import           Control.Monad
-import           Control.Monad.Fail
 import           Control.Monad.Reader
 
 import           Data.Text                     as T
@@ -88,7 +86,7 @@ runEdhSession
   -> Text
   -> EdhSession a
   -> EdhInterpreter (Either InterpretError a)
-runEdhSession moduId moduSource (EdhSession (ReaderT f)) = do
+runEdhSession moduId moduSource (ReaderT f) = do
   world <- ask
   runEdhModule world moduId moduSource >>= \case
     Left  err  -> return $ Left err
@@ -96,23 +94,16 @@ runEdhSession moduId moduSource (EdhSession (ReaderT f)) = do
 
 
 runEdh :: MonadIO m => EdhInterpreter a -> m a
-runEdh (EdhInterpreter (ReaderT f)) = liftIO $ do
+runEdh (ReaderT f) = liftIO $ do
   world <- createEdhWorld
   installEdhBatteries world
   f world
 
 runEdhWithoutBatteries :: MonadIO m => EdhInterpreter a -> m a
-runEdhWithoutBatteries (EdhInterpreter (ReaderT f)) =
-  liftIO $ createEdhWorld >>= f
+runEdhWithoutBatteries (ReaderT f) = liftIO $ createEdhWorld >>= f
 
 
-newtype EdhSession a = EdhSession { unEdhS :: ReaderT (EdhWorld, Object) IO a }
-    deriving (Functor, Applicative, Monad,
-        MonadReader (EdhWorld, Object),
-        MonadIO, MonadFail)
+type EdhSession a = ReaderT (EdhWorld, Object) IO a
 
-newtype EdhInterpreter a = EdhInterpreter { unEdh :: ReaderT EdhWorld IO a }
-    deriving (Functor, Applicative, Monad,
-        MonadReader EdhWorld,
-        MonadIO, MonadFail)
+type EdhInterpreter a = ReaderT EdhWorld IO a
 
