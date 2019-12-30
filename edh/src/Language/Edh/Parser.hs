@@ -504,11 +504,11 @@ parseOpAddrOrTupleOrParen =
 
 
 parseExpr :: Parser Expr
-parseExpr = parseExprPrec 0 id
+parseExpr = parseExprPrec 0
 
 
 -- Notes:
---  * (+)/(-) prefix should have highest precedence
+--  * (+)/(-) prefix should have highest precedence except call/index
 --  * (not) should have a precedence slightly higher than (&&) (||)
 --  * guard (|) should have a precedence no smaller than the branch op (->)
 --  * (ai) should have lowest precedence
@@ -516,10 +516,10 @@ parseExpr = parseExprPrec 0 id
 
 parsePrefixExpr :: Parser Expr
 parsePrefixExpr = choice
-  [ (symbol "+" >> parseExprPrec 9 (PrefixExpr PrefixPlus))
-  , (symbol "-" >> parseExprPrec 9 (PrefixExpr PrefixMinus))
-  , (symbol "not" >> parseExprPrec 4 (PrefixExpr Not))
-  , (symbol "|" >> parseExprPrec 1 (PrefixExpr Guard))
+  [ (symbol "+" >> PrefixExpr PrefixPlus <$> parseExprPrec 9)
+  , (symbol "-" >> PrefixExpr PrefixMinus <$> parseExprPrec 9)
+  , (symbol "not" >> PrefixExpr Not <$> parseExprPrec 4)
+  , (symbol "|" >> PrefixExpr Guard <$> parseExprPrec 1)
   , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
   , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
   , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
@@ -534,8 +534,18 @@ parsePrefixExpr = choice
       _                  -> setOffset o >> fail "a call/for required here"
 
 
-parseExprPrec :: Precedence -> (Expr -> Expr) -> Parser Expr
-parseExprPrec leftPrec leftCtor = do
+parseExprPrec :: Precedence -> Parser Expr
+parseExprPrec prec = do
+  (_, rightExpr, rightCtor) <- parseExprPrec' prec id
+  return $ rightCtor rightExpr
+
+-- besides hardcoded prefix operators, all other operators are infix binary
+-- operators, they can be declared and further overridden everywhere, while
+-- they are left-assosciative only
+
+parseExprPrec'
+  :: Precedence -> (Expr -> Expr) -> Parser (Precedence, Expr, (Expr -> Expr))
+parseExprPrec' prec leftCtor = do
   leftExpr <- choice
     [ parsePrefixExpr
     , LitExpr <$> parseLitExpr
@@ -547,34 +557,47 @@ parseExprPrec leftPrec leftCtor = do
     , parseOpAddrOrTupleOrParen
     , AttrExpr <$> parseAttrAddr
     ]
-  parseRestExpr leftExpr leftPrec leftCtor
+  parseRestExpr prec leftExpr leftCtor
 
-
-parseRestExpr :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
-parseRestExpr leftExpr leftPrec leftCtor = choice
+parseRestExpr
+  :: Precedence
+  -> Expr
+  -> (Expr -> Expr)
+  -> Parser (Precedence, Expr, (Expr -> Expr))
+parseRestExpr prec leftExpr leftCtor = choice
   [ parseIndexer
-    >>= (\idxVal -> parseRestExpr (IndexExpr idxVal leftExpr) leftPrec leftCtor)
+    >>= (\idxVal -> parseRestExpr prec (IndexExpr idxVal leftExpr) leftCtor)
   , parsePackSender
     >>= (\packSender ->
-          parseRestExpr (CallExpr leftExpr packSender) leftPrec leftCtor
+          parseRestExpr prec (CallExpr leftExpr packSender) leftCtor
         )
-  , parseInfixOp leftExpr leftPrec leftCtor
-  , return $ leftCtor leftExpr
+  , try $ parseInfixOp prec leftExpr leftCtor
+  , return (10, leftCtor leftExpr, id)
   ]
 
-
--- besides hardcoded prefix operators, all other operators are infix binary
--- operators, they can be declared and further overridden everywhere,
--- while they are left-assosciative only
-
-parseInfixOp :: Expr -> Precedence -> (Expr -> Expr) -> Parser Expr
-parseInfixOp leftExpr leftPrec leftCtor = do
+parseInfixOp
+  :: Precedence
+  -> Expr
+  -> (Expr -> Expr)
+  -> Parser (Precedence, Expr, (Expr -> Expr))
+parseInfixOp leftPrec leftExpr leftCtor = do
   opSym <- parseOpLit
   opPD  <- get
   case Map.lookup opSym opPD of
-    Nothing             -> fail $ "undeclared operator: " <> T.unpack opSym
-    Just (rightPrec, _) -> parseExprPrec rightPrec $ \rightExpr ->
-      if leftPrec < rightPrec
-        then leftCtor $ InfixExpr opSym leftExpr rightExpr
-        else InfixExpr opSym (leftCtor leftExpr) rightExpr
+    Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
+    Just (opPrec, _) -> if opPrec > leftPrec
+      then do
+        (rightPrec, rightExpr, rightCtor) <- parseExprPrec'
+          opPrec
+          (leftCtor . InfixExpr opSym leftExpr)
+        if rightPrec > opPrec
+          then return (opPrec, rightExpr, rightCtor)
+          else return (rightPrec, rightExpr, rightCtor)
+      else do
+        (rightPrec, rightExpr, rightCtor) <- parseExprPrec'
+          leftPrec
+          (InfixExpr opSym (leftCtor leftExpr))
+        if rightPrec > opPrec
+          then return (opPrec, rightExpr, rightCtor)
+          else return (rightPrec, rightExpr, rightCtor)
 
