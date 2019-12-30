@@ -175,10 +175,8 @@ parseArgsSender = parsePackSender <|> do
   SingleSender . SendPosArg <$> parseExpr
 
 parsePackSender :: Parser ArgsSender
-parsePackSender = between
-  (symbol "(")
-  (symbol ")")
-  (parseArgSends [] >>= return . PackSender . reverse)
+parsePackSender =
+  between (symbol "(") (symbol ")") $ PackSender . reverse <$> parseArgSends []
 
 parseArgSends :: [ArgSender] -> Parser [ArgSender]
 parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
@@ -503,12 +501,8 @@ parseOpAddrOrTupleOrParen =
       ]
 
 
-parseExpr :: Parser Expr
-parseExpr = parseExprPrec 0
-
-
 -- Notes:
---  * (+)/(-) prefix should have highest precedence except call/index
+--  * (+)/(-) prefix should have highest precedence below Call/Index
 --  * (not) should have a precedence slightly higher than (&&) (||)
 --  * guard (|) should have a precedence no smaller than the branch op (->)
 --  * (ai) should have lowest precedence
@@ -516,10 +510,10 @@ parseExpr = parseExprPrec 0
 
 parsePrefixExpr :: Parser Expr
 parsePrefixExpr = choice
-  [ (symbol "+" >> PrefixExpr PrefixPlus <$> parseExprPrec 9)
-  , (symbol "-" >> PrefixExpr PrefixMinus <$> parseExprPrec 9)
-  , (symbol "not" >> PrefixExpr Not <$> parseExprPrec 4)
-  , (symbol "|" >> PrefixExpr Guard <$> parseExprPrec 1)
+  [ symbol "+" >> PrefixExpr PrefixPlus <$> parseExprPrec 9
+  , symbol "-" >> PrefixExpr PrefixMinus <$> parseExprPrec 9
+  , symbol "not" >> PrefixExpr Not <$> parseExprPrec 4
+  , symbol "|" >> PrefixExpr Guard <$> parseExprPrec 1
   , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
   , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
   , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
@@ -529,75 +523,62 @@ parsePrefixExpr = choice
     o <- getOffset
     e <- parseExpr
     case e of
-      ce@(CallExpr _ _ ) -> return ce
-      le@(ForExpr _ _ _) -> return le
-      _                  -> setOffset o >> fail "a call/for required here"
+      ce@CallExpr{} -> return ce
+      le@ForExpr{}  -> return le
+      _             -> setOffset o >> fail "a call/for required here"
 
+
+-- besides hardcoded prefix operators, all other operators are infix binary
+-- operators, they can be declared and further overridden everywhere,
+-- while they are left-assosciative only
 
 parseExprPrec :: Precedence -> Parser Expr
 parseExprPrec prec = do
-  (_, rightExpr, rightCtor) <- parseExprPrec' prec id
-  return $ rightCtor rightExpr
-
--- besides hardcoded prefix operators, all other operators are infix binary
--- operators, they can be declared and further overridden everywhere, while
--- they are left-assosciative only
-
-parseExprPrec'
-  :: Precedence -> (Expr -> Expr) -> Parser (Precedence, Expr, (Expr -> Expr))
-parseExprPrec' prec leftCtor = do
-  leftExpr <- choice
+  oneExpr <- choice
     [ parsePrefixExpr
-    , LitExpr <$> parseLitExpr
     , parseForExpr
     , parseIfExpr
     , parseCaseExpr
     , parseListExpr
     , parseBlockOrDict
     , parseOpAddrOrTupleOrParen
+    , LitExpr <$> parseLitExpr
     , AttrExpr <$> parseAttrAddr
     ]
-  parseRestExpr prec leftExpr leftCtor
+  parseOps prec oneExpr
 
-parseRestExpr
-  :: Precedence
-  -> Expr
-  -> (Expr -> Expr)
-  -> Parser (Precedence, Expr, (Expr -> Expr))
-parseRestExpr prec leftExpr leftCtor = choice
-  [ parseIndexer
-    >>= (\idxVal -> parseRestExpr prec (IndexExpr idxVal leftExpr) leftCtor)
-  , parsePackSender
-    >>= (\packSender ->
-          parseRestExpr prec (CallExpr leftExpr packSender) leftCtor
-        )
-  , try $ parseInfixOp prec leftExpr leftCtor
-  , return (10, leftCtor leftExpr, id)
+parseOps :: Precedence -> Expr -> Parser Expr
+parseOps prec expr = choice
+  [ parseIndexer >>= parseOps prec . flip IndexExpr expr
+  , parsePackSender >>= parseOps prec . CallExpr expr
+  , goInfix expr
   ]
+ where
+  goInfix :: Expr -> Parser Expr
+  goInfix leftExpr = (<|> return leftExpr) $ try $ do
 
-parseInfixOp
-  :: Precedence
-  -> Expr
-  -> (Expr -> Expr)
-  -> Parser (Precedence, Expr, (Expr -> Expr))
-parseInfixOp leftPrec leftExpr leftCtor = do
-  opSym <- parseOpLit
-  opPD  <- get
-  case Map.lookup opSym opPD of
-    Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
-    Just (opPrec, _) -> if opPrec > leftPrec
-      then do
-        (rightPrec, rightExpr, rightCtor) <- parseExprPrec'
-          opPrec
-          (leftCtor . InfixExpr opSym leftExpr)
-        if rightPrec > opPrec
-          then return (opPrec, rightExpr, rightCtor)
-          else return (rightPrec, rightExpr, rightCtor)
-      else do
-        (rightPrec, rightExpr, rightCtor) <- parseExprPrec'
-          leftPrec
-          (InfixExpr opSym (leftCtor leftExpr))
-        if rightPrec > opPrec
-          then return (opPrec, rightExpr, rightCtor)
-          else return (rightPrec, rightExpr, rightCtor)
+-- TODO 
+-- the "lower precedence operator" failure should carry silent rejection semantic,
+-- while the "undeclared operator" should carry semantic of loud complaint,
+-- find a way to distinguish them, or because of the `try` above, the 
+-- "undeclared operator" error won't show up to end user.
 
+    (opPrec, opSym) <- nextOp prec
+    rightExpr       <- parseExprPrec opPrec
+    goInfix $ InfixExpr opSym leftExpr rightExpr
+
+  nextOp :: Precedence -> Parser (Precedence, OpSymbol)
+  nextOp prec' = do
+    opSym <- parseOpLit
+    opPD  <- get
+    case Map.lookup opSym opPD of
+      Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
+      Just (opPrec, _) -> if opPrec > prec'
+        then return (opPrec, opSym)
+        -- leave this op to be encountered later, i.e.
+        -- after left-hand expr collapsed into one
+        else fail "lower precedence operator"
+
+
+parseExpr :: Parser Expr
+parseExpr = parseExprPrec 0
