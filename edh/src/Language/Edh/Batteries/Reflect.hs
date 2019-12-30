@@ -250,22 +250,22 @@ makeOpProc argsSender that _ !exit = do
 
 
 -- | utility expr(*args,**kwargs)
-exprProc :: EdhProcedure
-exprProc !argsSender !that scope !exit = case argsSender of
+makeExprProc :: EdhProcedure
+makeExprProc !argsSender !that scope !exit = case argsSender of
   SingleSender (SendPosArg !argExpr) -> exit (that, scope, EdhExpr argExpr)
   PackSender   []                    -> exit (that, scope, nil)
   PackSender   [SendPosArg !argExpr] -> exit (that, scope, EdhExpr argExpr)
-  PackSender   argSenders            -> exprProc' argSenders exit
-  SingleSender argSender             -> exprProc' [argSender] exit
+  PackSender   argSenders            -> makeExprProc' argSenders exit
+  SingleSender argSender             -> makeExprProc' [argSender] exit
  where
-  exprProc' :: [ArgSender] -> EdhProcExit -> EdhProg (STM ())
-  exprProc' [] !exit' =
+  makeExprProc' :: [ArgSender] -> EdhProcExit -> EdhProg (STM ())
+  makeExprProc' [] !exit' =
     exit' (that, scope, EdhArgsPack $ ArgsPack [] Map.empty)
-  exprProc' (!x : xs) !exit' = case x of
+  makeExprProc' (!x : xs) !exit' = case x of
     UnpackPosArgs _ -> throwEdh EvalError "not possible to unpack to expr"
     UnpackKwArgs _ -> throwEdh EvalError "not possible to unpack to expr"
     UnpackPkArgs _ -> throwEdh EvalError "not possible to unpack to expr"
-    SendPosArg !argExpr -> exprProc' xs $ \(_, _, !pk) -> case pk of
+    SendPosArg !argExpr -> makeExprProc' xs $ \(_, _, !pk) -> case pk of
       (EdhArgsPack (ArgsPack !posArgs !kwArgs)) ->
         exit'
           ( that
@@ -273,7 +273,7 @@ exprProc !argsSender !that scope !exit = case argsSender of
           , EdhArgsPack $ ArgsPack (EdhExpr argExpr : posArgs) kwArgs
           )
       _ -> error "bug"
-    SendKwArg !kw !argExpr -> exprProc' xs $ \(_, _, !pk) -> case pk of
+    SendKwArg !kw !argExpr -> makeExprProc' xs $ \(_, _, !pk) -> case pk of
       (EdhArgsPack (ArgsPack !posArgs !kwArgs)) -> exit'
         ( that
         , scope
