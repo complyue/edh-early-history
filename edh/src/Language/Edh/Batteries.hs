@@ -156,6 +156,7 @@ installEdhBatteries world = liftIO $ atomically $ do
     , ("supers"     , supersProc)
     , ("scope"      , scopeObtainProc)
     , ("makeOp"     , makeOpProc)
+    , ("expr"       , exprProc)
     ]
 
   installEdhAttrs rootEntity
