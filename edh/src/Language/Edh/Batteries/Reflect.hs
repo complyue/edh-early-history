@@ -98,7 +98,7 @@ scopeObtainProc _ !that _ !exit = do
                (that, contextScope $ edh'context pgs, EdhObject wrapperObj)
 
 mkScopeWrapper :: EdhWorld -> Scope -> STM Object
-mkScopeWrapper world (Scope !ent !this !lexi'stack _) = do
+mkScopeWrapper world scope@(Scope !ent !this !lexi'stack _) = do
     -- use an object to wrap the very entity, the entity is same as of this's 
     -- in case we are in a class procedure, but not if we are in a method proc
   entWrapper <- viewAsEdhObject ent wrapperClass []
@@ -124,11 +124,9 @@ mkScopeWrapper world (Scope !ent !this !lexi'stack _) = do
     ]
   return wrapperObj
  where
--- save the lexical context in the fake class of the wrapper object
-  !wrapperClass = case lexi'stack of
-    lexi'top : lexi'rest ->
-      (objClass $ scopeSuper world) { classLexiStack = lexi'top :| lexi'rest }
-    _ -> error "bug empty lexical stack"
+-- save the scope context as 'classLexiStack' of the fake class for wrapper
+  !wrapperClass =
+    (objClass $ scopeSuper world) { classLexiStack = scope :| lexi'stack }
 
 
 -- | utility scope.attrs()
@@ -190,35 +188,36 @@ scopeEvalProc !argsSender !that _ !exit = do
       -> [EdhValue]
       -> Map.Map AttrName EdhValue
       -> EdhProg (STM ())
-    evalThePack argsValues kwargsValues [] kwargsExprs | Map.null kwargsExprs =
+    evalThePack !argsValues !kwargsValues [] !kwargsExprs
+      | Map.null kwargsExprs =
       -- restore original program state and return the eval-ed values
-      local (const pgs) $ exitEdhProc
+                               local (const pgs) $ exitEdhProc
         exit
         ( that
         , callerScope
-        , EdhArgsPack $ ArgsPack (reverse argsValues) kwargsValues
+        , case argsValues of
+          [val] | null kwargsValues -> val
+          _ -> EdhArgsPack $ ArgsPack (reverse argsValues) kwargsValues
         )
-    evalThePack argsValues kwargsValues [] kwargsExprs = do
+    evalThePack !argsValues !kwargsValues [] !kwargsExprs = do
       let (!oneExpr, !kwargsExprs') = Map.splitAt 1 kwargsExprs
           (!kw     , !kwExpr      ) = Map.elemAt 0 oneExpr
       case kwExpr of
-        EdhExpr expr -> evalExpr that expr $ \(_, _, val) -> evalThePack
+        EdhExpr !expr -> evalExpr that expr $ \(_, _, !val) -> evalThePack
           argsValues
           (Map.insert kw val kwargsValues)
           []
           kwargsExprs'
         v -> throwEdh EvalError $ "Not an expr: " <> T.pack (show v)
-    evalThePack argsValues kwargsValues (argExpr : argsExprs') kwargsExprs =
-      case argExpr of
-        EdhExpr expr -> evalExpr that expr $ \(_, _, val) ->
+    evalThePack !argsValues !kwargsValues (!argExpr : argsExprs') !kwargsExprs
+      = case argExpr of
+        EdhExpr expr -> evalExpr that expr $ \(_, _, !val) ->
           evalThePack (val : argsValues) kwargsValues argsExprs' kwargsExprs
         v -> throwEdh EvalError $ "Not an expr: " <> T.pack (show v)
   packEdhArgs that argsSender
     $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) ->
         if null kwargs && null args
-          then exitEdhProc
-            exit
-            (that, callerScope, EdhArgsPack $ ArgsPack [] Map.empty)
+          then exitEdhProc exit (that, callerScope, nil)
           else
             contEdhSTM
             $
