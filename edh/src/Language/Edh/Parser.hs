@@ -182,8 +182,11 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
   arg <- nextArg <* trailingComma
   parseArgSends $ arg : ss
  where
-  nextArg, unpackKwArgs, unpackPosArgs :: Parser ArgSender
-  nextArg      = unpackKwArgs <|> unpackPosArgs <|> parseKwSend
+  nextArg, unpackPkArgs, unpackKwArgs, unpackPosArgs :: Parser ArgSender
+  nextArg      = unpackPkArgs <|> unpackKwArgs <|> unpackPosArgs <|> parseKwSend
+  unpackPkArgs = do
+    void $ symbol "***"
+    UnpackPkArgs <$> parseExpr
   unpackKwArgs = do
     void $ symbol "**"
     UnpackKwArgs <$> parseExpr

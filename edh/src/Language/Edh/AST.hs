@@ -80,6 +80,7 @@ data ArgsSender = PackSender ![ArgSender]
   deriving (Eq, Show)
 data ArgSender = UnpackPosArgs !Expr
     | UnpackKwArgs !Expr
+    | UnpackPkArgs !Expr
     | SendPosArg !Expr
     | SendKwArg !AttrName !Expr
   deriving (Eq, Show)

@@ -707,7 +707,13 @@ packEdhArgs' that (x : xs) exit = do
             $  "Invalid argument keyword from dict key: "
             <> T.pack (show k)
   case x of
-    UnpackPosArgs listExpr -> evalExpr that listExpr $ \case
+    UnpackPosArgs posExpr -> evalExpr that posExpr $ \case
+      (_, _, EdhArgsPack (ArgsPack posArgs' _kwArgs')) ->
+        packEdhArgs' that xs $ \(_, _, pk) -> case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+            exit
+            (that, scope, EdhArgsPack (ArgsPack (posArgs ++ posArgs') kwArgs))
+          _ -> error "bug"
       (_, _, EdhTuple l) -> packEdhArgs' that xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
           exit
@@ -723,7 +729,16 @@ packEdhArgs' that (x : xs) exit = do
           _ -> error "bug"
       (_, _, v) ->
         throwEdh EvalError $ "Can not unpack args from: " <> T.pack (show v)
-    UnpackKwArgs dictExpr -> evalExpr that dictExpr $ \case
+    UnpackKwArgs kwExpr -> evalExpr that kwExpr $ \case
+      (_, _, EdhArgsPack (ArgsPack _posArgs' kwArgs')) ->
+        packEdhArgs' that xs $ \(_, _, pk) -> case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+            exit
+            ( that
+            , scope
+            , EdhArgsPack (ArgsPack posArgs (Map.union kwArgs kwArgs'))
+            )
+          _ -> error "bug"
       (_, _, EdhDict (Dict ds)) -> packEdhArgs' that xs $ \(_, _, pk) ->
         case pk of
           EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
@@ -739,6 +754,19 @@ packEdhArgs' that (x : xs) exit = do
           _ -> error "bug"
       (_, _, v) ->
         throwEdh EvalError $ "Can not unpack kwargs from: " <> T.pack (show v)
+    UnpackPkArgs pkExpr -> evalExpr that pkExpr $ \case
+      (_, _, EdhArgsPack (ArgsPack posArgs' kwArgs')) ->
+        packEdhArgs' that xs $ \(_, _, pk) -> case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+            exit
+            ( that
+            , scope
+            , EdhArgsPack
+              (ArgsPack (posArgs ++ posArgs') (Map.union kwArgs kwArgs'))
+            )
+          _ -> error "bug"
+      (_, _, v) ->
+        throwEdh EvalError $ "Can not unpack pkargs from: " <> T.pack (show v)
     SendPosArg argExpr -> evalExpr that argExpr $ \(_, _, val) ->
       packEdhArgs' that xs $ \(_, _, pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
