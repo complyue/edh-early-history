@@ -160,20 +160,30 @@ declareEdhOperators world declLoc opps = do
   chkCompatible op prev newly = do
     (prevPrec, prevDeclLoc) <- prev
     (newPrec , newDeclLoc ) <- newly
-    if prevPrec /= newPrec
-      then throwSTM $ UsageError
-        (  "precedence change from "
-        <> T.pack (show prevPrec)
-        <> " (declared "
-        <> prevDeclLoc
-        <> ") to "
+    if newPrec < 0 || newPrec >= 10
+      then
+        throwSTM
+        $  UsageError
+        $  "Invalidate precedence "
         <> T.pack (show newPrec)
         <> " (declared "
         <> T.pack (show newDeclLoc)
         <> ") for operator: "
         <> op
-        )
-      else return (prevPrec, prevDeclLoc)
+      else if prevPrec /= newPrec
+        then throwSTM $ UsageError
+          (  "precedence change from "
+          <> T.pack (show prevPrec)
+          <> " (declared "
+          <> prevDeclLoc
+          <> ") to "
+          <> T.pack (show newPrec)
+          <> " (declared "
+          <> T.pack (show newDeclLoc)
+          <> ") for operator: "
+          <> op
+          )
+        else return (prevPrec, prevDeclLoc)
 
 
 mkHostProc :: Text -> EdhProcedure -> STM EdhValue
