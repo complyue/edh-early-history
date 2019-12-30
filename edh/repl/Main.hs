@@ -2,11 +2,10 @@
 module Main where
 
 import           Prelude
-import           Debug.Trace
+-- import           Debug.Trace
 
 import           System.Console.Haskeline
 
-import           Language.Edh.Control
 import           Language.Edh.Runtime
 import           Language.Edh.Interpreter
 import           Language.Edh.Batteries

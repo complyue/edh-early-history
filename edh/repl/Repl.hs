@@ -3,7 +3,7 @@
 module Repl where
 
 import           Prelude
-import           Debug.Trace
+-- import           Debug.Trace
 import           Text.Printf
 
 import           Data.Text                      ( Text )
@@ -11,12 +11,9 @@ import qualified Data.Text                     as T
 
 import           System.Console.Haskeline
 
-import           Text.Megaparsec
-
 import           Language.Edh.Control
 import           Language.Edh.Runtime
 import           Language.Edh.Interpreter
-import           Language.Edh.Batteries
 
 
 doRead :: [Text] -> InputT IO (Maybe Text)
@@ -55,7 +52,7 @@ doEval
 doEval = evalEdhSource
 
 
-doPrint :: (Either InterpretError EdhValue) -> InputT IO ()
+doPrint :: Either InterpretError EdhValue -> InputT IO ()
 doPrint = \case
   Left err -> case err of
     EdhParseError _ -> do
@@ -63,6 +60,9 @@ doPrint = \case
       outputStrLn $ show err
     EdhEvalError _ -> do
       outputStrLn "* 😱 *"
+      outputStrLn $ show err
+    EdhUsageError _ -> do
+      outputStrLn "* 🙈 *"
       outputStrLn $ show err
   Right o -> case o of
     EdhNil -> return ()
