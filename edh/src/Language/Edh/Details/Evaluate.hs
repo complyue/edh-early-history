@@ -10,7 +10,9 @@ import           Control.Concurrent.STM
 
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
-import           Data.List.NonEmpty             ( (<|) )
+import           Data.List.NonEmpty             ( NonEmpty(..)
+                                                , (<|)
+                                                )
 import qualified Data.List.NonEmpty            as NE
 
 
@@ -482,7 +484,45 @@ evalExpr that expr exit = do
                             )
 
                 -- 3 pos-args - caller scope + lh/rh expr receiving operator
-                -- TODO
+                (PackReceiver [RecvArg scopeName Nothing Nothing, RecvArg lhName Nothing Nothing, RecvArg rhName Nothing Nothing])
+                  -> do
+                    scopeWrapper <- mkScopeWrapper world scope
+                    opEnt        <-
+                      newTVar
+                      $  Map.fromList
+                      $  [ (AttrByName scopeName, EdhObject scopeWrapper)
+                         , (AttrByName lhName   , EdhExpr lhExpr)
+                         , (AttrByName rhName   , EdhExpr rhExpr)
+                         ]
+                      ++ case op'pred of
+-- put the overridden (predecessor) operator in the overriding operator's scope entity
+                           Nothing       -> []
+                           Just predProc -> [(AttrByName opSym, predProc)]
+-- push operator procedure's scope to call stack
+                    runEdhProg pgs
+                        { edh'context =
+                          (edh'context pgs)
+                            { callStack = Scope opEnt
+                                                this
+                                                (NE.toList op'lexi'stack)
+                                                opProc
+                                            <| call'stack
+                            }
+                        }
+                      $ evalStmt that op'body
+-- pop call stack after operator proc returned
+                      $ \(_, _, opRtn) -> local (const pgs) $ exitEdhProc
+                          exit
+                          ( that
+                          , scope
+                          , case opRtn of
+                            -- explicit return
+                            EdhReturn rtnVal -> rtnVal
+                            -- no explicit return, assuming it returns the last
+                            -- value from procedure execution
+                            _                -> opRtn
+                          )
+
                 _ ->
                   throwEdhFromSTM pgs EvalError
                     $  "Invalid operator signature: "
@@ -496,6 +536,38 @@ evalExpr that expr exit = do
 
 
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+
+
+mkScopeWrapper :: EdhWorld -> Scope -> STM Object
+mkScopeWrapper world scope@(Scope !ent !this !lexi'stack _) = do
+    -- use an object to wrap the very entity, the entity is same as of this's 
+    -- in case we are in a class procedure, but not if we are in a method proc
+  entWrapper <- viewAsEdhObject ent wrapperClass []
+  -- a scope wrapper object is itself a blank bucket, can be used to store
+  -- arbitrary attributes
+  wrapperEnt <- newTVar Map.empty
+  -- the wrapper object itself is a bunch of magical makeups
+  wrapperObj <- viewAsEdhObject
+    wrapperEnt
+    wrapperClass
+    [
+  -- put the 'scopeSuper' object as the top super, this is where the builtin
+  -- scope manipulation methods are resolved
+      scopeSuper world
+  -- put the object wrapping the entity (different than this's entity for
+  -- a method procedure's scope) as the middle super object, so attributes
+  -- not shadowed by those manually assigned ones to 'wrapperEnt', or scope
+  -- manipulation methods, can be read off directly from the wrapper object
+    , entWrapper
+  -- put the original `this` object as the bottom super object, for
+  -- information needed later, e.g. eval
+    , this
+    ]
+  return wrapperObj
+ where
+-- save the scope context as 'classLexiStack' of the fake class for wrapper
+  !wrapperClass =
+    (objClass $ scopeSuper world) { classLexiStack = scope :| lexi'stack }
 
 
 -- | assign an evaluated value to a target expression

@@ -7,7 +7,6 @@ import           Prelude
 import           Control.Monad.Reader
 import           Control.Concurrent.STM
 
-import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
@@ -96,37 +95,6 @@ scopeObtainProc _ !that _ !exit = do
     exitEdhSTM pgs
                exit
                (that, contextScope $ edh'context pgs, EdhObject wrapperObj)
-
-mkScopeWrapper :: EdhWorld -> Scope -> STM Object
-mkScopeWrapper world scope@(Scope !ent !this !lexi'stack _) = do
-    -- use an object to wrap the very entity, the entity is same as of this's 
-    -- in case we are in a class procedure, but not if we are in a method proc
-  entWrapper <- viewAsEdhObject ent wrapperClass []
-  -- a scope wrapper object is itself a blank bucket, can be used to store
-  -- arbitrary attributes
-  wrapperEnt <- newTVar Map.empty
-  -- the wrapper object itself is a bunch of magical makeups
-  wrapperObj <- viewAsEdhObject
-    wrapperEnt
-    wrapperClass
-    [
-  -- put the 'scopeSuper' object as the top super, this is where the builtin
-  -- scope manipulation methods are resolved
-      scopeSuper world
-  -- put the object wrapping the entity (different than this's entity for
-  -- a method procedure's scope) as the middle super object, so attributes
-  -- not shadowed by those manually assigned ones to 'wrapperEnt', or scope
-  -- manipulation methods, can be read off directly from the wrapper object
-    , entWrapper
-  -- put the original `this` object as the bottom super object, for
-  -- information needed later, e.g. eval
-    , this
-    ]
-  return wrapperObj
- where
--- save the scope context as 'classLexiStack' of the fake class for wrapper
-  !wrapperClass =
-    (objClass $ scopeSuper world) { classLexiStack = scope :| lexi'stack }
 
 
 -- | utility scope.attrs()
