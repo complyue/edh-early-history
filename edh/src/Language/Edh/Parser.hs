@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Parser where
 
@@ -246,10 +245,9 @@ parseOpDeclOvrdStmt = do
   let procDecl = ProcDecl opSym argRcvr body
   opPD <- get
   case precDecl of
-    Nothing -> do
-      case Map.lookup opSym opPD of
-        Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
-        Just (opPrec, _) -> return $ OpOvrdStmt opSym procDecl opPrec
+    Nothing -> case Map.lookup opSym opPD of
+      Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
+      Just (opPrec, _) -> return $ OpOvrdStmt opSym procDecl opPrec
     Just opPrec -> do
       when (opPrec < 0 || opPrec >= 10)
            (fail $ "invalid operator precedence: " <> show opPrec)

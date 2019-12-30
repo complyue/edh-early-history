@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 
 module Language.Edh.Batteries where
 
