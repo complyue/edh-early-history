@@ -4,7 +4,7 @@ module Language.Edh.Interpreter where
 
 
 import           Prelude
-import           Debug.Trace
+-- import           Debug.Trace
 
 import           Control.Exception
 import           Control.Monad.IO.Class
@@ -81,13 +81,13 @@ evalEdhSource world modu code = liftIO $ do
               Left  !err   -> return $ Left $ EdhParseError err
               Right !stmts -> do
 
-                trace
-                    ( (" ** parsed: \n" ++)
-                    $ unlines
-                    $ (<$> stmts) \(StmtSrc (sp, stmt)) ->
-                        sourcePosPretty sp ++ "\n  " ++ show stmt
-                    )
-                  $ return ()
+                -- trace
+                --     ( (" ** parsed: \n" ++)
+                --     $ unlines
+                --     $ (<$> stmts) \(StmtSrc (sp, stmt)) ->
+                --         sourcePosPretty sp ++ "\n  " ++ show stmt
+                --     )
+                --   $ return ()
 
                 -- release world lock as soon as parsing done successfuly
                 atomically $ putTMVar wops opPD'

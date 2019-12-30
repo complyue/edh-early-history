@@ -533,51 +533,48 @@ parsePrefixExpr = choice
 -- while they are left-assosciative only
 
 parseExprPrec :: Precedence -> Parser Expr
-parseExprPrec prec = do
-  oneExpr <- choice
-    [ parsePrefixExpr
-    , parseForExpr
-    , parseIfExpr
-    , parseCaseExpr
-    , parseListExpr
-    , parseBlockOrDict
-    , parseOpAddrOrTupleOrParen
-    , LitExpr <$> parseLitExpr
-    , AttrExpr <$> parseAttrAddr
-    ]
-  parseOps prec oneExpr
-
-parseOps :: Precedence -> Expr -> Parser Expr
-parseOps prec expr = choice
-  [ parseIndexer >>= parseOps prec . flip IndexExpr expr
-  , parsePackSender >>= parseOps prec . CallExpr expr
-  , goInfix expr
-  ]
+parseExprPrec prec =
+  choice
+      [ parsePrefixExpr
+      , parseForExpr
+      , parseIfExpr
+      , parseCaseExpr
+      , parseListExpr
+      , parseBlockOrDict
+      , parseOpAddrOrTupleOrParen
+      , LitExpr <$> parseLitExpr
+      , AttrExpr <$> parseAttrAddr
+      ]
+    >>= parseMoreOps
  where
-  goInfix :: Expr -> Parser Expr
-  goInfix leftExpr = (<|> return leftExpr) $ try $ do
+  parseMoreOps :: Expr -> Parser Expr
+  parseMoreOps expr = choice
+    [ parseIndexer >>= parseMoreOps . flip IndexExpr expr
+    , parsePackSender >>= parseMoreOps . CallExpr expr
+    , parseMoreInfix expr
+    ]
+  parseMoreInfix :: Expr -> Parser Expr
+  parseMoreInfix leftExpr = higherOp prec >>= \case
+    Nothing -> return leftExpr
+    Just (opPrec, opSym) ->
+      parseExprPrec opPrec >>= parseMoreInfix . InfixExpr opSym leftExpr
 
--- TODO 
--- the "lower precedence operator" failure should carry silent rejection semantic,
--- while the "undeclared operator" should carry semantic of loud complaint,
--- find a way to distinguish them, or because of the `try` above, the 
--- "undeclared operator" error won't show up to end user.
-
-    (opPrec, opSym) <- nextOp prec
-    rightExpr       <- parseExprPrec opPrec
-    goInfix $ InfixExpr opSym leftExpr rightExpr
-
-  nextOp :: Precedence -> Parser (Precedence, OpSymbol)
-  nextOp prec' = do
-    opSym <- parseOpLit
-    opPD  <- get
-    case Map.lookup opSym opPD of
-      Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
-      Just (opPrec, _) -> if opPrec > prec'
-        then return (opPrec, opSym)
-        -- leave this op to be encountered later, i.e.
-        -- after left-hand expr collapsed into one
-        else fail "lower precedence operator"
+  higherOp :: Precedence -> Parser (Maybe (Precedence, OpSymbol))
+  higherOp prec' = do
+    beforeOp <- getParserState
+    optional parseOpLit >>= \case
+      Nothing    -> return Nothing
+      Just opSym -> do
+        opPD <- get
+        case Map.lookup opSym opPD of
+          Nothing -> fail $ "undeclared operator: (" <> T.unpack opSym <> ")"
+          Just (opPrec, _) -> if opPrec > prec'
+            then return $ Just (opPrec, opSym)
+            else do
+              -- leave this op to be encountered later, i.e.
+              -- after left-hand expr collapsed into one
+              setParserState beforeOp
+              return Nothing
 
 
 parseExpr :: Parser Expr
