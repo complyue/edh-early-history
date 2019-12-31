@@ -444,6 +444,68 @@ program scope (e.g. a module, a class).
 And you can even roll your own, arbitrary new operators with a precendence
 you'd like with, as so similar as **Haskell** allows you.
 
+Some operators are implemented in **Haskell** the host language, some are
+just implemented in **Edh**, take any of them as example for your own
+operator implementation:
+
+```hs
+-- | operator (=)
+assignProc :: EdhProcedure
+assignProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
+  do
+    pgs <- ask
+    -- execution of the assignment always in a tx for atomicity
+    local (\pgs' -> pgs' { edh'in'tx = True })
+      $ evalExpr that rhExpr
+      $ assignEdhTarget pgs that lhExpr exit
+assignProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+-- | utility type(*args,**kwargs)
+typeProc :: EdhProcedure
+typeProc !argsSender !that _ !exit = do
+  !pgs <- ask
+  let !callerCtx   = edh'context pgs
+      !callerScope = contextScope callerCtx
+  packEdhArgs that argsSender
+    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) ->
+        let !argsType = edhTypeOf <$> args
+        in  if null kwargs
+              then case argsType of
+                [t] -> exitEdhProc exit (that, callerScope, t)
+                _   -> exitEdhProc exit (that, callerScope, EdhTuple argsType)
+              else exitEdhProc
+                exit
+                ( that
+                , callerScope
+                , EdhArgsPack $ ArgsPack argsType $ Map.map edhTypeOf kwargs
+                )
+```
+
+```c++
+  operator != (lhv, rhv) not (lhv == rhv)
+
+  operator &> (scope, lhe, rhe) {
+    lhv = scope.eval(lhe)
+    if lhv != false && lhv != nil && lhv != ''
+      then scope.eval(rhe)
+      else nil
+  }
+
+  operator |> (scope, lhe, rhe) {
+    lhv = scope.eval(lhe)
+    if lhv == false || lhv == nil || lhv == ''
+      then scope.eval(rhe)
+      else lhv
+  }
+
+  operator += (scope, lhe, rhe) {
+    scope.eval(makeOp(
+      lhe, "=", makeOp(lhe, "+", rhe)
+    ))
+  }
+```
+
 All operators in **Edh** are left associative, infix only, though. Well,
 except a few hardcoded prefix operators:
 
