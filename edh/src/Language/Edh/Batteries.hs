@@ -150,7 +150,7 @@ installEdhBatteries world = liftIO $ atomically $ do
 
   !rootProcedures <- mapM
     (\(nm, hp) -> (AttrByName nm, ) <$> mkHostProc nm hp)
-    [ ("pack"       , packProc)
+    [ ("pkargs"     , pkargsProc)
     , ("dict"       , dictProc)
     , ("type"       , typeProc)
     , ("constructor", ctorProc)
@@ -187,4 +187,4 @@ installEdhBatteries world = liftIO $ atomically $ do
  where
   !rootEntity = objEntity $ worldRoot world
   scopeManiMethods :: Entity
-  !scopeManiMethods = objEntity $ scopeSuper $ world
+  !scopeManiMethods = objEntity $ scopeSuper world

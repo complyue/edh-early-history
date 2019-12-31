@@ -208,7 +208,7 @@ generator g (n) {
     for i from range(n) do
         // pack an arguments sender to yield out,
         // you'd feel it like calling a callback
-        yield pack (i, i * i, desc="square of " ++ i)
+        yield pkargs (i, i * i, desc="square of " ++ i)
 }
 
 // arguments receiver syntax in for expression,
@@ -321,7 +321,7 @@ A `sink` is a multi-sender, multi-receiver broadcasting channel
 for messages, comparable to a `chan` in Go, which is a multi-sender,
 load-balanced-multi-receiver unicasting channel for messsages.
 
-An _event_ message in **Edh** can be an `ArgsPack` created by `pack()`, then
+An _event_ message in **Edh** can be an `ArgsPack` created by `pkargs()`, then
 further received by the _argument receiver_ of the `for` expression.
 
 ```js
@@ -351,7 +351,7 @@ class EventProducer (evsStop, evsPub, name="announcer") {
             for _ from evsStop do break,
             for currentTime from runtime.everyMillisN(interval) do {
                 this.evtCnt += 1
-                evsPub <- pack (t=currentTime, n=evtCnt,
+                evsPub <- pkargs (t=currentTime, n=evtCnt,
                     description="Event#" ++ evtCnt)
             }
         )
@@ -644,8 +644,8 @@ DecimalType
 ( DecimalType, StringType, PairType, )
 Đ: type(type, (+), type(1))
 ( HostProcType, HostOperType, TypeType, )
-Đ: type(pack(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
-pack( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
+Đ: type(pkargs(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
+pkargs( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
 Đ:
 ```
 

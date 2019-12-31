@@ -368,6 +368,17 @@ data ArgsPack = ArgsPack {
     positional'args :: ![EdhValue]
     , keyword'args :: !(Map.Map AttrName EdhValue)
   } deriving (Eq)
+instance Show ArgsPack where
+  show (ArgsPack posArgs kwArgs) = if null posArgs && Map.null kwArgs
+    then "()"
+    else
+      "( "
+      ++ concat [ show i ++ ", " | i <- posArgs ]
+      ++ concat
+           [ T.unpack kw ++ "=" ++ show v ++ ", "
+           | (kw, v) <- Map.toList kwArgs
+           ]
+      ++ ")"
 
 
 -- | Type of procedures implemented in the host language (Haskell).
@@ -485,19 +496,9 @@ instance Show EdhValue where
     then "(,)" -- mimic the denotation of empty tuple in Python
     else -- advocate trailing comma here
          "( " ++ concat [ show i ++ ", " | i <- v ] ++ ")"
-  show (EdhArgsPack (ArgsPack posArgs kwArgs)) =
-    if null posArgs && Map.null kwArgs
-      then "pack()"
-      else
-        "pack( "
-        ++ concat [ show i ++ ", " | i <- posArgs ]
-        ++ concat
-             [ T.unpack kw ++ "=" ++ show v ++ ", "
-             | (kw, v) <- Map.toList kwArgs
-             ]
-        ++ ")"
+  show (EdhArgsPack v) = "pkargs" ++ show v
 
-  show (EdhBlock v) = if null v
+  show (EdhBlock    v) = if null v
     then "{;}" -- make it obvious this is an empty block
     else "{ " ++ concat [ show i ++ "; " | i <- v ] ++ "}"
 

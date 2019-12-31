@@ -31,9 +31,9 @@ consProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
--- | utility pack(*args,**kwargs)
-packProc :: EdhProcedure
-packProc !argsSender that _ !exit = packEdhArgs that argsSender exit
+-- | utility pkargs(*args,**kwargs,***packed)
+pkargsProc :: EdhProcedure
+pkargsProc !argsSender that _ !exit = packEdhArgs that argsSender exit
 
 
 -- | operator (++)
