@@ -613,8 +613,20 @@ All numbers in **Edh** are `Data.Lossless.Decimal` from
 [lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
 , by default and by all means:
 
-```
-...
+```haskell
+Đ: x = 1.1 + 2.2
+3.3
+Đ: x / 0
+inf
+Đ: -x / 0
+-inf
+Đ: 0/0
+nan
+Đ: nan == nan
+false
+Đ: pi
+3.1415926535897932384626433832795028841971
+Đ:
 ```
 
 ### reflection
