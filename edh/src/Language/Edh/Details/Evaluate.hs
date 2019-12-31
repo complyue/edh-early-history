@@ -594,16 +594,21 @@ assignEdhTarget pgsAfter that lhExpr exit (_, _, rhVal) = do
         runEdhProg pgsAfter $ exitEdhProc exit (tgtObj, callerScope, rhVal)
   case lhExpr of
     AttrExpr !addr -> case addr of
+      DirectRef (NamedAttr "_") ->
+        -- silently drop value assigned to single underscore
+        contEdhSTM $ runEdhProg pgsAfter $ exitEdhProc
+          exit
+          (this, callerScope, nil)
       DirectRef !addr' ->
-        return $ resolveAddr pgs addr' >>= \key -> finishAssign this ent key
+        contEdhSTM $ resolveAddr pgs addr' >>= \key -> finishAssign this ent key
       IndirectRef !tgtExpr !addr' -> case tgtExpr of
-        AttrExpr ThisRef -> return $ resolveAddr pgs addr' >>= \key ->
+        AttrExpr ThisRef -> contEdhSTM $ resolveAddr pgs addr' >>= \key ->
           finishAssign this (objEntity this) key
-        AttrExpr ThatRef -> return $ resolveAddr pgs addr' >>= \key ->
+        AttrExpr ThatRef -> contEdhSTM $ resolveAddr pgs addr' >>= \key ->
           finishAssign that (objEntity that) key
         _ -> evalExpr that tgtExpr $ \(!_, !_, !tgtVal) -> case tgtVal of
           EdhObject tgtObj@(Object !tgtEnt _ _) ->
-            return $ resolveAddr pgs addr' >>= \key ->
+            contEdhSTM $ resolveAddr pgs addr' >>= \key ->
               finishAssign tgtObj tgtEnt key
           _ -> throwEdh EvalError $ "Invalid assignment target: " <> T.pack
             (show tgtVal)
@@ -644,22 +649,39 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
     recvFromPack
       :: (ArgsPack, EntityStore) -> ArgReceiver -> STM (ArgsPack, EntityStore)
     recvFromPack (pk@(ArgsPack posArgs' kwArgs'), em) argRcvr = case argRcvr of
+      RecvRestPosArgs "_" ->
+        -- silently drop the value to single underscore, while consume the args
+        -- from incoming pack
+        return (ArgsPack [] kwArgs', em)
       RecvRestPosArgs restPosArgAttr -> return
         ( ArgsPack [] kwArgs'
         , Map.insert (AttrByName restPosArgAttr)
                      (EdhArgsPack $ ArgsPack posArgs' Map.empty)
                      em
         )
+      RecvRestKwArgs "_" ->
+        -- silently drop the value to single underscore, while consume the args
+        -- from incoming pack
+        return (ArgsPack posArgs' Map.empty, em)
       RecvRestKwArgs restKwArgAttr -> return
         ( ArgsPack posArgs' Map.empty
         , Map.insert (AttrByName restKwArgAttr)
                      (EdhArgsPack $ ArgsPack [] kwArgs')
                      em
         )
+      RecvRestPkArgs "_" ->
+        -- silently drop the value to single underscore, while consume the args
+        -- from incoming pack
+        return (ArgsPack [] Map.empty, em)
       RecvRestPkArgs restPkArgAttr -> return
         ( ArgsPack [] Map.empty
         , Map.insert (AttrByName restPkArgAttr) (EdhArgsPack pk) em
         )
+      RecvArg "_" _ _ -> do
+        -- silently drop the value to single underscore, while consume the arg
+        -- from incoming pack
+        (_, posArgs'', kwArgs'') <- resolveArgValue "_" Nothing
+        return (ArgsPack posArgs'' kwArgs'', em)
       RecvArg argName argTgtAddr argDefault -> do
         (argVal, posArgs'', kwArgs'') <- resolveArgValue argName argDefault
         case argTgtAddr of
@@ -782,21 +804,18 @@ packEdhArgs' !that (!x : xs) !exit = do
     UnpackPosArgs !posExpr -> evalExpr that posExpr $ \case
       (_, _, EdhArgsPack (ArgsPack !posArgs' _kwArgs')) ->
         packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
-          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
-            exit
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exit
             (that, scope, EdhArgsPack (ArgsPack (posArgs ++ posArgs') kwArgs))
           _ -> error "bug"
       (_, _, EdhTuple !l) -> packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
-        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
-          exit
-          (that, scope, EdhArgsPack (ArgsPack (posArgs ++ l) kwArgs))
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) ->
+          exit (that, scope, EdhArgsPack (ArgsPack (posArgs ++ l) kwArgs))
         _ -> error "bug"
       (_, _, EdhList (List !l)) -> packEdhArgs' that xs $ \(_, _, !pk) ->
         case pk of
           EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
             ll <- readTVar l
-            runEdhProg pgs $ exitEdhProc
-              exit
+            runEdhProg pgs $ exit
               (that, scope, EdhArgsPack (ArgsPack (posArgs ++ ll) kwArgs))
           _ -> error "bug"
       (_, _, v) ->
@@ -804,20 +823,19 @@ packEdhArgs' !that (!x : xs) !exit = do
     UnpackKwArgs !kwExpr -> evalExpr that kwExpr $ \case
       (_, _, EdhArgsPack (ArgsPack _posArgs' !kwArgs')) ->
         packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
-          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) ->
             exit
-            ( that
-            , scope
-            , EdhArgsPack (ArgsPack posArgs (Map.union kwArgs kwArgs'))
-            )
+              ( that
+              , scope
+              , EdhArgsPack (ArgsPack posArgs (Map.union kwArgs kwArgs'))
+              )
           _ -> error "bug"
       (_, _, EdhDict (Dict !ds)) -> packEdhArgs' that xs $ \(_, _, !pk) ->
         case pk of
           EdhArgsPack (ArgsPack !posArgs !kwArgs) -> return $ do
             dm  <- readTVar ds
             kvl <- forM (Map.toAscList dm) $ \(k, v) -> (, v) <$> dictKey2Kw k
-            runEdhProg pgs $ exitEdhProc
-              exit
+            runEdhProg pgs $ exit
               ( that
               , scope
               , EdhArgsPack
@@ -829,8 +847,7 @@ packEdhArgs' !that (!x : xs) !exit = do
     UnpackPkArgs !pkExpr -> evalExpr that pkExpr $ \case
       (_, _, EdhArgsPack (ArgsPack !posArgs' !kwArgs')) ->
         packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
-          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
-            exit
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exit
             ( that
             , scope
             , EdhArgsPack
@@ -841,26 +858,28 @@ packEdhArgs' !that (!x : xs) !exit = do
         throwEdh EvalError $ "Can not unpack pkargs from: " <> T.pack (show v)
     SendPosArg !argExpr -> evalExpr that argExpr $ \(_, _, !val) ->
       packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
-        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
-          exit
-          (that, scope, EdhArgsPack (ArgsPack (val : posArgs) kwArgs))
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) ->
+          exit (that, scope, EdhArgsPack (ArgsPack (val : posArgs) kwArgs))
         _ -> error "bug"
     SendKwArg !kw !argExpr -> evalExpr that argExpr $ \(_, _, !val) ->
       packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
-        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exitEdhProc
-          exit
-          ( that
-          , scope
-          , EdhArgsPack
-            (ArgsPack posArgs $ Map.alter
-              (\case -- make sure latest value with same kw take effect
-                Nothing       -> Just val
-                Just laterVal -> Just laterVal
+        EdhArgsPack (ArgsPack !posArgs !kwArgs) -> case kw of
+          "_" ->
+            -- silently drop the value to keyword of single underscore
+            exit (that, scope, pk)
+          _ -> exit
+            ( that
+            , scope
+            , EdhArgsPack
+              (ArgsPack posArgs $ Map.alter
+                (\case -- make sure latest value with same kw take effect
+                  Nothing       -> Just val
+                  Just laterVal -> Just laterVal
+                )
+                kw
+                kwArgs
               )
-              kw
-              kwArgs
             )
-          )
         _ -> error "bug"
 
 
