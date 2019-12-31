@@ -511,10 +511,16 @@ parseOpAddrOrTupleOrParen =
 
 parsePrefixExpr :: Parser Expr
 parsePrefixExpr = choice
-  [ symbol "+" >> PrefixExpr PrefixPlus <$> parseExprPrec 9
-  , symbol "-" >> PrefixExpr PrefixMinus <$> parseExprPrec 9
+  [ (symbol "+" >> notFollowedBy (satisfy isOperatorChar))
+  >>  PrefixExpr PrefixPlus
+  <$> parseExprPrec 9
+  , (symbol "-" >> notFollowedBy (satisfy isOperatorChar))
+  >>  PrefixExpr PrefixMinus
+  <$> parseExprPrec 9
   , symbol "not" >> PrefixExpr Not <$> parseExprPrec 4
-  , symbol "|" >> PrefixExpr Guard <$> parseExprPrec 1
+  , (symbol "|" >> notFollowedBy (satisfy isOperatorChar))
+  >>  PrefixExpr Guard
+  <$> parseExprPrec 1
   , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
   , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
   , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
@@ -579,4 +585,4 @@ parseExprPrec prec =
 
 
 parseExpr :: Parser Expr
-parseExpr = parseExprPrec 0
+parseExpr = parseExprPrec (-1)

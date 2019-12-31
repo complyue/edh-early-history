@@ -3,6 +3,8 @@ module Language.Edh.Details.RtTypes where
 
 import           Prelude
 
+import           GHC.Conc                       ( unsafeIOToSTM )
+
 import           Control.Monad.Except
 import           Control.Monad.Reader
 
@@ -81,14 +83,13 @@ data AttrKey = AttrByName !AttrName | AttrBySym !Symbol
 --       's 'Ord' instance, so it can be used as attribut key on an
 --       entity (the underlying 'Map.Map' storage per se).
 newtype Symbol = Symbol {
-    -- TODO remember to default the description to the source pos
     symbol'description :: CString
   } deriving (Eq, Ord)
 instance Show Symbol where
   show (Symbol dp) = "[@" <> sd <> "]"
     where sd = unsafePerformIO $ peekCString dp
-mkSymbol :: String -> IO Symbol
-mkSymbol !d = do
+mkSymbol :: String -> STM Symbol
+mkSymbol !d = unsafeIOToSTM $ do
   !s <- newCString d
   let !sym = Symbol s
   addFinalizer sym $ free s

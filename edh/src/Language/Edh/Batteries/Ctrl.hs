@@ -6,14 +6,8 @@ import           Prelude
 -- import           Debug.Trace
 
 import           Control.Monad.Reader
-import           Control.Concurrent.STM
 
 import qualified Data.Text                     as T
-import qualified Data.Map.Strict               as Map
-
-import           Text.Megaparsec
-
-import           Data.Lossless.Decimal          ( Decimal(..) )
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -25,10 +19,30 @@ branchProc :: EdhProcedure
 branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
   do
     !pgs <- ask
-    let !callerCtx@(Context !world _ _ (StmtSrc (srcPos, _))) = edh'context pgs
-        !callerScope = contextScope callerCtx
-    evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
-      _ -> throwEdh EvalError $ "Invalid  xxx : " <> T.pack (show lhVal)
+    let !callerCtx@(Context _ _ !ctxMatch _) = edh'context pgs
+        !callerScope                         = contextScope callerCtx
+    case lhExpr of
+      PrefixExpr Guard guardedExpr ->
+        evalExpr that guardedExpr $ \(_, _, predValue) -> if predValue /= true
+          then exitEdhProc exit (that, callerScope, EdhFallthrough)
+          else evalExpr that rhExpr $ \(that', scope', rhVal) -> exitEdhProc
+            exit
+            ( that'
+            , scope'
+            , case rhVal of
+              EdhFallthrough -> EdhFallthrough
+              _              -> EdhCaseClose rhVal
+            )
+      _ -> evalExpr that lhExpr $ \(_, _, lhVal) -> if lhVal /= ctxMatch
+        then exitEdhProc exit (that, callerScope, EdhFallthrough)
+        else evalExpr that rhExpr $ \(that', scope', rhVal) -> exitEdhProc
+          exit
+          ( that'
+          , scope'
+          , case rhVal of
+            EdhFallthrough -> EdhFallthrough
+            _              -> EdhCaseClose rhVal
+          )
 branchProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 

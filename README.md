@@ -382,18 +382,26 @@ for _ from runtime.afterMillisN(60e3) do
 ### Haskell style case-of, with Go style fallthrough
 
 ```haskell
-let essay = case type(v) of {
-   BoolType -> "to be or not to be, that's a problem"
-   DecimalType -> {
-      |v<2 -> "consume less, produce more"
-      |v<10 -> "no more than " ++ v ++ " cups of coffee a day"
-      true -> "every one get his/her lucky number"
-   }
-   StringType -> (quiz=v fallthrough)
-   SymbolType -> (quiz='mistery attracts most people' fallthrough)
-   ModuleType -> (quiz='I live in ' ++ v.__name__; fallthrough)
-   "do you known, that " ++ quiz ++ " ?"
-}
+  method essay (v) case type(v) of {
+    BoolType -> "to be or not to be, that's a problem"
+
+    DecimalType -> {
+        |v<2 -> "consume less, produce more";
+        |v<10 -> "no more than " ++ v ++ " cups of coffee a day";
+        |true -> "every one get his/her lucky number"
+    }
+
+    StringType -> {quiz=v fallthrough}
+
+    SymbolType -> {quiz='mistery attracts most people' fallthrough}
+
+    ObjectType -> {
+      quiz='I live in ' ++ (v?__name__ |> 'no where');
+      fallthrough
+    }
+
+    "do you known, that " ++ quiz ++ " ?"
+  }
 ```
 
 ### ternary operator

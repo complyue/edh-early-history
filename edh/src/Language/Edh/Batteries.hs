@@ -43,6 +43,12 @@ installEdhBatteries world = liftIO $ do
         , 1
         ) -- ^ why brittany insists on formatting it like this ?.?
 
+      -- | attribute tempter, 
+      -- address an attribute off an object if possible, nil otherwise
+      , ( "?"
+        , 9
+        )
+
       -- assignments
       , ("=" , 1)
       , ("+=", 1)
@@ -89,7 +95,7 @@ installEdhBatteries world = liftIO $ do
         --       onCnd and oneThing or theOther
         --  * Edh
         --       onCnd &> oneThing |> theOther
-      , ("&>", 2)
+      , ("&>", 3)
       , ( "|>"
         , 2
         ) -- ^ why brittany insists on formatting it like this ?.?
@@ -102,13 +108,13 @@ installEdhBatteries world = liftIO $ do
         --  * tuple comprehension:
         --     (,) =< for x from range(100) do x*x
       , ( "=<"
-        , 3
+        , 1
         ) -- ^ why brittany insists on formatting it like this ?.?
         -- | prepand to list
         --     l = [3,7,5]
         --     [2,9] => l
       , ( "=>"
-        , 3
+        , 1
         )
 
         -- | publish to sink
@@ -117,26 +123,14 @@ installEdhBatteries world = liftIO $ do
         , 5
         )
 
-        -- | case branch (| guard is a hardcoded prefix operator)
-        --    let essay = case type(v) of (
-        --       BoolType -> "to be or not to be, that's a problem"
-        --       DecimalType -> (
-        --          |v<2 -> "consume less, produce more"
-        --          |v<10 -> "no more than " ++ v ++ " cups of coffee a day"
-        --          true -> "every one get his/her lucky number"
-        --       )
-        --       StringType -> (quiz=v fallthrough)
-        --       SymbolType -> (quiz='mistery attracts most people' fallthrough)
-        --       ModuleType -> (quiz='I live in ' ++ v.__name__; fallthrough)
-        --       "do you known, that " ++ quiz ++ " ?"
-        --    )
+        -- | branch
       , ( "->"
-        , 1
+        , 0
         )
 
         -- | string coercing concatenation
       , ( "++"
-        , 5
+        , 2
         )
 
         -- | logging
@@ -147,6 +141,7 @@ installEdhBatteries world = liftIO $ do
     !rootOperators <- mapM
       (\(sym, hp) -> (AttrByName sym, ) <$> mkHostOper world sym hp)
       [ (":" , consProc)
+      , ("?" , attrTemptProc)
       , ("++", concatProc)
       , ("+" , addProc)
       , ("-" , subsProc)
@@ -168,7 +163,8 @@ installEdhBatteries world = liftIO $ do
 
     !rootProcedures <- mapM
       (\(nm, hp) -> (AttrByName nm, ) <$> mkHostProc nm hp)
-      [ ("pkargs"     , pkargsProc)
+      [ ("Symbol"     , symbolCtorProc)
+      , ("pkargs"     , pkargsProc)
       , ("dict"       , dictProc)
       , ("type"       , typeProc)
       , ("constructor", ctorProc)

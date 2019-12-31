@@ -15,6 +15,7 @@ import           Data.List.NonEmpty             ( NonEmpty(..)
                                                 )
 import qualified Data.List.NonEmpty            as NE
 
+import           Text.Megaparsec
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -29,25 +30,33 @@ evalStmt that ss@(StmtSrc (_, !stmt)) !exit =
     $ evalStmt' that stmt exit
 
 
--- TODO this should check for Thunk, and implement
---      break/fallthrough semantics
 evalBlock :: Object -> [StmtSrc] -> EdhProcExit -> EdhProg (STM ())
 evalBlock that [] !exit = do
   !pgs <- ask
   let !ctx   = edh'context pgs
       !scope = contextScope ctx
+  -- empty block evals to nil
   exitEdhProc exit (that, scope, nil)
 evalBlock that [!ss] !exit = evalStmt that ss $ \result ->
   exitEdhProc exit $ case result of
+    -- last branch does match
     (!this', !scope', EdhCaseClose !val) -> (this', scope', val)
+    -- pass end-of-block without match, should propagate upwards for the outer
+    -- block's sake
+    (!this', !scope', EdhFallthrough) -> (this', scope', EdhFallthrough)
+    -- last stmt no special branching result, propagate as is
     _ -> result
 evalBlock that (ss : rest) !exit = evalStmt that ss $ \result -> case result of
+  -- this branch matches without fallthrough, done this block
   (!this', !scope', EdhCaseClose !val) -> exitEdhProc exit (this', scope', val)
+  -- should fallthrough to next branch (or stmt)
+  (_, _, EdhFallthrough) -> evalBlock that rest exit
+  -- ctrl to be propagated upwards
   brk@(_, _, EdhBreak) -> exitEdhProc exit brk
   ctn@(_, _, EdhContinue) -> exitEdhProc exit ctn
   rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
   yld@(_, _, EdhYield _) -> exitEdhProc exit yld
-  (_, _, EdhFallthrough) -> evalBlock that rest exit
+  -- no special branching result, continue this block
   _ -> evalBlock that rest exit
 
 
@@ -170,8 +179,9 @@ evalStmt' that stmt exit = do
 evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr that expr exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !call'stack _ _) = edh'context pgs
-      !scope@(Scope   _      !this       _ _) = contextScope ctx
+  let !ctx@(Context !world !call'stack _ (StmtSrc (srcPos, _))) =
+        edh'context pgs
+      !scope@(Scope _ !this _ _) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -198,11 +208,15 @@ evalExpr that expr exit = do
             <> T.pack (show v)
             <> " ❌"
 
-      -- TODO this should probably create Thunk instead, but mind to
-      --      cooperate with the branch operator (->), find a way to
-      --      tell it that this is guarded value, don't compare with
-      --      thunk target value. but how ?
-      Guard  -> evalExpr that expr' exit
+      Guard -> contEdhSTM $ do
+        (EdhRuntime logger _) <- readTMVar $ worldRuntime world
+        logger
+          30
+          (Just $ sourcePosPretty srcPos)
+          (ArgsPack [EdhString $ "Standalone guard treated as plain value."]
+                    Map.empty
+          )
+        runEdhProg pgs $ evalExpr that expr' exit
 
       AtoIso -> local (\s -> s { edh'in'tx = True }) $ evalExpr that expr' exit
 
@@ -258,20 +272,32 @@ evalExpr that expr exit = do
           EdhTuple l -> exitEdhProc exit (this, scope, EdhTuple l)
           _          -> error "bug"
 
-    ParenExpr x                 -> evalExpr that x exit
+    ParenExpr x -> evalExpr that x exit
 
-    BlockExpr stmts             -> evalBlock that stmts exit
-
-    CaseExpr tgtExpr branchStmt -> evalExpr that tgtExpr $ \(_, _, tgtVal) ->
-      -- eval the block with the case target as the 'contextMatch'
+    BlockExpr stmts ->
+      -- eval the block with `true` being the 'contextMatch'
       local
-          (\pgs' -> pgs'
-            { edh'context = (edh'context pgs') { contextMatch = tgtVal }
-            }
+          (\pgs' ->
+            pgs' { edh'context = (edh'context pgs') { contextMatch = true } }
           )
-        $ evalBlock that [branchStmt]
+        $ evalBlock that stmts
         $ \blkResult -> -- restore program state after block done
                         local (const pgs) $ exitEdhProc exit blkResult
+
+    CaseExpr tgtExpr branchesStmt ->
+      evalExpr that tgtExpr $ \(_, _, tgtVal) -> do
+        let stmts = case branchesStmt of
+              (StmtSrc (_, ExprStmt (BlockExpr stmts'))) -> stmts'
+              _ -> [branchesStmt]
+        -- eval the block with the case target being the 'contextMatch'
+        local
+            (\pgs' -> pgs'
+              { edh'context = (edh'context pgs') { contextMatch = tgtVal }
+              }
+            )
+          $ evalBlock that stmts
+          $ \blkResult -> -- restore program state after block done
+                          local (const pgs) $ exitEdhProc exit blkResult
 
     -- TODO impl this
     -- ForExpr ar iter todo -> undefined
