@@ -635,6 +635,20 @@ false
 
 ### reflection
 
+Value type introspection
+
+```haskell
+Đ: type(7)
+DecimalType
+Đ: type(3, 'abc', 2:5)
+( DecimalType, StringType, PairType, )
+Đ: type(type, (+), type(1))
+( HostProcType, HostOperType, TypeType, )
+Đ: type(pack(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
+pack( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
+Đ:
+```
+
 Scope capturing and manipulation
 
 ```haskell
@@ -645,10 +659,12 @@ Scope capturing and manipulation
 Đ|   4:     }
 Đ|   5:     return (scope(), g(5))
 Đ|   6:   }
-Đ|   7:
-Đ|   8:   let (s1, s2) = (*f(3))
-Đ|   9: }
-Đ:
+Đ|   7: }
+Đ: let (s1, s2) = (*f(3))
+Đ: s1
+[object: <scope>]
+Đ: type(s1)
+ObjectType
 Đ: s1.attrs()
 { "g":[method: g], "n":3, }
 Đ: s2.attrs()
@@ -661,20 +677,6 @@ Scope capturing and manipulation
 { "m":5, "t":3/5, }
 Đ: s2.t
 3/5
-Đ:
-```
-
-Value type introspection
-
-```haskell
-Đ: type(7)
-DecimalType
-Đ: type(3, 'abc', 2:5)
-( DecimalType, StringType, PairType, )
-Đ: type(type, (+), type(1))
-( HostProcType, HostOperType, TypeType, )
-Đ: type(pack(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
-pack( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
 Đ:
 ```
 
