@@ -619,7 +619,35 @@ All numbers in **Edh** are `Data.Lossless.Decimal` from
 
 ### reflection
 
-...
+Scope capturing and manipulation
+
+```console
+Đ: method f(n) { m = n*3; scope() }
+[method: f]
+Đ: s = f(3)
+[object: <scope>]
+Đ: s.attrs()
+{ "m":9, "n":3, }
+Đ: s.eval(makeExpr(m/n))
+3
+Đ: s.eval(makeExpr( (g=n/m) ))
+1/3
+Đ: s.attrs()
+{ "g":1/3, "m":9, "n":3, }
+Đ: s.g
+1/3
+Đ:
+```
+
+Value type introspection
+
+```console
+Đ: type(1)
+DecimalType
+Đ: type(3, 'abc')
+( DecimalType, StringType, )
+Đ:
+```
 
 ## The name
 
