@@ -140,20 +140,25 @@ createEdhWorld = liftIO $ do
     , worldRuntime   = runtime
     }
  where
-  defaultLogger :: LogLevel -> ArgsPack -> STM ()
-  defaultLogger !level !pkargs = unsafeIOToSTM $ case pkargs of
+  defaultLogger :: LogLevel -> Maybe String -> ArgsPack -> STM ()
+  defaultLogger !level !srcLoc !pkargs = unsafeIOToSTM $ case pkargs of
     ArgsPack [!argVal] !kwargs | Map.null kwargs ->
       hPutStrLn stderr $ logPrefix ++ T.unpack (edhValueStr argVal)
     _ -> hPutStrLn stderr $ logPrefix ++ show pkargs
    where
     logPrefix :: String
-    logPrefix = case level of
-      _ | level >= 50 -> "🔥 "
-      _ | level >= 40 -> "❗ "
-      _ | level >= 30 -> "❓ "
-      _ | level >= 20 -> "💧 "
-      _ | level >= 10 -> "🐞 "
-      _               -> "😥 "
+    logPrefix =
+      (case srcLoc of
+          Nothing -> id
+          Just sl -> (++ sl ++ "\n")
+        )
+        $ case level of
+            _ | level >= 50 -> "🔥 "
+            _ | level >= 40 -> "❗ "
+            _ | level >= 30 -> "❓ "
+            _ | level >= 20 -> "💧 "
+            _ | level >= 10 -> "🐞 "
+            _               -> "😥 "
 
 declareEdhOperators :: EdhWorld -> Text -> [(OpSymbol, Precedence)] -> STM ()
 declareEdhOperators world declLoc opps = do
