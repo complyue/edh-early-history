@@ -626,6 +626,10 @@ nan
 false
 Đ: pi
 3.1415926535897932384626433832795028841971
+Đ: y = 7/11
+7/11
+Đ: y * 33
+21
 Đ:
 ```
 
@@ -656,8 +660,12 @@ Value type introspection
 ```haskell
 Đ: type(7)
 DecimalType
-Đ: type(3, 'abc', type'of'nil=nil)
-pack( DecimalType, StringType, type'of'nil=nil, )
+Đ: type(3, 'abc', 2:5)
+( DecimalType, StringType, PairType, )
+Đ: type(type, (+), type(1))
+( HostProcType, HostOperType, TypeType, )
+Đ: type(pack(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
+pack( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
 Đ:
 ```
 
