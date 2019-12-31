@@ -123,7 +123,7 @@ createEdhWorld = liftIO $ do
                         }
   opPD    <- newTMVarIO Map.empty
   modus   <- newTVarIO Map.empty
-  runtime <- newTMVarIO EdhRuntime { runtimeLogger   = simpleLogger
+  runtime <- newTMVarIO EdhRuntime { runtimeLogger   = defaultLogger
                                    , runtimeLogLevel = 20
                                    }
   return $ EdhWorld
@@ -140,9 +140,9 @@ createEdhWorld = liftIO $ do
     , worldRuntime   = runtime
     }
  where
-  simpleLogger :: LogLevel -> ArgsPack -> STM ()
-  simpleLogger level pkargs = unsafeIOToSTM $ case pkargs of
-    ArgsPack [argVal] kwargs | Map.null kwargs ->
+  defaultLogger :: LogLevel -> ArgsPack -> STM ()
+  defaultLogger !level !pkargs = unsafeIOToSTM $ case pkargs of
+    ArgsPack [!argVal] !kwargs | Map.null kwargs ->
       hPutStrLn stderr $ logPrefix ++ T.unpack (edhValueStr argVal)
     _ -> hPutStrLn stderr $ logPrefix ++ show pkargs
    where
