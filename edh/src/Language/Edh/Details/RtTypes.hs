@@ -278,9 +278,17 @@ data EdhWorld = EdhWorld {
     , worldOperators :: !(TMVar OpPrecDict)
     -- | all modules loaded into this world
     , worldModules :: !(TVar (Map.Map ModuleId Object))
+    -- | interface to the embedding host runtime
+    , worldRuntime :: !(TMVar EdhRuntime)
   }
 instance Eq EdhWorld where
-  EdhWorld x'root _ _ _ _ == EdhWorld y'root _ _ _ _ = x'root == y'root
+  EdhWorld x'root _ _ _ _ _ == EdhWorld y'root _ _ _ _ _ = x'root == y'root
+
+data EdhRuntime = EdhRuntime {
+  runtimeLogger :: !(LogLevel -> ArgsPack -> STM ())
+  , runtimeLogLevel :: !LogLevel
+  }
+type LogLevel = Int
 
 
 -- | The monad for running of an Edh program

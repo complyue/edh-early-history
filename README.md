@@ -193,7 +193,7 @@ import * from './lib.edh'
 // also see argument retargeting here:
 import (doA, doB as thatB, **newGoodiesToKnow) from 'awsomelib'
 if len(newGoodiesToKnow) > 0 then
-    console.debug(
+    runtime.debug <| (
         "there're more functions from awsomelib, check that out:\n\t"
         ++ newGoodiesToKnow.keys())
 ```
@@ -214,7 +214,7 @@ generator g (n) {
 // arguments receiver syntax in for expression,
 // you'd feel it like defining a callback
 for (x, y, desc="the result") from g(100) do
-    console.log(x ++ ": " ++ desc ++ " is " ++ y)
+    runtime.info <| (x ++ ": " ++ desc ++ " is " ++ y)
 ```
 
 ### Go Type-Embedding style multiple _inheritance_
@@ -226,7 +226,7 @@ let you.
 ```javascript
 class B (name) {
     method greeting(guest) {
-        console.log("Hello "++guest++", I am "++name++', your guide.')
+        runtime.info <| ("Hello "++guest++", I am "++name++', your guide.')
     }
 }
 
@@ -238,7 +238,7 @@ class D () {
     extends B('Farmer')
 
     method hello() {
-        console.log(`Hello there!`)
+        runtime.info <| (`Hello there!`)
     }
 }
 
@@ -330,7 +330,7 @@ class EventMonitor (evsSub, name="observer") {
         ackN = 0
         for (t, description, **) from evsSub do {
             ackN += 1
-            console.info(name ++ " got #" ++ ackN ++ " event: "
+            runtime.info <| (name ++ " got #" ++ ackN ++ " event: "
                 ++ description ++ " @ " ++ t)
             if ackN >= maxN then break
         }
@@ -340,7 +340,7 @@ class EventMonitor (evsSub, name="observer") {
 class EventProducer (evsStop, evsPub, name="announcer") {
     evtCnt = 0
     method reportSummary() {
-        console.info(name ++ " totally dispatched " ++ evtCnt ++ " event(s).")
+        runtime.info <| (name ++ " totally dispatched " ++ evtCnt ++ " event(s).")
     }
     method giveTiming (interval) {
         defer this.reportSummary()

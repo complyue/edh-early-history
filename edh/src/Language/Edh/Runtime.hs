@@ -20,11 +20,13 @@ where
 
 import           Prelude
 
+import           System.IO
+import           GHC.Conc                       ( unsafeIOToSTM )
+
 import           Control.Exception
 import           Control.Monad.Except
 
 import           Control.Concurrent.STM
-import           GHC.Conc                       ( unsafeIOToSTM )
 
 import           Foreign.C.String
 import           Foreign.Marshal.Alloc
@@ -119,8 +121,11 @@ createEdhWorld = liftIO $ do
     !scopeClass = Class { classLexiStack = worldScope :| []
                         , classProcedure = scopeClassProc
                         }
-  opPD  <- newTMVarIO Map.empty
-  modus <- newTVarIO Map.empty
+  opPD    <- newTMVarIO Map.empty
+  modus   <- newTVarIO Map.empty
+  runtime <- newTMVarIO EdhRuntime { runtimeLogger   = simpleLogger
+                                   , runtimeLogLevel = 20
+                                   }
   return $ EdhWorld
     { worldRoot      = root
     , moduleClass    = Class { classLexiStack = worldScope :| []
@@ -132,8 +137,23 @@ createEdhWorld = liftIO $ do
                               }
     , worldOperators = opPD
     , worldModules   = modus
+    , worldRuntime   = runtime
     }
-
+ where
+  simpleLogger :: LogLevel -> ArgsPack -> STM ()
+  simpleLogger level pkargs = unsafeIOToSTM $ case pkargs of
+    ArgsPack [argVal] kwargs | Map.null kwargs ->
+      hPutStrLn stderr $ logPrefix ++ T.unpack (edhValueStr argVal)
+    _ -> hPutStrLn stderr $ logPrefix ++ show pkargs
+   where
+    logPrefix :: String
+    logPrefix = case level of
+      _ | level >= 50 -> "🔥 "
+      _ | level >= 40 -> "❗ "
+      _ | level >= 30 -> "❓ "
+      _ | level >= 20 -> "💧 "
+      _ | level >= 10 -> "🐞 "
+      _               -> "😥 "
 
 declareEdhOperators :: EdhWorld -> Text -> [(OpSymbol, Precedence)] -> STM ()
 declareEdhOperators world declLoc opps = do
