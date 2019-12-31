@@ -621,7 +621,7 @@ All numbers in **Edh** are `Data.Lossless.Decimal` from
 
 Scope capturing and manipulation
 
-```console
+```haskell
 Đ: method f(n) { m = n*3; scope() }
 [method: f]
 Đ: s = f(3)
@@ -641,11 +641,11 @@ Scope capturing and manipulation
 
 Value type introspection
 
-```console
-Đ: type(1)
+```haskell
+Đ: type(7)
 DecimalType
-Đ: type(3, 'abc')
-( DecimalType, StringType, )
+Đ: type(3, 'abc', type'of'nil=nil)
+pack( DecimalType, StringType, type'of'nil=nil, )
 Đ:
 ```
 
