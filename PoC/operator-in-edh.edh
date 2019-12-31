@@ -10,10 +10,6 @@
 {
   operator != (lhv, rhv) not (lhv == rhv)
 
-  // TODO consider not including (!~=) in default batteries,
-  // to discourage deep-value based equality test over all
-  operator !~= 4 (lhv, rhv) not (lhv ~= rhv)
-
   operator &> (scope, lhe, rhe) {
     lhv = scope.eval(lhe)
     if lhv != false && lhv != nil && lhv != ''
@@ -27,9 +23,35 @@
       then scope.eval(rhe)
       else lhv
   }
-
 }
-
 method f (n) { r = n>5 &> n*7 |> n*3; r/11 }
-
 ( f(2), f(8) )
+
+
+{
+  operator += (scope, lhe, rhe) {
+    scope.eval(makeOp(
+      lhe, "=", makeOp(lhe, "+", rhe)
+    ))
+  }
+
+  operator -= (scope, lhe, rhe) {
+    scope.eval(makeOp(
+      lhe, "=", makeOp(lhe, "-", rhe)
+    ))
+  }
+
+  operator *= (scope, lhe, rhe) {
+    scope.eval(makeOp(
+      lhe, "=", makeOp(lhe, "*", rhe)
+    ))
+  }
+
+  operator /= (scope, lhe, rhe) {
+    scope.eval(makeOp(
+      lhe, "=", makeOp(lhe, "/", rhe)
+    ))
+  }
+}
+(a = 3, a += 5, a -= 7, a *= 11, a /= 17)
+
