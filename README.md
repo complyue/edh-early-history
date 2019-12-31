@@ -546,13 +546,13 @@ against an object to method ([]), it'll be much similar as implementing
 
 ### lossless decimal for numbers
 
-In JavaScript, even today, all numbers are `float64`, it puzzled me a while,
+In **JavaScript**, even today, all numbers are `float64`, it puzzled me a while,
 before I figured out this is the reason why we can not have `Int64Array`
 besides `Int32Array`/`Int16Array`/`Float64Array`/`Float32Array` etc. that
 the language simply unable to handle elements from an `Int64Array` if it's
 ever provided.
 
-Python gives you lossless integers by default, but `float64` for decimal:
+**Python** gives you lossless integers by default, but `float64` for decimal:
 
 ```python
 >>> 1.1 + 2.2
@@ -560,7 +560,7 @@ Python gives you lossless integers by default, but `float64` for decimal:
 >>>
 ```
 
-Haskell forces you to choose a type for every number in your program,
+**Haskell** forces you to choose a type for every number in your program,
 normal options including the lossless `Integer`, bounded `Int`, and
 precision-lossing `Double`/`Float`:
 
@@ -585,7 +585,7 @@ from practical daily use:
 λ>
 ```
 
-> Your compiled Haskell program will crash on division-by-zero if not
+> Your compiled **Haskell** program will crash on division-by-zero if not
 > handled specifically.
 
 Then here's `Data.Lossless.Decimal` from package
