@@ -68,8 +68,8 @@ evalExprs that (x : xs) exit = evalExpr that x $ \(this', scope', val) ->
 evalStmt' :: Object -> Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' that stmt exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !call'stack _) = edh'context pgs
-      !scope@(Scope !ent !this _ _        ) = contextScope ctx
+  let !ctx@(  Context !world !call'stack _ _) = edh'context pgs
+      !scope@(Scope   !ent   !this       _ _) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr that expr exit
@@ -170,8 +170,8 @@ evalStmt' that stmt exit = do
 evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr that expr exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !call'stack _) = edh'context pgs
-      !scope@(Scope _ !this _ _           ) = contextScope ctx
+  let !ctx@(  Context !world !call'stack _ _) = edh'context pgs
+      !scope@(Scope   _      !this       _ _) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -258,14 +258,25 @@ evalExpr that expr exit = do
           EdhTuple l -> exitEdhProc exit (this, scope, EdhTuple l)
           _          -> error "bug"
 
-    ParenExpr x     -> evalExpr that x exit
+    ParenExpr x                 -> evalExpr that x exit
 
-    BlockExpr stmts -> evalBlock that stmts exit
+    BlockExpr stmts             -> evalBlock that stmts exit
+
+    CaseExpr tgtExpr branchStmt -> evalExpr that tgtExpr $ \(_, _, tgtVal) ->
+      -- eval the block with the case target as the 'contextMatch'
+      local
+          (\pgs' -> pgs'
+            { edh'context = (edh'context pgs') { contextMatch = tgtVal }
+            }
+          )
+        $ evalBlock that [branchStmt]
+        $ \blkResult -> -- restore program state after block done
+                        local (const pgs) $ exitEdhProc exit blkResult
 
     -- TODO impl this
     -- ForExpr ar iter todo -> undefined
 
-    AttrExpr  addr  -> case addr of
+    AttrExpr addr -> case addr of
       ThisRef          -> exitEdhProc exit (this, scope, EdhObject this)
       ThatRef          -> exitEdhProc exit (that, scope, EdhObject that)
       DirectRef !addr' -> return $ do
@@ -585,8 +596,8 @@ assignEdhTarget
   -> EdhProg (STM ())
 assignEdhTarget pgsAfter that lhExpr exit (_, _, rhVal) = do
   !pgs <- ask
-  let !callerCtx@(  Context _ _ _       ) = edh'context pgs
-      !callerScope@(Scope !ent !this _ _) = contextScope callerCtx
+  let !callerCtx@(  Context _    _     _ _) = edh'context pgs
+      !callerScope@(Scope   !ent !this _ _) = contextScope callerCtx
       finishAssign :: Object -> Entity -> AttrKey -> STM ()
       finishAssign tgtObj tgtEnt key = do
         modifyTVar' tgtEnt $ \em -> Map.insert key rhVal em

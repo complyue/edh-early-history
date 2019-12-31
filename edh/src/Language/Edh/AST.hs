@@ -133,7 +133,7 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
     -- this is used to implement the case-of construct, as well as
     -- to allow multiple statements grouped as a single
     -- expression fitting into subclauses of if-then-else,
-    -- while, and for-from-do constructs.
+    -- while, for-from-do, and try-catch-finally etc.
     | BlockExpr ![StmtSrc]
 
     | ForExpr !ArgsReceiver !Expr !Expr

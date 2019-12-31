@@ -21,6 +21,7 @@ import           Language.Edh.Batteries.Data
 import           Language.Edh.Batteries.Math
 import           Language.Edh.Batteries.Assign
 import           Language.Edh.Batteries.Reflect
+import           Language.Edh.Batteries.Ctrl
 import           Language.Edh.Batteries.Runtime
 
 
@@ -146,6 +147,7 @@ installEdhBatteries world = liftIO $ do
     !rootOperators <- mapM
       (\(sym, hp) -> (AttrByName sym, ) <$> mkHostOper world sym hp)
       [ (":" , consProc)
+      , ("++", concatProc)
       , ("+" , addProc)
       , ("-" , subsProc)
       , ("*" , mulProc)
@@ -160,7 +162,7 @@ installEdhBatteries world = liftIO $ do
       , ("<" , isLtProc)
       , ("<=", isLeProc)
       , ("=" , assignProc)
-      , ("++", concatProc)
+      , ("->", branchProc)
       , ("<|", loggingProc)
       ]
 

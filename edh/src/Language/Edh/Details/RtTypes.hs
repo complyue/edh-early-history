@@ -111,13 +111,14 @@ data Context = Context {
     contextWorld :: !EdhWorld
     -- | the call stack frames of Edh procedures
     , callStack :: !(NonEmpty Scope)
-    -- | `that` object in context, the object triggering current
-    -- procedure call, it's the final descendent object when a
-    -- super method or constructor is in execution.
+    -- | the match target value in context, normally be `true`, or the
+    -- value from `x` in a `case x of` block
+    , contextMatch :: EdhValue
+    -- | currently executing statement
     , contextStmt :: !StmtSrc
   }
 instance Eq Context where
-  Context x'world x'stack x'ss == Context y'world y'stack y'ss =
+  Context x'world x'stack x'ss _ == Context y'world y'stack y'ss _ =
     x'world == y'world && x'stack == y'stack && x'ss == y'ss
 contextScope :: Context -> Scope
 contextScope = NE.head . callStack
@@ -238,28 +239,6 @@ instance Show GenrIter where
   show _ = "[iterator]"
 
 
--- | Pending evaluated statement, it can be later forced against a
--- target value in context.
---
--- Note: we rely on the 'CString' field (which is essentially a ptr),
---       for equality testing of thunks.
-data Thunk = Thunk {
-    thunkDescription :: !CString
-    , thunkValuator :: !(EdhValue -> IO EdhValue)
-  }
-instance Eq Thunk where
-  Thunk x'd _ == Thunk y'd _ = x'd == y'd
-instance Show Thunk where
-  show (Thunk d _) = "[thunk: " <> s <> "]"
-    where s = unsafePerformIO $ peekCString d
-mkThunk :: String -> (EdhValue -> IO EdhValue) -> IO Thunk
-mkThunk !desc !valuator = do
-  !s <- newCString desc
-  let !thk = Thunk s valuator
-  addFinalizer thk $ free s
-  return thk
-
-
 -- | A world for Edh programs to change
 data EdhWorld = EdhWorld {
     -- | root object of this world
@@ -358,8 +337,8 @@ type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
 getEdhErrorContext !pgs !msg =
-  let (Context _ !stack (StmtSrc (!sp, _))) = edh'context pgs
-      !frames                               = foldl'
+  let (Context _ !stack _ (StmtSrc (!sp, _))) = edh'context pgs
+      !frames = foldl'
         (\sfs (Scope _ _ _ (ProcDecl procName _ (StmtSrc (spos, _)))) ->
           (procName, T.pack (sourcePosPretty spos)) : sfs
         )
@@ -456,9 +435,6 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
   -- * pending evaluated code block
     | EdhBlock ![StmtSrc]
 
-  -- * harness for lazy evaluation
-    | EdhThunk !Thunk
-
   -- * host procedure callable from Edh world
     | EdhHostProc !HostProcedure
     | EdhHostOper !Precedence !HostProcedure
@@ -510,8 +486,6 @@ instance Show EdhValue where
     then "{;}" -- make it obvious this is an empty block
     else "{ " ++ concat [ show i ++ "; " | i <- v ] ++ "}"
 
-  show (EdhThunk    v) = show v
-
   show (EdhHostProc v) = show v
   show (EdhHostOper prec (HostProcedure pn _)) =
     "[hostop: (" ++ nm ++ ") " ++ show prec ++ " ]"
@@ -560,8 +534,6 @@ instance Eq EdhValue where
   EdhArgsPack x        == EdhArgsPack y        = x == y
 
   EdhBlock    x        == EdhBlock    y        = x == y
-
-  EdhThunk    x        == EdhThunk    y        = x == y
 
   EdhHostProc x        == EdhHostProc y        = x == y
   EdhHostOper _ x'proc == EdhHostOper _ y'proc = x'proc == y'proc
@@ -620,7 +592,6 @@ edhTypeOf (EdhPair _ _    ) = EdhType PairType
 edhTypeOf (EdhTuple    _  ) = EdhType TupleType
 edhTypeOf (EdhArgsPack _  ) = EdhType ArgsPackType
 edhTypeOf (EdhBlock    _  ) = EdhType BlockType
-edhTypeOf (EdhThunk    _  ) = EdhType ThunkType
 edhTypeOf (EdhHostProc _  ) = EdhType HostProcType
 edhTypeOf (EdhHostOper _ _) = EdhType HostOperType
 edhTypeOf (EdhClass    _  ) = EdhType ClassType

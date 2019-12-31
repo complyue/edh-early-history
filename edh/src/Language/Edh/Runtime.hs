@@ -62,6 +62,7 @@ runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
 moduleContext :: EdhWorld -> Object -> Context
 moduleContext !w !mo = Context { contextWorld = w
                                , callStack    = moduScope <| rootScope
+                               , contextMatch = true
                                , contextStmt  = voidStatement
                                }
  where

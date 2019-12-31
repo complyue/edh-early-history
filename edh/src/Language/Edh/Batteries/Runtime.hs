@@ -25,7 +25,7 @@ loggingProc :: EdhProcedure
 loggingProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit
   = do
     !pgs <- ask
-    let !callerCtx@(Context !world _ (StmtSrc (srcPos, _))) = edh'context pgs
+    let !callerCtx@(Context !world _ _ (StmtSrc (srcPos, _))) = edh'context pgs
         !callerScope = contextScope callerCtx
     evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
       EdhDecimal (Decimal d e n) | d == 1 -> contEdhSTM $ do
