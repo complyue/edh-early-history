@@ -638,20 +638,29 @@ false
 Scope capturing and manipulation
 
 ```haskell
-Đ: method f(n) { m = n*3; scope() }
-[method: f]
-Đ: s = f(3)
-[object: <scope>]
-Đ: s.attrs()
-{ "m":9, "n":3, }
-Đ: s.eval(makeExpr(m/n))
-3
-Đ: s.eval(makeExpr( (g=n/m) ))
-1/3
-Đ: s.attrs()
-{ "g":1/3, "m":9, "n":3, }
-Đ: s.g
-1/3
+Đ: {
+Đ|   1:   method f(n) {
+Đ|   2:     method g(m) {
+Đ|   3:       scope()
+Đ|   4:     }
+Đ|   5:     return (scope(), g(5))
+Đ|   6:   }
+Đ|   7:
+Đ|   8:   let (s1, s2) = (*f(3))
+Đ|   9: }
+Đ:
+Đ: s1.attrs()
+{ "g":[method: g], "n":3, }
+Đ: s2.attrs()
+{ "m":5, }
+Đ: s2.eval(makeExpr(m/n))
+5/3
+Đ: s2.eval(makeExpr( (t=n/m) ))
+3/5
+Đ: s2.attrs()
+{ "m":5, "t":3/5, }
+Đ: s2.t
+3/5
 Đ:
 ```
 
