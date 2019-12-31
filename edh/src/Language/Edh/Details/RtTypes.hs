@@ -158,8 +158,13 @@ data Scope = Scope {
 instance Eq Scope where
   Scope x'e _ _ x'p == Scope y'e _ _ y'p = x'e == y'e && x'p == y'p
 instance Show Scope where
-  show (Scope _ _ _ (ProcDecl pName _ (StmtSrc (!srcPos, _)))) =
-    "[scope: " ++ T.unpack pName ++ " @ " ++ sourcePosPretty srcPos ++ "]"
+  show (Scope _ _ _ (ProcDecl pName argsRcvr (StmtSrc (!srcPos, _)))) =
+    "["
+      ++ T.unpack pName
+      ++ show argsRcvr
+      ++ " @ "
+      ++ sourcePosPretty srcPos
+      ++ "]"
 
 
 -- | An object views an entity, with inheritance relationship 

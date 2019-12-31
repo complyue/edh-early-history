@@ -64,9 +64,9 @@ doPrint = \case
     EdhUsageError _ -> do
       outputStrLn "* 🙈 *"
       outputStrLn $ show err
-  Right o -> case o of
+  Right val -> case val of
     EdhNil -> return ()
-    _      -> outputStrLn $ show o
+    _      -> outputStrLn $ T.unpack $ edhValueStr val
 
 
 doLoop :: EdhWorld -> Object -> InputT IO ()

@@ -121,6 +121,27 @@ scopeAttrsProc _ !that _ !exit = do
   itemKeyOf (AttrBySym  sym ) = ItemBySym sym
 
 
+-- | utility scope.traceback()
+-- get stack trace from the wrapped scope
+scopeTraceBackProc :: EdhProcedure
+scopeTraceBackProc _ !that _ !exit = do
+  !pgs <- ask
+  let callerCtx = edh'context pgs
+      scopesShown =
+        show
+              -- the world scope at bottom of any lexical stack has empty
+              -- lexical stack itself, and is of no interest
+          <$> (NE.takeWhile (not . null . lexiStack) $ classLexiStack $ objClass
+                that
+              )
+  exitEdhProc
+    exit
+    ( that
+    , contextScope callerCtx
+    , EdhString $ T.pack $ unlines $ reverse scopesShown
+    )
+
+
 -- | utility scope.stack()
 -- get lexical context from the wrapped scope
 scopeStackProc :: EdhProcedure
@@ -131,8 +152,8 @@ scopeStackProc _ !that _ !exit = do
     wrappedObjs <-
       sequence
       $   mkScopeWrapper world
-      -- the world scope at bottom of any lexical stack has empty lexical stack
-      -- itself, and is not to be wrapped
+      -- the world scope at bottom of any lexical stack has empty
+      -- lexical stack itself, and is of no interest
       <$> (NE.takeWhile (not . null . lexiStack) $ classLexiStack $ objClass
             that
           )

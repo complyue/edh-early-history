@@ -5,6 +5,7 @@ module Language.Edh.AST where
 import           Prelude
 
 import           Data.Text                      ( Text )
+import qualified Data.Text                     as T
 
 import           Data.Lossless.Decimal          ( Decimal )
 
@@ -68,12 +69,22 @@ data AttrAddr = ThisRef | ThatRef
 data ArgsReceiver = PackReceiver ![ArgReceiver]
     | SingleReceiver !ArgReceiver
     | WildReceiver
-  deriving (Eq, Show)
+  deriving (Eq)
+instance Show ArgsReceiver where
+  show (PackReceiver   rs) = "( " ++ unwords ((++ ", ") . show <$> rs) ++ ")"
+  show (SingleReceiver r ) = "(" ++ show r ++ ")"
+  show WildReceiver        = " * "
+
 data ArgReceiver = RecvRestPosArgs !AttrName
     | RecvRestKwArgs !AttrName
     | RecvRestPkArgs !AttrName
     | RecvArg !AttrName !(Maybe AttrAddr) !(Maybe Expr)
-  deriving (Eq, Show)
+  deriving (Eq)
+instance Show ArgReceiver where
+  show (RecvRestPosArgs nm) = "*" ++ T.unpack nm
+  show (RecvRestKwArgs  nm) = "**" ++ T.unpack nm
+  show (RecvRestPkArgs  nm) = "***" ++ T.unpack nm
+  show (RecvArg nm _ _    ) = T.unpack nm
 
 data ArgsSender = PackSender ![ArgSender]
     | SingleSender !ArgSender

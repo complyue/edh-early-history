@@ -52,13 +52,14 @@ installEdhBatteries world = liftIO $ atomically $ do
     -- comparations
     , ( "~="
       , 4
-      ) -- value-wise equality test
+      ) -- ^ deep-value-wise equality test
     , ( "=="
       , 4
-      ) -- identity-wise equality test
+      ) -- ^ identity-wise equality test
     , ( "!="
       , 4
-      ) -- C style here, as (/=) is used for inplace division
+      ) -- ^ inversed identity-wise equality test
+        -- C style here, as (/=) is used for inplace division
     , (">" , 4)
     , (">=", 4)
     , ("<" , 4)
@@ -82,7 +83,7 @@ installEdhBatteries world = liftIO $ atomically $ do
       , 2
       ) -- ^ why brittany insists on formatting it like this ?.?
 
-      -- comprehension
+      -- | comprehension
       --  * list comprehension:
       --     [] =< for x from range(100) do x*x
       --  * dict comprehension:
@@ -92,20 +93,20 @@ installEdhBatteries world = liftIO $ atomically $ do
     , ( "=<"
       , 3
       ) -- ^ why brittany insists on formatting it like this ?.?
-      -- prepand to list
+      -- | prepand to list
       --     l = [3,7,5]
       --     [2,9] => l
     , ( "=>"
       , 3
       )
 
-      -- publish to sink
+      -- | publish to sink
       --     evsPub <- outEvent
     , ( "<-"
       , 5
       )
 
-      -- case branch (| guard is a hardcoded prefix operator)
+      -- | case branch (| guard is a hardcoded prefix operator)
       --    let essay = case type(v) of (
       --       BoolType -> "to be or not to be, that's a problem"
       --       DecimalType -> (
@@ -122,7 +123,7 @@ installEdhBatteries world = liftIO $ atomically $ do
       , 1
       )
 
-      -- string coercing concatenation
+      -- | string coercing concatenation
     , ("++", 5)
     ]
 
@@ -175,9 +176,10 @@ installEdhBatteries world = liftIO $ atomically $ do
 
   !scopeMethods <- mapM
     (\(sym, hp) -> (AttrByName sym, ) <$> mkHostProc sym hp)
-    [ ("eval" , scopeEvalProc)
-    , ("attrs", scopeAttrsProc)
-    , ("stack", scopeStackProc)
+    [ ("eval"     , scopeEvalProc)
+    , ("attrs"    , scopeAttrsProc)
+    , ("traceback", scopeTraceBackProc)
+    , ("stack"    , scopeStackProc)
     ]
 
   installEdhAttrs scopeManiMethods scopeMethods

@@ -660,11 +660,13 @@ Scope capturing and manipulation
 Đ|   5:     return (scope(), g(5))
 Đ|   6:   }
 Đ|   7: }
+[method: f]
 Đ: let (s1, s2) = (*f(3))
-Đ: s1
-[object: <scope>]
-Đ: type(s1)
-ObjectType
+Đ: s2.traceback()
+[<module> *  @ <Genesis>:1:1]
+[f( n, ) @ <interactive>:1:15]
+[g( m, ) @ <interactive>:2:17]
+
 Đ: s1.attrs()
 { "g":[method: g], "n":3, }
 Đ: s2.attrs()
