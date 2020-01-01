@@ -19,8 +19,8 @@ branchProc :: EdhProcedure
 branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
   do
     !pgs <- ask
-    let !callerCtx@(Context _ _ !ctxMatch _) = edh'context pgs
-        !callerScope                         = contextScope callerCtx
+    let !callerCtx@(Context _ _ _ !ctxMatch _) = edh'context pgs
+        !callerScope                           = contextScope callerCtx
     case lhExpr of
       PrefixExpr Guard guardedExpr ->
         evalExpr that guardedExpr $ \(_, _, predValue) -> if predValue /= true

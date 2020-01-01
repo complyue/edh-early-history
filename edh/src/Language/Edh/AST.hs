@@ -56,7 +56,6 @@ data Stmt = VoidStmt
         , try'finally :: !(Maybe StmtSrc)
         }
     | ThrowStmt !Expr
-    | YieldStmt !Expr
     | ReturnStmt !Expr
     | ExprStmt !Expr
   deriving (Eq, Show)
@@ -136,6 +135,7 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
     -- while, for-from-do, and try-catch-finally etc.
     | BlockExpr ![StmtSrc]
 
+    | YieldExpr !Expr
     | ForExpr !ArgsReceiver !Expr !Expr
 
     | AttrExpr !AttrAddr

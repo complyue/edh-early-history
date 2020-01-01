@@ -5,6 +5,7 @@ import           Prelude
 
 import           GHC.Conc                       ( unsafeIOToSTM )
 
+import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Reader
 
@@ -112,6 +113,8 @@ data Context = Context {
     contextWorld :: !EdhWorld
     -- | the call stack frames of Edh procedures
     , callStack :: !(NonEmpty Scope)
+    -- | the direct generator caller
+    , generatorCaller :: !(Maybe EdhGenrCaller)
     -- | the match target value in context, normally be `true`, or the
     -- value from `x` in a `case x of` block
     , contextMatch :: EdhValue
@@ -119,10 +122,17 @@ data Context = Context {
     , contextStmt :: !StmtSrc
   }
 instance Eq Context where
-  Context x'world x'stack x'ss _ == Context y'world y'stack y'ss _ =
+  Context x'world x'stack _ _ x'ss == Context y'world y'stack _ _ y'ss =
     x'world == y'world && x'stack == y'stack && x'ss == y'ss
 contextScope :: Context -> Scope
 contextScope = NE.head . callStack
+
+type EdhGenrCaller
+  = (  EdhProgState
+    ,  (Object, Scope, EdhValue)
+    -> ((Object, Scope, EdhValue) -> STM ())
+    -> EdhProg (STM ())
+    )
 
 
 -- Especially note that Edh has no block scope as in C
@@ -234,12 +244,6 @@ instance Show GenrDef where
   show (GenrDef _ (ProcDecl mn _ _)) = "[generator: " ++ T.unpack mn ++ "]"
 
 
-newtype GenrIter = GenrIter Context
-  deriving (Eq)
-instance Show GenrIter where
-  show _ = "[iterator]"
-
-
 -- | A world for Edh programs to change
 data EdhWorld = EdhWorld {
     -- | root object of this world
@@ -338,7 +342,7 @@ type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
 getEdhErrorContext !pgs !msg =
-  let (Context _ !stack _ (StmtSrc (!sp, _))) = edh'context pgs
+  let (Context _ !stack _ _ (StmtSrc (!sp, _))) = edh'context pgs
       !frames = foldl'
         (\sfs (Scope _ _ _ (ProcDecl procName _ (StmtSrc (spos, _)))) ->
           (procName, T.pack (sourcePosPretty spos)) : sfs
@@ -348,6 +352,19 @@ getEdhErrorContext !pgs !msg =
         $ NE.toList stack
         )
   in  EdhErrorContext msg (T.pack $ sourcePosPretty sp) frames
+
+-- | Throw from an Edh program, be cautious NOT to have any monadic action
+-- following such a throw, or it'll silently fail to work out.
+throwEdh :: Exception e => (EdhErrorContext -> e) -> Text -> EdhProg (STM ())
+throwEdh !excCtor !msg = do
+  !pgs <- ask
+  return $ throwSTM (excCtor $ getEdhErrorContext pgs msg)
+
+-- | Throw from the stm operation of an Edh program.
+throwEdhFromSTM
+  :: Exception e => EdhProgState -> (EdhErrorContext -> e) -> Text -> STM a
+throwEdhFromSTM pgs !excCtor !msg =
+  throwSTM (excCtor $ getEdhErrorContext pgs msg)
 
 
 -- | A pack of evaluated argument values with positional/keyword origin,
@@ -449,7 +466,6 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
   -- * flow control
     | EdhBreak | EdhContinue
     | EdhCaseClose !EdhValue | EdhFallthrough
-    | EdhGenrIter !GenrIter
     | EdhYield !EdhValue
     | EdhReturn !EdhValue
 
@@ -502,13 +518,12 @@ instance Show EdhValue where
   show EdhContinue      = "[continue]"
   show (EdhCaseClose v) = "[caseclose: " ++ show v ++ "]"
   show EdhFallthrough   = "[fallthrough]"
-  show (EdhGenrIter i)  = show i
-  show (EdhYield    v)  = "[yield: " ++ show v ++ "]"
-  show (EdhReturn   v)  = "[return: " ++ show v ++ "]"
+  show (EdhYield  v)    = "[yield: " ++ show v ++ "]"
+  show (EdhReturn v)    = "[return: " ++ show v ++ "]"
 
-  show (EdhSink     v)  = show v
+  show (EdhSink   v)    = show v
 
-  show (EdhExpr     v)  = "[expr: " ++ show v ++ "]"
+  show (EdhExpr   v)    = "[expr: " ++ show v ++ "]"
 
 -- Note:
 --
@@ -548,14 +563,13 @@ instance Eq EdhValue where
   EdhContinue          == EdhContinue          = True
   EdhCaseClose x       == EdhCaseClose y       = x == y
   EdhFallthrough       == EdhFallthrough       = True
-  EdhGenrIter x        == EdhGenrIter y        = x == y
 -- todo: regard a yielded/returned value equal to the value itself ?
-  EdhYield    x'v      == EdhYield    y'v      = x'v == y'v
-  EdhReturn   x'v      == EdhReturn   y'v      = x'v == y'v
+  EdhYield  x'v        == EdhYield  y'v        = x'v == y'v
+  EdhReturn x'v        == EdhReturn y'v        = x'v == y'v
 
-  EdhSink     x        == EdhSink     y        = x == y
+  EdhSink   x          == EdhSink   y          = x == y
 
-  EdhExpr     x'v      == EdhExpr     y'v      = x'v == y'v
+  EdhExpr   x'v        == EdhExpr   y'v        = x'v == y'v
 
 -- todo: support coercing equality ?
 --       * without this, we are a strongly typed dynamic language
@@ -604,12 +618,11 @@ edhTypeOf EdhBreak          = EdhType FlowCtrlType
 edhTypeOf EdhContinue       = EdhType FlowCtrlType
 edhTypeOf (EdhCaseClose _)  = EdhType FlowCtrlType
 edhTypeOf EdhFallthrough    = EdhType FlowCtrlType
-edhTypeOf (EdhGenrIter _)   = EdhType FlowCtrlType
-edhTypeOf (EdhYield    _)   = EdhType FlowCtrlType
-edhTypeOf (EdhReturn   _)   = EdhType FlowCtrlType
+edhTypeOf (EdhYield  _)     = EdhType FlowCtrlType
+edhTypeOf (EdhReturn _)     = EdhType FlowCtrlType
 
-edhTypeOf (EdhSink     _)   = EdhType SinkType
-edhTypeOf (EdhExpr     _)   = EdhType ExprType
+edhTypeOf (EdhSink   _)     = EdhType SinkType
+edhTypeOf (EdhExpr   _)     = EdhType ExprType
 
-edhTypeOf (EdhType     _)   = EdhType TypeType
+edhTypeOf (EdhType   _)     = EdhType TypeType
 

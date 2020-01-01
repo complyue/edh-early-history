@@ -60,10 +60,11 @@ runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
 
 
 moduleContext :: EdhWorld -> Object -> Context
-moduleContext !w !mo = Context { contextWorld = w
-                               , callStack    = moduScope <| rootScope
-                               , contextMatch = true
-                               , contextStmt  = voidStatement
+moduleContext !w !mo = Context { contextWorld    = w
+                               , callStack       = moduScope <| rootScope
+                               , generatorCaller = Nothing
+                               , contextMatch    = true
+                               , contextStmt     = voidStatement
                                }
  where
   !moduScope = Scope (objEntity mo)
@@ -77,17 +78,10 @@ runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
 runEdhProgram' _    []     = return $ Right EdhNil
 runEdhProgram' !ctx !stmts = do
   !final <- newEmptyTMVarIO
-  let
-    !scope@(Scope _ this _ _) = contextScope ctx
-    wrapper :: EdhProg (STM ())
-    wrapper = do
-      let evalStmts :: SeqStmts -> EdhProcExit -> EdhProg (STM ())
-          evalStmts []       exit = exit (this, scope, nil)
-          evalStmts [s     ] exit = evalStmt this s exit
-          evalStmts (s : rs) exit = evalStmt this s (const $ evalStmts rs exit)
-      evalStmts stmts $ \(_, _, !val) -> return $ putTMVar final val
+  let !(Scope _ !this _ _) = contextScope ctx
   tryJust Just $ do
-    driveEdhProg ctx wrapper
+    driveEdhProg ctx $ evalBlock this stmts $ \(_, _, !val) ->
+      return $ putTMVar final val
     atomically $ readTMVar final
 
 

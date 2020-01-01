@@ -66,7 +66,7 @@ attrTemptProc !argsSender _ _ _ =
 symbolCtorProc :: EdhProcedure
 symbolCtorProc !argsSender that _ !exit = do
   !pgs <- ask
-  let !callerCtx@(Context _ _ _ (StmtSrc (srcPos, _))) = edh'context pgs
+  let !callerCtx@(Context _ _ _ _ (StmtSrc (srcPos, _))) = edh'context pgs
       !callerScope = contextScope callerCtx
   packEdhArgs that argsSender
     $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> contEdhSTM $ do

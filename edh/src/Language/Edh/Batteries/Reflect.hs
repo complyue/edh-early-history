@@ -88,8 +88,8 @@ supersProc !argsSender that _ !exit = do
 scopeObtainProc :: EdhProcedure
 scopeObtainProc _ !that _ !exit = do
   !pgs <- ask
-  let (Context !world !call'stack _ _) = edh'context pgs
-      !scope                           = NE.head call'stack
+  let (Context !world !call'stack _ _ _) = edh'context pgs
+      !scope                             = NE.head call'stack
   contEdhSTM $ do
     wrapperObj <- mkScopeWrapper world scope
     exitEdhSTM pgs
@@ -147,7 +147,7 @@ scopeTraceBackProc _ !that _ !exit = do
 scopeStackProc :: EdhProcedure
 scopeStackProc _ !that _ !exit = do
   !pgs <- ask
-  let callerCtx@(Context !world _ _ _) = edh'context pgs
+  let callerCtx@(Context !world _ _ _ _) = edh'context pgs
   contEdhSTM $ do
     wrappedObjs <-
       sequence
@@ -169,8 +169,8 @@ scopeEvalProc :: EdhProcedure
 scopeEvalProc !argsSender !that _ !exit = do
   !pgs <- ask
   let
-    callerCtx@(Context !world _ _ _) = edh'context pgs
-    callerScope                      = contextScope $ callerCtx
+    callerCtx@(Context !world _ _ _ _) = edh'context pgs
+    callerScope                        = contextScope $ callerCtx
     evalThePack
       :: [EdhValue]
       -> Map.Map AttrName EdhValue
@@ -213,10 +213,11 @@ scopeEvalProc !argsSender !that _ !exit = do
               -- eval all exprs with the original lexical scope as call stack
               runEdhProg pgs
                 { edh'context = Context
-                                  { contextWorld = world
+                                  { contextWorld    = world
                                   , callStack = (classLexiStack $ objClass that)
-                                  , contextMatch = true
-                                  , contextStmt  = voidStatement
+                                  , generatorCaller = Nothing
+                                  , contextMatch    = true
+                                  , contextStmt     = voidStatement
                                   }
                 }
             $ evalThePack [] Map.empty args kwargs

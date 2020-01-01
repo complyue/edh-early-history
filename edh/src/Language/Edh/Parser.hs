@@ -284,11 +284,6 @@ parseTryStmt = do
     recov <- parseStmt
     return (excClass, an, recov)
 
-parseYieldStmt :: Parser Stmt
-parseYieldStmt = do
-  void $ symbol "yield"
-  YieldStmt <$> parseExpr
-
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
   void $ symbol "return"
@@ -321,7 +316,6 @@ parseStmt = do
           , parseOpDeclOvrdStmt
           , parseTryStmt
     -- TODO validate yield must within a generator procedure
-          , parseYieldStmt
           , parseReturnStmt
           , parseThrowStmt
           , parseVoidStmt
@@ -347,6 +341,11 @@ parseCaseExpr = do
   tgt <- parseExpr
   void $ symbol "of"
   CaseExpr tgt <$> parseStmt
+
+parseYieldExpr :: Parser Expr
+parseYieldExpr = do
+  void $ symbol "yield"
+  YieldExpr <$> parseExpr
 
 parseForExpr :: Parser Expr
 parseForExpr = do
@@ -543,6 +542,7 @@ parseExprPrec :: Precedence -> Parser Expr
 parseExprPrec prec =
   choice
       [ parsePrefixExpr
+      , parseYieldExpr
       , parseForExpr
       , parseIfExpr
       , parseCaseExpr

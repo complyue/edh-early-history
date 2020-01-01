@@ -50,7 +50,6 @@ module Language.Edh.EHI
   , Object
   , Class
   , Method
-  , GenrIter
     -- ** World changing tools
   , declareEdhOperators
   , installEdhAttrs
