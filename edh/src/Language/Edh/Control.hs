@@ -59,6 +59,6 @@ instance Show InterpretError where
       (\st (pname, ploc) -> st <> "\n📜 " <> pname <> " 🔎 " <> ploc)
       ("💔" :: Text)
       stack
-  show (EdhUsageError (UsageError msg)) = "🔮 " ++ T.unpack msg
+  show (EdhUsageError (UsageError msg)) = "🐒 " ++ T.unpack msg
 instance Exception InterpretError
 
