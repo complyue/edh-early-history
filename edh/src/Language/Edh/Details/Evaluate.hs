@@ -466,8 +466,6 @@ evalExpr that expr exit = do
             <> T.pack (show val)
       _ -> evalExpr that iterExpr $ \case
         (_, _, EdhSink evs     ) -> undefined
-        (_, _, EdhArgsPack pk  ) -> undefined
-        (_, _, EdhPair lhv rhv ) -> undefined
         (_, _, EdhTuple vs     ) -> undefined
         (_, _, EdhList (List l)) -> undefined
         (_, _, EdhDict (Dict d)) -> undefined
@@ -1013,6 +1011,13 @@ packEdhArgs' !that (!x : xs) !exit = do
   !pgs <- ask
   let !ctx   = edh'context pgs
       !scope = contextScope ctx
+      edhVal2Kw :: EdhValue -> STM AttrName
+      edhVal2Kw = \case
+        EdhString s -> return s
+        k ->
+          throwEdhFromSTM pgs EvalError
+            $  "Invalid argument keyword from value: "
+            <> T.pack (show k)
       dictKey2Kw :: ItemKey -> STM AttrName
       dictKey2Kw = \case
         ItemByStr !name -> return name
@@ -1026,6 +1031,11 @@ packEdhArgs' !that (!x : xs) !exit = do
         packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
           EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exit
             (that, scope, EdhArgsPack (ArgsPack (posArgs ++ posArgs') kwArgs))
+          _ -> error "bug"
+      (_, _, EdhPair !k !v) -> packEdhArgs' that xs $ \(_, _, !pk) ->
+        case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> exit
+            (that, scope, EdhArgsPack (ArgsPack (posArgs ++ [k, v]) kwArgs))
           _ -> error "bug"
       (_, _, EdhTuple !l) -> packEdhArgs' that xs $ \(_, _, !pk) -> case pk of
         EdhArgsPack (ArgsPack !posArgs !kwArgs) ->
@@ -1049,6 +1059,17 @@ packEdhArgs' !that (!x : xs) !exit = do
               , scope
               , EdhArgsPack (ArgsPack posArgs (Map.union kwArgs kwArgs'))
               )
+          _ -> error "bug"
+      (_, _, EdhPair !k !v) -> packEdhArgs' that xs $ \(_, _, !pk) ->
+        case pk of
+          EdhArgsPack (ArgsPack !posArgs !kwArgs) -> contEdhSTM $ do
+            kw <- edhVal2Kw k
+            runEdhProg pgs
+              $ exit
+                  ( that
+                  , scope
+                  , EdhArgsPack (ArgsPack posArgs $ Map.insert kw v kwArgs)
+                  )
           _ -> error "bug"
       (_, _, EdhDict (Dict !ds)) -> packEdhArgs' that xs $ \(_, _, !pk) ->
         case pk of
