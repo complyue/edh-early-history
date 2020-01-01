@@ -44,3 +44,22 @@ for n from range(10, 5, 2) do runtime.info <| ' ** iter # ' ++ n
 generator g * { for n from range(5) do yield pkargs(1,2,3,m=n+1) }
 for (a,m,b,c) from g() do 20 <| (a,b,c,m)
 
+
+{
+  generator enumerate(g, ***gargs) {
+    n = 0
+    case type(g) of {
+      GeneratorType -> for i from g(***gargs) do {
+        yield pkargs(n, i)
+        n += 1
+      }
+      ;|true -> for i from g do {
+        yield pkargs(n, i)
+        n += 1
+      }
+    }
+  }
+}
+
+for (i, n) from enumerate(range, 5) do runtime.info <| ' # ' ++ i ++ ' >> ' ++ n
+
