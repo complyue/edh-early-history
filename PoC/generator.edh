@@ -39,3 +39,8 @@ for n from range(10, 5, -2) do runtime.info <| ' ** iter # ' ++ n
 for n from range(5, 10, -2) do runtime.info <| ' ** iter # ' ++ n
 
 for n from range(10, 5, 2) do runtime.info <| ' ** iter # ' ++ n
+
+
+generator g * { for n from range(5) do yield pkargs(1,2,3,m=n+1) }
+for (a,m,b,c) from g() do 20 <| (a,b,c,m)
+
