@@ -35,3 +35,7 @@ for n from range(5, 10, 2) do runtime.info <| ' ** iter # ' ++ n
 
 for n from range(10, 5, -2) do runtime.info <| ' ** iter # ' ++ n
 
+
+for n from range(5, 10, -2) do runtime.info <| ' ** iter # ' ++ n
+
+for n from range(10, 5, 2) do runtime.info <| ' ** iter # ' ++ n
