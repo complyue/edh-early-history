@@ -48,22 +48,24 @@ evalBlock that [] !exit = do
   -- empty block evals to nil
   exitEdhProc exit (that, scope, nil)
 evalBlock that [!ss] !exit = evalStmt that ss $ \result -> case result of
-    -- last branch does match
+  -- last branch does match
   (!this', !scope', EdhCaseClose !val) -> exitEdhProc exit (this', scope', val)
-  -- pass end-of-block without match, should propagate upwards for the outer
-  -- block's sake
-  (!this', !scope', EdhFallthrough) ->
-    exitEdhProc exit (this', scope', EdhFallthrough)
+  -- pass end-of-block without match, give out nil
+  (!this', !scope', EdhFallthrough) -> exitEdhProc exit (this', scope', nil)
+  -- ctrl to be propagated outwards
+  brk@(_, _, EdhBreak) -> exitEdhProc exit brk
+  ctn@(_, _, EdhContinue) -> exitEdhProc exit ctn
+  rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
   -- yield should have been handled by 'evalExpr'
   (_, _, EdhYield _) -> throwEdh EvalError "bug yield reached block"
   -- last stmt no special branching result, propagate as is
-  _                  -> exitEdhProc exit result
+  _ -> exitEdhProc exit result
 evalBlock that (ss : rest) !exit = evalStmt that ss $ \result -> case result of
   -- this branch matches without fallthrough, done this block
   (!this', !scope', EdhCaseClose !val) -> exitEdhProc exit (this', scope', val)
   -- should fallthrough to next branch (or stmt)
   (_, _, EdhFallthrough) -> evalBlock that rest exit
-  -- ctrl to be propagated upwards
+  -- ctrl to be propagated outwards
   brk@(_, _, EdhBreak) -> exitEdhProc exit brk
   ctn@(_, _, EdhContinue) -> exitEdhProc exit ctn
   rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
@@ -122,7 +124,15 @@ evalStmt' that stmt exit = do
     ReturnStmt expr -> evalExpr that expr $ \(this', scope', !val) ->
       exitEdhProc exit (this', scope', EdhReturn val)
 
-    ClassStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
+    -- TryStmt truncBody catches finallyBody -> undefined
+
+    -- ThrowStmt excExpr                     -> undefined
+
+    WhileStmt cndExpr bodyStmt         -> undefined
+
+    ExtendsStmt superExpr              -> undefined
+
+    ClassStmt   pd@(ProcDecl name _ _) -> contEdhSTM $ do
       let
         !cls =
           EdhClass $ Class { classLexiStack = call'stack, classProcedure = pd }
@@ -183,7 +193,6 @@ evalStmt' that stmt exit = do
 
     VoidStmt -> exitEdhProc exit (this, scope, nil)
 
-    -- TODO comment out this once `case stmt` get total
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
 
 
@@ -336,27 +345,53 @@ evalExpr that expr exit = do
                               :: (Object, Scope, EdhValue)
                               -> ((Object, Scope, EdhValue) -> STM ())
                               -> EdhProg (STM ())
-                            recvYield (_, _, yieldedVal) exit' =
-                              recvEdhArgs
-
-                                  argsRcvr
-                                  (case yieldedVal of
-                                    EdhArgsPack pk' -> pk'
-                                    _ -> ArgsPack [yieldedVal] Map.empty
-                                  )
-                                $ \(_, _, scopeObj') -> case scopeObj' of
-                                    EdhObject (Object rcvd'ent' rcvd'cls' _)
-                                      | rcvd'cls'
-                                        == (objClass $ scopeSuper world) -> contEdhSTM
-                                      $ do
-                                          recvYield'em <- readTVar rcvd'ent'
-                                          modifyTVar' ent
-                                            $ Map.union recvYield'em
-                                          runEdhProg pgs
-                                            $ evalExpr that' doExpr
-                                            $ \doResult ->
-                                                contEdhSTM $ exit' doResult
-                                    _ -> error "bug"
+                            recvYield (_, _, yielded'val) exit' =
+                              case yielded'val of
+                                EdhContinue -> throwEdh
+                                  EvalError
+                                  "Unexpected continue from generator"
+                                EdhBreak -> throwEdh
+                                  EvalError
+                                  "Unexpected break from generator"
+                                _ ->
+                                  recvEdhArgs
+                                      argsRcvr
+                                      (case yielded'val of
+                                        EdhArgsPack pk' -> pk'
+                                        _ -> ArgsPack [yielded'val] Map.empty
+                                      )
+                                    $ \(_, _, scopeObj') -> case scopeObj' of
+                                        EdhObject (Object rcvd'ent' rcvd'cls' _)
+                                          | rcvd'cls'
+                                            == (objClass $ scopeSuper world) -> contEdhSTM
+                                          $ do
+                                              recvYield'em <- readTVar
+                                                rcvd'ent'
+                                              modifyTVar' ent
+                                                $ Map.union recvYield'em
+                                              runEdhProg pgs
+                                                $ evalExpr that' doExpr
+                                                $ \case
+                                                    ctn@(_, _, EdhContinue)
+                                                      ->
+                                                -- propagate the continue to generator
+                                                         contEdhSTM
+                                                      $  exit' ctn
+                                                    (that'', scope'', EdhBreak)
+                                                      ->
+                                                -- early stop the for-from-do with nil result
+                                                         exitEdhProc
+                                                        exit
+                                                        (that'', scope'', nil)
+                                                    rtn@(_, _, EdhReturn _)
+                                                      ->
+                                                -- early return from for-from-do
+                                                         exitEdhProc exit rtn
+                                                    doResult ->
+                                                -- normal result from do, send to generator
+                                                                contEdhSTM
+                                                      $ exit' doResult
+                                        _ -> error "bug"
                         -- use direct containing object of the method as `this` in its
                         -- procedure execution
                           local
@@ -381,19 +416,23 @@ evalExpr that expr exit = do
                           -- use the resolution target object as `that` in execution of 
                           -- the method procedure
                             $ evalStmt that' gnr'body
-                            $ \(_, _, gnrRtn) ->
+                            $ \(that'', scope'', gnrRtn) ->
                                 -- restore previous context after method returned
-                                                 local (const pgs) $ exitEdhProc
-                                exit
-                                ( that'
-                                , scope
-                                , case gnrRtn of
+                                local (const pgs) $ case gnrRtn of
+                                  EdhReturn rtnVal ->
                                   -- explicit return
-                                  EdhReturn rtnVal -> rtnVal
+                                    exitEdhProc exit (that'', scope'', rtnVal)
+                                  EdhContinue ->
+                                    throwEdh EvalError "Unexpected continue"
+                                  EdhBreak ->
+                                    -- allows use of `break` to early stop the generator
+                                    -- procedure with nil result
+                                    exitEdhProc exit (that', scope, nil)
+                                  _ ->
                                   -- no explicit return, assuming it returns the last
                                   -- value from procedure execution
-                                  _                -> gnrRtn
-                                )
+                                    exitEdhProc exit (that'', scope'', gnrRtn)
+
                       _ -> error "bug"
                 _ -> error "bug"
         (_, _, val) ->
@@ -490,18 +529,24 @@ evalExpr that expr exit = do
                              , edh'in'tx   = edh'in'tx pgs
                              }
                            $ evalStmt that' proc'body
-                           $ \(_, _, ctorRtn) ->
-                             -- restore previous context after ctor returned 
+                           $ \(that'', scope'', ctorRtn) ->
+                            -- restore previous context after ctor returned 
                                local (const pgs) $ case ctorRtn of
-                             -- allow a class procedure to explicitly return other
-                             -- value than newly constructed `this` object
-                             -- it can still `return this to early stop the ctor proc
-                             -- this is magically an advanced feature
+                            -- allow a class procedure to explicitly return other
+                            -- value than newly constructed `this` object
+                            -- it can still `return this to early stop the ctor proc
+                            -- this is magically an advanced feature
                                  EdhReturn rtnVal ->
-                                   exitEdhProc exit (this, scope, rtnVal)
-                               -- no explicit return from class procedure, return the
-                               -- newly constructed this object, throw away the last
-                               -- value from the procedure execution
+                                   exitEdhProc exit (that'', scope'', rtnVal)
+                                 EdhContinue ->
+                                   throwEdh EvalError "Unexpected continue"
+                            -- allow the use of `break` to early stop a constructor 
+                            -- procedure with nil result
+                                 EdhBreak ->
+                                   exitEdhProc exit (that'', scope'', nil)
+                            -- no explicit return from class procedure, return the
+                            -- newly constructed this object, throw away the last
+                            -- value from the procedure execution
                                  _ -> exitEdhProc
                                    exit
                                    (this, scope, EdhObject newThis)
@@ -544,19 +589,20 @@ evalExpr that expr exit = do
                         -- use the resolution target object as `that` in execution of 
                         -- the method procedure
                       $ evalStmt that' mth'body
-                      $ \(_, _, mthRtn) ->
+                      $ \(that'', scope'', mthRtn) ->
                           -- restore previous context after method returned
-                                           local (const pgs) $ exitEdhProc
-                          exit
-                          ( that'
-                          , scope
-                          , case mthRtn of
+                          local (const pgs) $ case mthRtn of
+                            EdhContinue ->
+                              throwEdh EvalError "Unexpected continue"
+                            -- allow the use of `break` to early stop a method 
+                            -- procedure with nil result
+                            EdhBreak -> exitEdhProc exit (that', scope, nil)
                             -- explicit return
-                            EdhReturn rtnVal -> rtnVal
+                            EdhReturn rtnVal ->
+                              exitEdhProc exit (that'', scope'', rtnVal)
                             -- no explicit return, assuming it returns the last
                             -- value from procedure execution
-                            _                -> mthRtn
-                          )
+                            _ -> exitEdhProc exit (that'', scope'', mthRtn)
                   _ -> error "bug"
               _ -> error "bug"
 
