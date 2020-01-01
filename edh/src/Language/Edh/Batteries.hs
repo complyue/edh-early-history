@@ -50,12 +50,12 @@ installEdhBatteries world = liftIO $ do
         )
 
       -- assignments
-      , ("=" , 1)
-      , ("+=", 1)
-      , ("-=", 1)
-      , ("/=", 1)
+      , ("=" , 2)
+      , ("+=", 2)
+      , ("-=", 2)
+      , ("/=", 2)
       , ( "*="
-        , 1
+        , 2
         ) -- ^ why brittany insists on formatting it like this ?.?
 
       -- arithmetic
@@ -97,7 +97,7 @@ installEdhBatteries world = liftIO $ do
         --       onCnd &> oneThing |> theOther
       , ("&>", 3)
       , ( "|>"
-        , 2
+        , 3
         ) -- ^ why brittany insists on formatting it like this ?.?
 
         -- | comprehension
