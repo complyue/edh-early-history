@@ -464,17 +464,54 @@ evalExpr that expr exit = do
             <> T.pack (show $ edhTypeOf val)
             <> ": "
             <> T.pack (show val)
-      _ -> evalExpr that iterExpr $ \case
-        (_, _, EdhSink evs     ) -> undefined
-        (_, _, EdhTuple vs     ) -> undefined
-        (_, _, EdhList (List l)) -> undefined
-        (_, _, EdhDict (Dict d)) -> undefined
-        (_, _, val) ->
-          throwEdh EvalError
-            $  "Can not iterate over "
-            <> T.pack (show $ edhTypeOf val)
-            <> ": "
-            <> T.pack (show val)
+      _ -> do
+        let doIt :: [ArgsPack] -> STM ()
+            doIt [] = exitEdhSTM pgs exit (that, scope, nil)
+            doIt (pk : pks) =
+              runEdhProg pgs $ recvEdhArgs argsRcvr pk $ \(_, _, scopeObj') ->
+                case scopeObj' of
+                  EdhObject (Object rcvd'ent' rcvd'cls' _)
+                    | rcvd'cls' == (objClass $ scopeSuper world) -> contEdhSTM
+                    $  do
+                         rcvd'em <- readTVar rcvd'ent'
+                         modifyTVar' ent $ Map.union rcvd'em
+                         runEdhProg pgs $ evalExpr that doExpr $ \case
+                           (_, _, EdhBreak) ->
+                          -- break for loop
+                             exitEdhProc exit (that, scope, nil)
+                          -- early return during for loop
+                           rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
+                          -- continue for loop
+                           _                       -> contEdhSTM $ doIt pks
+                  _ -> error "bug"
+        evalExpr that iterExpr $ \case
+          (_, _, EdhSink evs) -> undefined
+          (_, _, EdhTuple vs) -> contEdhSTM $ doIt
+            [ case val of
+                EdhArgsPack pk' -> pk'
+                _               -> ArgsPack [val] Map.empty
+            | val <- vs
+            ]
+          (_, _, EdhList (List l)) -> contEdhSTM $ do
+            ll <- readTVar l
+            doIt
+              [ case val of
+                  EdhArgsPack pk' -> pk'
+                  _               -> ArgsPack [val] Map.empty
+              | val <- ll
+              ]
+          (_, _, EdhDict (Dict d)) -> contEdhSTM $ do
+            ds <- readTVar d
+            doIt
+              [ ArgsPack [itemKeyValue k, v] Map.empty
+              | (k, v) <- Map.toList ds
+              ]
+          (_, _, val) ->
+            throwEdh EvalError
+              $  "Can not iterate over "
+              <> T.pack (show $ edhTypeOf val)
+              <> ": "
+              <> T.pack (show val)
 
 
     AttrExpr addr -> case addr of

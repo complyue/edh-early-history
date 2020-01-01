@@ -58,6 +58,13 @@ instance Show ItemKey where
   show (ItemByNum  k) = showDecimal k
   show (ItemByBool k) = show $ EdhBool k
 
+itemKeyValue :: ItemKey -> EdhValue
+itemKeyValue (ItemByType tyv) = EdhType tyv
+itemKeyValue (ItemByStr  s  ) = EdhString s
+itemKeyValue (ItemBySym  s  ) = EdhSymbol s
+itemKeyValue (ItemByNum  d  ) = EdhDecimal d
+itemKeyValue (ItemByBool b  ) = EdhBool b
+
 
 -- | An entity in Edh is the backing storage for a scope, with
 -- possibly an object viewing this entity.
