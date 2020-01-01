@@ -128,9 +128,23 @@ evalStmt' that stmt exit = do
 
     -- ThrowStmt excExpr                     -> undefined
 
-    WhileStmt cndExpr bodyStmt -> undefined
+    WhileStmt cndExpr bodyStmt -> do
+      let !stmts = deBlock bodyStmt
+          doWhile :: EdhProg (STM ())
+          doWhile = do
+            evalExpr that cndExpr $ \case
+              (_, _, EdhBool True ) -> evalBlock that stmts $ \_ -> doWhile
+              (_, _, EdhBool False) -> exitEdhProc exit (that, scope, nil)
+              (_, _, EdhNil       ) -> exitEdhProc exit (that, scope, nil)
+              (_, _, cndVal) ->
+                throwEdh EvalError
+                  $  "Invalid condition value for while: "
+                  <> T.pack (show $ edhTypeOf cndVal)
+                  <> ": "
+                  <> T.pack (show cndVal)
+      doWhile
 
-    ExtendsStmt superExpr      -> evalExpr that superExpr $ \case
+    ExtendsStmt superExpr -> evalExpr that superExpr $ \case
       (_, _, EdhObject superObj) -> contEdhSTM $ do
         modifyTVar' (objSupers this) (superObj :)
         exitEdhSTM pgs exit (that, scope, nil)
