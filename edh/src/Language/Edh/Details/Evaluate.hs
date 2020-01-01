@@ -128,11 +128,20 @@ evalStmt' that stmt exit = do
 
     -- ThrowStmt excExpr                     -> undefined
 
-    WhileStmt cndExpr bodyStmt         -> undefined
+    WhileStmt cndExpr bodyStmt -> undefined
 
-    ExtendsStmt superExpr              -> undefined
+    ExtendsStmt superExpr      -> evalExpr that superExpr $ \case
+      (_, _, EdhObject superObj) -> contEdhSTM $ do
+        modifyTVar' (objSupers this) (superObj :)
+        exitEdhSTM pgs exit (that, scope, nil)
+      (_, _, superVal) ->
+        throwEdh EvalError
+          $  "Can only extends an object, not "
+          <> T.pack (show $ edhTypeOf superVal)
+          <> ": "
+          <> T.pack (show superVal)
 
-    ClassStmt   pd@(ProcDecl name _ _) -> contEdhSTM $ do
+    ClassStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
       let
         !cls =
           EdhClass $ Class { classLexiStack = call'stack, classProcedure = pd }
