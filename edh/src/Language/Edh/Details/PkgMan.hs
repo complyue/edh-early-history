@@ -39,9 +39,7 @@ locateEdhModule !pgs !pkgPath !importPath = case splitExtension importPath of
       <> T.pack importPath
   _ -> unsafeIOToSTM (doesPathExist pkgPath) >>= \case
     False ->
-      throwEdhFromSTM pgs EvalError
-        $  "Path does not exist: "
-        <> T.pack importPath
+      throwEdhFromSTM pgs EvalError $ "Path does not exist: " <> T.pack pkgPath
     True -> case stripPrefix "./" importPath of
       Just !relImp -> resolveRelImport relImp
       Nothing -> unsafeIOToSTM (canonicalizePath pkgPath) >>= resolveAbsImport
