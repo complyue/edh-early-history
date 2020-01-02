@@ -1,0 +1,51 @@
+
+  generator range(start, stop=nil, step=nil) {
+    if stop == nil then let (stop, start) = (start, 0)
+    start == stop -> return nil
+    n = start
+    
+    start < stop -> {
+      if step == nil
+        then step = 1
+        else if step <= 0 then return nil
+      while n < stop {
+        yield n
+        n += step
+      }
+    }
+
+    start > stop -> {
+      if step == nil
+        then step = -1
+        else if step >= 0 then return nil
+      while n > stop {
+        yield n
+        n += step
+      }
+    }
+  }
+
+  /**
+   * a generator procedure can only be call by a for-from-do loop,
+   * to enumerate a generator, pass its args following it, instead
+   * of calling it your self.
+   */
+  generator enumerate(g, ***gargs) {
+    n = 0
+    case type(g) of {
+
+      GeneratorType -> for i from g(***gargs) do {
+        yield pkargs(n, i)
+        n += 1
+
+      }
+
+      // the | guard prefix will be parsed as infix (|) operator,
+      // if has a nearby left-hand expression, place a semi-colon 
+      // right before it can make sure it's parsed as expected always.
+      ; |true -> for i from g do {
+        yield pkargs(n, i)
+        n += 1
+      }
+    }
+  }

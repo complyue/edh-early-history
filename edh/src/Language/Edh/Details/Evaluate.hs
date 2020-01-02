@@ -20,6 +20,7 @@ import           Text.Megaparsec
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Details.RtTypes
+import           Language.Edh.Details.PkgMan
 import           Language.Edh.Details.Utils
 
 

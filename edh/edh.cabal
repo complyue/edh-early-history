@@ -56,6 +56,7 @@ library edh-internal
         Language.Edh.Details.RtTypes
         Language.Edh.Details.Evaluate
         Language.Edh.Details.Tx
+        Language.Edh.Details.PkgMan
         Language.Edh.Details.Utils
         Paths_edh
     hs-source-dirs: src
@@ -71,6 +72,8 @@ library edh-internal
         stm >=2.5,
         scientific >=0.3.6,
         megaparsec >=8.0,
+        filepath -any,
+        directory -any,
         lossless-decimal -any,
         text -any,
         vector -any,
