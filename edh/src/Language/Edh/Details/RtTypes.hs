@@ -65,6 +65,9 @@ itemKeyValue (ItemBySym  s  ) = EdhSymbol s
 itemKeyValue (ItemByNum  d  ) = EdhDecimal d
 itemKeyValue (ItemByBool b  ) = EdhBool b
 
+toPairList :: DictStore -> [EdhValue]
+toPairList d = (<$> Map.toList d) \(k, v) -> EdhPair (itemKeyValue k) v
+
 edhDictFromEntity :: Entity -> STM Dict
 edhDictFromEntity ent = do
   em <- readTVar ent
