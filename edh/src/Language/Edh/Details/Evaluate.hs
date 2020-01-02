@@ -249,8 +249,9 @@ importFromEntity !argsRcvr !fromEnt !exit = do
     emImp <- readTVar fromEnt
     let !artsPk = ArgsPack [] $ Map.fromAscList $ catMaybes
           [ (case k of
--- only named attributes, those are not symbols, are importable
-              AttrByName attrName -> case v of
+-- only attributes with a name not started with `_` are importable,
+-- and all symbol values are not importable however named
+              AttrByName attrName | not (T.isPrefixOf "_" attrName) -> case v of
                 EdhSymbol _ -> Nothing
                 _           -> Just (attrName, v)
 -- symbolic attributes are effective stripped off, this is desirable so that
