@@ -110,6 +110,31 @@ concatProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
+-- | utility null(*args,**kwargs) - null test
+isNullProc :: EdhProcedure
+isNullProc !argsSender that _ !exit = do
+  !pgs <- ask
+  let !callerCtx   = edh'context pgs
+      !callerScope = contextScope callerCtx
+  packEdhArgs that argsSender
+    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> if null kwargs
+        then case args of
+          [v] -> contEdhSTM $ do
+            isNull <- EdhBool <$> edhValueNull v
+            exitEdhSTM pgs exit (that, callerScope, isNull)
+          _ -> contEdhSTM $ do
+            argsNulls <- sequence $ ((EdhBool <$>) . edhValueNull) <$> args
+            exitEdhSTM pgs exit (that, callerScope, EdhTuple argsNulls)
+        else contEdhSTM $ do
+          argsNulls   <- sequence $ ((EdhBool <$>) . edhValueNull) <$> args
+          kwargsNulls <- sequence
+            $ Map.map ((EdhBool <$>) . edhValueNull) kwargs
+          exitEdhSTM
+            pgs
+            exit
+            (that, callerScope, EdhArgsPack $ ArgsPack argsNulls kwargsNulls)
+
+
 -- | utility type(*args,**kwargs) - value type introspection
 typeProc :: EdhProcedure
 typeProc !argsSender !that _ !exit = do

@@ -473,9 +473,6 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     | EdhTuple ![EdhValue]
     | EdhArgsPack ArgsPack
 
-  -- * pending evaluated code block
-    | EdhBlock ![StmtSrc]
-
   -- * host procedure callable from Edh world
     | EdhHostProc !HostProcedure
     | EdhHostOper !Precedence !HostProcedure
@@ -502,6 +499,18 @@ edhValueStr :: EdhValue -> Text
 edhValueStr (EdhString s) = s
 edhValueStr v             = T.pack $ show v
 
+edhValueNull :: EdhValue -> STM Bool
+edhValueNull EdhNil                = return True
+edhValueNull (EdhDecimal d       ) = return $ D.decimalIsNaN d || d == 0
+edhValueNull (EdhBool    b       ) = return $ b == False
+edhValueNull (EdhString  s       ) = return $ T.null s
+edhValueNull (EdhDict    (Dict d)) = Map.null <$> readTVar d
+edhValueNull (EdhList    (List l)) = null <$> readTVar l
+edhValueNull (EdhTuple   l       ) = return $ null l
+edhValueNull (EdhArgsPack (ArgsPack args kwargs)) =
+  return $ null args && Map.null kwargs
+edhValueNull _ = return False
+
 instance Show EdhValue where
   show (EdhType t)    = show t
   show EdhNil         = "nil"
@@ -521,10 +530,6 @@ instance Show EdhValue where
     else -- advocate trailing comma here
          "( " ++ concat [ show i ++ ", " | i <- v ] ++ ")"
   show (EdhArgsPack v) = "pkargs" ++ show v
-
-  show (EdhBlock    v) = if null v
-    then "{;}" -- make it obvious this is an empty block
-    else "{ " ++ concat [ show i ++ "; " | i <- v ] ++ "}"
 
   show (EdhHostProc v) = show v
   show (EdhHostOper prec (HostProcedure pn _)) =
@@ -571,8 +576,6 @@ instance Eq EdhValue where
   EdhPair x'k x'v      == EdhPair y'k y'v      = x'k == y'k && x'v == y'v
   EdhTuple    x        == EdhTuple    y        = x == y
   EdhArgsPack x        == EdhArgsPack y        = x == y
-
-  EdhBlock    x        == EdhBlock    y        = x == y
 
   EdhHostProc x        == EdhHostProc y        = x == y
   EdhHostOper _ x'proc == EdhHostOper _ y'proc = x'proc == y'proc
@@ -629,7 +632,6 @@ edhTypeOf (EdhList    _   ) = EdhType ListType
 edhTypeOf (EdhPair _ _    ) = EdhType PairType
 edhTypeOf (EdhTuple    _  ) = EdhType TupleType
 edhTypeOf (EdhArgsPack _  ) = EdhType ArgsPackType
-edhTypeOf (EdhBlock    _  ) = EdhType BlockType
 edhTypeOf (EdhHostProc _  ) = EdhType HostProcType
 edhTypeOf (EdhHostOper _ _) = EdhType HostOperType
 edhTypeOf (EdhClass    _  ) = EdhType ClassType

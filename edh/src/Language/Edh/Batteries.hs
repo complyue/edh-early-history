@@ -168,6 +168,7 @@ installEdhBatteries world = liftIO $ do
         [ ("Symbol"     , symbolCtorProc)
         , ("pkargs"     , pkargsProc)
         , ("dict"       , dictProc)
+        , ("null"       , isNullProc)
         , ("type"       , typeProc)
         , ("constructor", ctorProc)
         , ("supers"     , supersProc)

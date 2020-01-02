@@ -54,3 +54,21 @@
       }
     }
   }
+
+
+  generator zip(xs, ys) {
+    while not null(xs) && not null(ys) {
+      let (x, *xs) = (*xs)
+      let (y, *ys) = (*ys)
+      yield (x, y)
+    }
+  }
+
+  generator zip3(xs, ys, zs) {
+    while not null(xs) && not null(ys) && not null(zs) {
+      let (x, *xs) = (*xs)
+      let (y, *ys) = (*ys)
+      let (z, *zs) = (*zs)
+      yield (x, y, z)
+    }
+  }
