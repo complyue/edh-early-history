@@ -420,7 +420,7 @@ evalExpr that expr exit = do
   !pgs <- ask
   let !ctx@(Context !world !call'stack genr'caller _ (StmtSrc (srcPos, _))) =
         edh'context pgs
-      !scope@(Scope !ent !this _ _) = contextScope ctx
+      !scope@(Scope _ !this _ _) = contextScope ctx
   case expr of
     LitExpr lit -> case lit of
       DecLiteral    v -> exitEdhProc exit (this, scope, EdhDecimal v)
@@ -544,171 +544,8 @@ evalExpr that expr exit = do
           contEdhSTM $ runEdhProg pgs' $ yieldTo yieldResult $ \doResult ->
             exitEdhSTM pgs exit doResult
 
-    ForExpr argsRcvr iterExpr doExpr -> case deParen iterExpr of
-      -- calling a generator method procedure
-      CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
-        (that', (Scope _ gnr'this _ _), EdhGenrDef (GenrDef gnr'lexi'stack gnrProc@(ProcDecl _ gnr'args gnr'body)))
-          ->
-           -- ensure args sending and receiving happens within a same tx
-           -- for atomicity of the call making
-             local (const pgs { edh'in'tx = True })
-            $ packEdhArgs that argsSndr
-            $ \(_, _, pkv) -> case pkv of
-                EdhArgsPack pk ->
-                  recvEdhArgs gnr'args pk $ \(_, _, scopeObj) ->
-                    case scopeObj of
-                      EdhObject (Object rcvd'ent rcvd'cls _)
-                        | rcvd'cls == (objClass $ scopeSuper world) -> do
-                          let
-                            recvYield
-                              :: (Object, Scope, EdhValue)
-                              -> ((Object, Scope, EdhValue) -> STM ())
-                              -> EdhProg (STM ())
-                            recvYield (_, _, yielded'val) exit' =
-                              case yielded'val of
-                                EdhContinue -> throwEdh
-                                  EvalError
-                                  "Unexpected continue from generator"
-                                EdhBreak -> throwEdh
-                                  EvalError
-                                  "Unexpected break from generator"
-                                _ ->
-                                  recvEdhArgs
-                                      argsRcvr
-                                      (case yielded'val of
-                                        EdhArgsPack pk' -> pk'
-                                        _ -> ArgsPack [yielded'val] Map.empty
-                                      )
-                                    $ \(_, _, scopeObj') -> case scopeObj' of
-                                        EdhObject (Object rcvd'ent' rcvd'cls' _)
-                                          | rcvd'cls'
-                                            == (objClass $ scopeSuper world) -> contEdhSTM
-                                          $ do
-                                              recvYield'em <- readTVar
-                                                rcvd'ent'
-                                              modifyTVar' ent
-                                                $ Map.union recvYield'em
-                                              runEdhProg pgs
-                                                $ evalExpr that' doExpr
-                                                $ \case
-                                                    ctn@(_, _, EdhContinue)
-                                                      ->
-                                                -- propagate the continue to generator
-                                                         contEdhSTM
-                                                      $  exit' ctn
-                                                    (that'', scope'', EdhBreak)
-                                                      ->
-                                                -- early stop the for-from-do with nil result
-                                                         exitEdhProc
-                                                        exit
-                                                        (that'', scope'', nil)
-                                                    rtn@(_, _, EdhReturn _)
-                                                      ->
-                                                -- early return from for-from-do
-                                                         exitEdhProc exit rtn
-                                                    doResult ->
-                                                -- normal result from do, send to generator
-                                                                contEdhSTM
-                                                      $ exit' doResult
-                                        _ -> error "bug"
-                        -- use direct containing object of the method as `this` in its
-                        -- procedure execution
-                          local
-                              (const pgs
-                            -- set method's scope
-                                { edh'context =
-                                  (edh'context pgs)
-                                    { callStack       =
-                                      (  Scope rcvd'ent
-                                               gnr'this
-                                               (NE.toList gnr'lexi'stack)
-                                               gnrProc
-                                      <| call'stack
-                                      )
-                                      -- receive yield as the generator caller
-                                    , generatorCaller = Just (pgs, recvYield)
-                                    }
-                              -- restore original tx state after args received
-                                , edh'in'tx   = edh'in'tx pgs
-                                }
-                              )
-                          -- use the resolution target object as `that` in execution of 
-                          -- the method procedure
-                            $ evalStmt that' gnr'body
-                            $ \(that'', scope'', gnrRtn) ->
-                                -- restore previous context after method returned
-                                local (const pgs) $ case gnrRtn of
-                                  EdhReturn rtnVal ->
-                                  -- explicit return
-                                    exitEdhProc exit (that'', scope'', rtnVal)
-                                  EdhContinue ->
-                                    throwEdh EvalError "Unexpected continue"
-                                  EdhBreak ->
-                                    -- allows use of `break` to early stop the generator
-                                    -- procedure with nil result
-                                    exitEdhProc exit (that', scope, nil)
-                                  _ ->
-                                  -- no explicit return, assuming it returns the last
-                                  -- value from procedure execution
-                                    exitEdhProc exit (that'', scope'', gnrRtn)
-
-                      _ -> error "bug"
-                _ -> error "bug"
-        (_, _, val) ->
-          throwEdh EvalError
-            $  "Can only call a generator method from for-from-do, not "
-            <> T.pack (show $ edhTypeOf val)
-            <> ": "
-            <> T.pack (show val)
-      _ -> do
-        let doIt :: [ArgsPack] -> STM ()
-            doIt [] = exitEdhSTM pgs exit (that, scope, nil)
-            doIt (pk : pks) =
-              runEdhProg pgs $ recvEdhArgs argsRcvr pk $ \(_, _, scopeObj') ->
-                case scopeObj' of
-                  EdhObject (Object rcvd'ent' rcvd'cls' _)
-                    | rcvd'cls' == (objClass $ scopeSuper world) -> contEdhSTM
-                    $  do
-                         rcvd'em <- readTVar rcvd'ent'
-                         modifyTVar' ent $ Map.union rcvd'em
-                         runEdhProg pgs $ evalExpr that doExpr $ \case
-                           (_, _, EdhBreak) ->
-                          -- break for loop
-                             exitEdhProc exit (that, scope, nil)
-                          -- early return during for loop
-                           rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
-                          -- continue for loop
-                           _                       -> contEdhSTM $ doIt pks
-                  _ -> error "bug"
-        evalExpr that iterExpr $ \case
-          (_, _, EdhSink evs) -> undefined
-          (_, _, EdhTuple vs) -> contEdhSTM $ doIt
-            [ case val of
-                EdhArgsPack pk' -> pk'
-                _               -> ArgsPack [val] Map.empty
-            | val <- vs
-            ]
-          (_, _, EdhList (List l)) -> contEdhSTM $ do
-            ll <- readTVar l
-            doIt
-              [ case val of
-                  EdhArgsPack pk' -> pk'
-                  _               -> ArgsPack [val] Map.empty
-              | val <- ll
-              ]
-          (_, _, EdhDict (Dict d)) -> contEdhSTM $ do
-            ds <- readTVar d
-            doIt
-              [ ArgsPack [itemKeyValue k, v] Map.empty
-              | (k, v) <- Map.toList ds
-              ]
-          (_, _, val) ->
-            throwEdh EvalError
-              $  "Can not iterate over "
-              <> T.pack (show $ edhTypeOf val)
-              <> ": "
-              <> T.pack (show val)
-
+    ForExpr argsRcvr iterExpr doExpr ->
+      runForLoop that argsRcvr iterExpr doExpr (const $ return ()) exit
 
     AttrExpr addr -> case addr of
       ThisRef          -> exitEdhProc exit (this, scope, EdhObject this)
@@ -986,6 +823,180 @@ evalExpr that expr exit = do
 
 
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+
+
+runForLoop
+  :: Object
+  -> ArgsReceiver
+  -> Expr
+  -> Expr
+  -> ((Object, Scope, EdhValue) -> STM ())
+  -> EdhProcExit
+  -> EdhProg (STM ())
+runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
+  !pgs <- ask
+  let !ctx@(  Context !world !call'stack _ _ _) = edh'context pgs
+      !scope@(Scope !ent _ _ _                ) = contextScope ctx
+  case deParen iterExpr of
+      -- calling a generator method procedure
+    CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
+      (that', (Scope _ gnr'this _ _), EdhGenrDef (GenrDef gnr'lexi'stack gnrProc@(ProcDecl _ gnr'args gnr'body)))
+        ->
+         -- ensure args sending and receiving happens within a same tx
+         -- for atomicity of the call making
+           local (const pgs { edh'in'tx = True })
+          $ packEdhArgs that argsSndr
+          $ \(_, _, pkv) -> case pkv of
+              EdhArgsPack pk -> recvEdhArgs gnr'args pk $ \(_, _, scopeObj) ->
+                case scopeObj of
+                  EdhObject (Object rcvd'ent rcvd'cls _)
+                    | rcvd'cls == (objClass $ scopeSuper world) -> do
+                      let
+                        recvYield
+                          :: (Object, Scope, EdhValue)
+                          -> ((Object, Scope, EdhValue) -> STM ())
+                          -> EdhProg (STM ())
+                        recvYield (_, _, yielded'val) exit' =
+                          case yielded'val of
+                            EdhContinue -> throwEdh
+                              EvalError
+                              "Unexpected continue from generator"
+                            EdhBreak -> throwEdh
+                              EvalError
+                              "Unexpected break from generator"
+                            _ ->
+                              recvEdhArgs
+                                  argsRcvr
+                                  (case yielded'val of
+                                    EdhArgsPack pk' -> pk'
+                                    _ -> ArgsPack [yielded'val] Map.empty
+                                  )
+                                $ \(_, _, scopeObj') -> case scopeObj' of
+                                    EdhObject (Object rcvd'ent' rcvd'cls' _)
+                                      | rcvd'cls'
+                                        == (objClass $ scopeSuper world) -> contEdhSTM
+                                      $ do
+                                          recvYield'em <- readTVar rcvd'ent'
+                                          modifyTVar' ent
+                                            $ Map.union recvYield'em
+                                          runEdhProg pgs
+                                            $ evalExpr that' doExpr
+                                            $ \case
+                                                ctn@(_, _, EdhContinue) ->
+                                            -- propagate the continue to generator
+                                                  contEdhSTM $ exit' ctn
+                                                (that'', scope'', EdhBreak)
+                                                  ->
+                                            -- early stop the for-from-do with nil result
+                                                     exitEdhProc
+                                                    exit
+                                                    (that'', scope'', nil)
+                                                rtn@(_, _, EdhReturn _) ->
+                                            -- early return from for-from-do
+                                                  exitEdhProc exit rtn
+                                                doResult ->
+                                            -- normal result from do, send to generator
+                                                            contEdhSTM $ do
+                                                  iterCollector doResult
+                                                  exit' doResult
+                                    _ -> error "bug"
+                    -- use direct containing object of the method as `this` in its
+                    -- procedure execution
+                      local
+                          (const pgs
+                        -- set method's scope
+                            { edh'context =
+                              (edh'context pgs)
+                                { callStack       =
+                                  (  Scope rcvd'ent
+                                           gnr'this
+                                           (NE.toList gnr'lexi'stack)
+                                           gnrProc
+                                  <| call'stack
+                                  )
+                                  -- receive yield as the generator caller
+                                , generatorCaller = Just (pgs, recvYield)
+                                }
+                          -- restore original tx state after args received
+                            , edh'in'tx   = edh'in'tx pgs
+                            }
+                          )
+                      -- use the resolution target object as `that` in execution of 
+                      -- the method procedure
+                        $ evalStmt that' gnr'body
+                        $ \(that'', scope'', gnrRtn) ->
+                            -- restore previous context after method returned
+                            local (const pgs) $ case gnrRtn of
+                              EdhReturn rtnVal ->
+                              -- explicit return
+                                exitEdhProc exit (that'', scope'', rtnVal)
+                              EdhContinue ->
+                                throwEdh EvalError "Unexpected continue"
+                              EdhBreak ->
+                                -- allows use of `break` to early stop the generator
+                                -- procedure with nil result
+                                exitEdhProc exit (that', scope, nil)
+                              _ ->
+                              -- no explicit return, assuming it returns the last
+                              -- value from procedure execution
+                                exitEdhProc exit (that'', scope'', gnrRtn)
+
+                  _ -> error "bug"
+              _ -> error "bug"
+      (_, _, val) ->
+        throwEdh EvalError
+          $  "Can only call a generator method from for-from-do, not "
+          <> T.pack (show $ edhTypeOf val)
+          <> ": "
+          <> T.pack (show val)
+    _ -> do
+      let doIt :: [ArgsPack] -> STM ()
+          doIt [] = exitEdhSTM pgs exit (that, scope, nil)
+          doIt (pk : pks) =
+            runEdhProg pgs $ recvEdhArgs argsRcvr pk $ \(_, _, scopeObj') ->
+              case scopeObj' of
+                EdhObject (Object rcvd'ent' rcvd'cls' _)
+                  | rcvd'cls' == (objClass $ scopeSuper world) -> contEdhSTM
+                  $  do
+                       rcvd'em <- readTVar rcvd'ent'
+                       modifyTVar' ent $ Map.union rcvd'em
+                       runEdhProg pgs $ evalExpr that doExpr $ \case
+                         (_, _, EdhBreak) ->
+                        -- break for loop
+                           exitEdhProc exit (that, scope, nil)
+                        -- early return during for loop
+                         rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
+                        -- continue for loop
+                         doResult                -> contEdhSTM $ do
+                           iterCollector doResult
+                           doIt pks
+                _ -> error "bug"
+      evalExpr that iterExpr $ \case
+        (_, _, EdhSink evs) -> undefined
+        (_, _, EdhTuple vs) -> contEdhSTM $ doIt
+          [ case val of
+              EdhArgsPack pk' -> pk'
+              _               -> ArgsPack [val] Map.empty
+          | val <- vs
+          ]
+        (_, _, EdhList (List l)) -> contEdhSTM $ do
+          ll <- readTVar l
+          doIt
+            [ case val of
+                EdhArgsPack pk' -> pk'
+                _               -> ArgsPack [val] Map.empty
+            | val <- ll
+            ]
+        (_, _, EdhDict (Dict d)) -> contEdhSTM $ do
+          ds <- readTVar d
+          doIt
+            [ ArgsPack [itemKeyValue k, v] Map.empty | (k, v) <- Map.toList ds ]
+        (_, _, val) ->
+          throwEdh EvalError
+            $  "Can not iterate over "
+            <> T.pack (show $ edhTypeOf val)
+            <> ": "
+            <> T.pack (show val)
 
 
 mkScopeWrapper :: EdhWorld -> Scope -> STM Object
