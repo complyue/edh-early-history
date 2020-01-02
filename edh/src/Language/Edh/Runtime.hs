@@ -47,19 +47,15 @@ runEdhProgram
   -> Object
   -> SeqStmts
   -> m (Either InterpretError EdhValue)
-runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
-  where !ctx = moduleContext w m
-
-
-runEdhProgram' :: Context -> SeqStmts -> IO (Either InterpretError EdhValue)
-runEdhProgram' _    []     = return $ Right EdhNil
-runEdhProgram' !ctx !stmts = do
+runEdhProgram !world !modu !stmts = liftIO $ tryJust edhKnownError $ do
   !final <- newEmptyTMVarIO
-  let !(Scope _ !this _ _) = contextScope ctx
-  tryJust edhKnownError $ do
-    driveEdhProg ctx $ evalBlock this stmts $ \(_, _, !val) ->
-      return $ putTMVar final val
-    atomically $ readTMVar final
+  runEdhProgram' ctx $ evalBlock modu stmts $ \(_, _, !val) ->
+    contEdhSTM $ putTMVar final val
+  atomically $ readTMVar final
+  where !ctx = moduleContext world modu
+
+runEdhProgram' :: MonadIO m => Context -> EdhProg (STM ()) -> m ()
+runEdhProgram' !ctx !prog = liftIO $ driveEdhProg ctx prog
 
 
 createEdhWorld :: MonadIO m => m EdhWorld
@@ -73,22 +69,18 @@ createEdhWorld = liftIO $ do
   scopeManiMethods <- newTVarIO Map.empty
   rootSupers       <- newTVarIO []
   let
-    !worldInitProc = ProcDecl { procedure'name = "<world>"
-                              , procedure'args = WildReceiver
-                              , procedure'body = voidStatement
-                              }
-    !worldScope = Scope rootEntity root [] worldInitProc
-    !worldClass = Class { classLexiStack = worldScope :| []
-                        , classProcedure = worldInitProc
-                        }
-    !root = Object { objEntity = rootEntity
-                   , objClass  = worldClass
-                   , objSupers = rootSupers
-                   }
     !moduClassProc = ProcDecl { procedure'name = "<module>"
                               , procedure'args = WildReceiver
                               , procedure'body = voidStatement
                               }
+    !worldScope = Scope rootEntity root [] moduClassProc
+    !moduClass  = Class { classLexiStack = worldScope :| []
+                        , classProcedure = moduClassProc
+                        }
+    !root = Object { objEntity = rootEntity
+                   , objClass  = moduClass
+                   , objSupers = rootSupers
+                   }
     !scopeClassProc = ProcDecl { procedure'name = "<scope>"
                                , procedure'args = WildReceiver
                                , procedure'body = voidStatement
@@ -103,9 +95,7 @@ createEdhWorld = liftIO $ do
                                    }
   return $ EdhWorld
     { worldRoot      = root
-    , moduleClass    = Class { classLexiStack = worldScope :| []
-                             , classProcedure = moduClassProc
-                             }
+    , moduleClass    = moduClass
     , scopeSuper     = Object { objEntity = scopeManiMethods
                               , objClass  = scopeClass
                               , objSupers = rootSupers
@@ -194,7 +184,7 @@ mkHostProc !d !p = do
 
 mkHostOper :: EdhWorld -> OpSymbol -> EdhProcedure -> STM EdhValue
 mkHostOper world opSym proc =
-  Map.lookup opSym <$> (readTMVar $ worldOperators world) >>= \case
+  Map.lookup opSym <$> readTMVar (worldOperators world) >>= \case
     Nothing ->
       throwSTM
         $  UsageError
@@ -213,5 +203,3 @@ installEdhAttrs e as = modifyTVar' e $ \em -> Map.union ad em
 
 installEdhAttr :: Entity -> AttrKey -> EdhValue -> STM ()
 installEdhAttr e k v = modifyTVar' e $ \em -> Map.insert k v em
-
-
