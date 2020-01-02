@@ -63,7 +63,7 @@ evalBlock that [!ss] !exit = evalStmt that ss $ \result -> case result of
   -- last branch does match
   (!this', !scope', EdhCaseClose !val) -> exitEdhProc exit (this', scope', val)
   -- explicit `fallthrough` at end of this block, cascade to outer block
-  fall@(_ , _, EdhFallthrough) -> exitEdhProc exit fall
+  fall@(_, _, EdhFallthrough) -> exitEdhProc exit fall
   -- ctrl to be propagated outwards
   brk@(_, _, EdhBreak) -> exitEdhProc exit brk
   ctn@(_, _, EdhContinue) -> exitEdhProc exit ctn
@@ -167,19 +167,32 @@ evalStmt' that stmt exit = do
           <> ": "
           <> T.pack (show superVal)
 
-    ClassStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
-      let
-        !cls =
-          EdhClass $ Class { classLexiStack = call'stack, classProcedure = pd }
-      modifyTVar' ent $ \em -> Map.insert (AttrByName name) cls em
-      exitEdhSTM pgs exit (this, scope, cls)
+    ClassStmt pd@(ProcDecl name _ _) -> if name == "_"
+      then throwEdh EvalError "`_` can not be used as class name"
+      else contEdhSTM $ do
+        let
+          !cls = EdhClass
+            $ Class { classLexiStack = call'stack, classProcedure = pd }
+        modifyTVar' ent $ \em -> Map.insert (AttrByName name) cls em
+        exitEdhSTM pgs exit (this, scope, cls)
 
-    MethodStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
-      let
-        mth = EdhMethod
-          $ Method { methodLexiStack = call'stack, methodProcedure = pd }
-      modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
-      exitEdhSTM pgs exit (this, scope, mth)
+    MethodStmt pd@(ProcDecl name _ _) -> if name == "_"
+      then throwEdh EvalError "`_` can not be used as method name"
+      else contEdhSTM $ do
+        let
+          mth = EdhMethod
+            $ Method { methodLexiStack = call'stack, methodProcedure = pd }
+        modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
+        exitEdhSTM pgs exit (this, scope, mth)
+
+    GeneratorStmt pd@(ProcDecl name _ _) -> if name == "_"
+      then throwEdh EvalError "`_` can not be used as generator name"
+      else contEdhSTM $ do
+        let gdf = EdhGenrDef $ GenrDef { generatorLexiStack = call'stack
+                                       , generatorProcedure = pd
+                                       }
+        modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
+        exitEdhSTM pgs exit (this, scope, gdf)
 
     OpDeclStmt opSym opPrec opProc -> contEdhSTM $ do
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
@@ -211,13 +224,6 @@ evalStmt' that stmt exit = do
                                       }
       modifyTVar' ent $ \em -> Map.insert (AttrByName opSym) op em
       exitEdhSTM pgs exit (this, scope, op)
-
-    GeneratorStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
-      let gdf = EdhGenrDef $ GenrDef { generatorLexiStack = call'stack
-                                     , generatorProcedure = pd
-                                     }
-      modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
-      exitEdhSTM pgs exit (this, scope, gdf)
 
     ImportStmt argsRcvr srcExpr -> case srcExpr of
       LitExpr (StringLiteral importSpec) ->
