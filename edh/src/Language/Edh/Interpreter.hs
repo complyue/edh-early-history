@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Edh.Interpreter where
 
@@ -32,32 +31,31 @@ runEdhModule
 runEdhModule world moduId moduSource =
   liftIO
     $
-  -- serialize parsing against 'worldOperators'
+      -- serialize parsing against 'worldOperators'
       bracket (atomically $ takeTMVar wops) (atomically . tryPutTMVar wops)
     $ \opPD -> do
-        moduSupers <- newTVarIO []
-        let (pr, opPD') =
-              runState (runParserT parseProgram moduId moduSource) opPD
+        -- parse module source
+        let (pr, opPD') = runState
+              (runParserT parseProgram (T.unpack moduId) moduSource)
+              opPD
         case pr of
           Left  !err   -> return $ Left $ EdhParseError err
           Right !stmts -> do
             -- release world lock as soon as parsing done successfuly
             atomically $ putTMVar wops opPD'
-
             -- prepare the module meta data
-            let !moduIdAttrVal = EdhString $ T.pack moduId
-            !entity <- newTVarIO $ Map.fromList
-              [ (AttrByName "__name__", moduIdAttrVal)
+            !moduEntity <- newTVarIO $ Map.fromList
+              [ (AttrByName "__name__", EdhString moduId)
               , (AttrByName "__file__", EdhString "<adhoc>")
               ]
-            let !modu = Object { objEntity = entity
+            !moduSupers <- newTVarIO []
+            let !modu = Object { objEntity = moduEntity
                                , objClass  = moduleClass world
                                , objSupers = moduSupers
                                }
-
             -- run statements from the module
             runEdhProgram world modu stmts >>= \case
-              Left  err -> return $ Left $ EdhEvalError err
+              Left  err -> return $ Left err
               Right _   -> return $ Right modu
   where !wops = worldOperators world
 
@@ -93,6 +91,6 @@ evalEdhSource world modu code = liftIO $ do
                 atomically $ putTMVar wops opPD'
 
                 runEdhProgram world modu stmts >>= \case
-                  Left  err -> return $ Left $ EdhEvalError err
+                  Left  err -> return $ Left err
                   Right val -> return $ Right val
   where !wops = worldOperators world

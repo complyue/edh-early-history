@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Edh.Runtime
   ( createEdhWorld
@@ -7,8 +6,6 @@ module Language.Edh.Runtime
   , installEdhAttr
   , runEdhProgram
   , runEdhProgram'
-  , moduleContext
-  , voidStatement
   , mkHostProc
   , mkHostOper
 -- TODO cherrypick what artifacts to export as for user interface
@@ -35,12 +32,7 @@ import           System.Mem.Weak
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
-import           Data.List.NonEmpty             ( NonEmpty(..)
-                                                , (<|)
-                                                )
-import qualified Data.List.NonEmpty            as NE
-
-import           Text.Megaparsec
+import           Data.List.NonEmpty             ( NonEmpty(..) )
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -54,32 +46,17 @@ runEdhProgram
   => EdhWorld
   -> Object
   -> SeqStmts
-  -> m (Either EvalError EdhValue)
+  -> m (Either InterpretError EdhValue)
 runEdhProgram !w !m !rs = liftIO $ runEdhProgram' ctx rs
   where !ctx = moduleContext w m
 
 
-moduleContext :: EdhWorld -> Object -> Context
-moduleContext !w !mo = Context { contextWorld    = w
-                               , callStack       = moduScope <| rootScope
-                               , generatorCaller = Nothing
-                               , contextMatch    = true
-                               , contextStmt     = voidStatement
-                               }
- where
-  !moduScope = Scope (objEntity mo)
-                     mo
-                     (NE.toList rootScope)
-                     (classProcedure $ moduleClass w)
-  !rootScope = (classLexiStack $ moduleClass w)
-
-
-runEdhProgram' :: Context -> SeqStmts -> IO (Either EvalError EdhValue)
+runEdhProgram' :: Context -> SeqStmts -> IO (Either InterpretError EdhValue)
 runEdhProgram' _    []     = return $ Right EdhNil
 runEdhProgram' !ctx !stmts = do
   !final <- newEmptyTMVarIO
   let !(Scope _ !this _ _) = contextScope ctx
-  tryJust Just $ do
+  tryJust edhKnownError $ do
     driveEdhProg ctx $ evalBlock this stmts $ \(_, _, !val) ->
       return $ putTMVar final val
     atomically $ readTMVar final
@@ -88,7 +65,10 @@ runEdhProgram' !ctx !stmts = do
 createEdhWorld :: MonadIO m => m EdhWorld
 createEdhWorld = liftIO $ do
   -- ultimate default methods/operators/values go into this
-  worldEntity      <- newTVarIO Map.empty
+  rootEntity <- newTVarIO $ Map.fromList
+    [ (AttrByName "__name__", EdhString "<root>")
+    , (AttrByName "__file__", EdhString "<Genesis>")
+    ]
   -- methods supporting reflected scope manipulation go into this
   scopeManiMethods <- newTVarIO Map.empty
   rootSupers       <- newTVarIO []
@@ -97,11 +77,11 @@ createEdhWorld = liftIO $ do
                               , procedure'args = WildReceiver
                               , procedure'body = voidStatement
                               }
-    !worldScope = Scope worldEntity root [] worldInitProc
+    !worldScope = Scope rootEntity root [] worldInitProc
     !worldClass = Class { classLexiStack = worldScope :| []
                         , classProcedure = worldInitProc
                         }
-    !root = Object { objEntity = worldEntity
+    !root = Object { objEntity = rootEntity
                    , objClass  = worldClass
                    , objSupers = rootSupers
                    }
@@ -117,7 +97,7 @@ createEdhWorld = liftIO $ do
                         , classProcedure = scopeClassProc
                         }
   opPD    <- newTMVarIO Map.empty
-  modus   <- newTVarIO Map.empty
+  modus   <- newTMVarIO Map.empty
   runtime <- newTMVarIO EdhRuntime { runtimeLogger   = defaultLogger
                                    , runtimeLogLevel = 20
                                    }
@@ -234,13 +214,4 @@ installEdhAttrs e as = modifyTVar' e $ \em -> Map.union ad em
 installEdhAttr :: Entity -> AttrKey -> EdhValue -> STM ()
 installEdhAttr e k v = modifyTVar' e $ \em -> Map.insert k v em
 
-
-voidStatement :: StmtSrc
-voidStatement = StmtSrc
-  ( SourcePos { sourceName   = "<Genesis>"
-              , sourceLine   = mkPos 1
-              , sourceColumn = mkPos 1
-              }
-  , VoidStmt
-  )
 

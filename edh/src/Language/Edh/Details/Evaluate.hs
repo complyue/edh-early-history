@@ -4,11 +4,20 @@ module Language.Edh.Details.Evaluate where
 import           Prelude
 -- import           Debug.Trace
 
+import           GHC.Conc                       ( unsafeIOToSTM )
+
+import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Reader
+import           Control.Monad.State.Strict
 import           Control.Concurrent.STM
 
+import           Data.Maybe
+import qualified Data.ByteString               as B
+import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
+import           Data.Text.Encoding
+import           Data.Text.Encoding.Error
 import qualified Data.Map.Strict               as Map
 import           Data.List.NonEmpty             ( NonEmpty(..)
                                                 , (<|)
@@ -19,7 +28,9 @@ import           Text.Megaparsec
 
 import           Language.Edh.Control
 import           Language.Edh.AST
+import           Language.Edh.Parser
 import           Language.Edh.Details.RtTypes
+import           Language.Edh.Details.CoreLang
 import           Language.Edh.Details.PkgMan
 import           Language.Edh.Details.Utils
 
@@ -208,16 +219,193 @@ evalStmt' that stmt exit = do
       modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
       exitEdhSTM pgs exit (this, scope, gdf)
 
-    ImportStmt _argsRcvr srcExpr -> case srcExpr of
-      LitExpr (StringLiteral moduPath) -> exitEdhProc
-        exit
-        (this, scope, EdhString $ "wana import " <> moduPath <> ".edh huh?")
-      expr ->
-        throwEdh EvalError $ "don't know how to import " <> T.pack (show expr)
+    ImportStmt argsRcvr srcExpr -> case srcExpr of
+      LitExpr (StringLiteral importSpec) ->
+        -- import from specified path
+        importEdhModule argsRcvr importSpec exit
+      _ -> evalExpr that srcExpr $ \(_, _, srcVal) -> case srcVal of
+        EdhObject (Object !fromEnt _ _) ->
+          -- import from an object
+          importFromEntity argsRcvr fromEnt exit
+        _ ->
+          -- todo support more sources of import ?
+          throwEdh EvalError
+            $  "Don't know how to import from "
+            <> T.pack (show $ edhTypeOf srcVal)
+            <> ": "
+            <> T.pack (show srcVal)
 
     VoidStmt -> exitEdhProc exit (this, scope, nil)
 
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
+
+
+importFromEntity :: ArgsReceiver -> Entity -> EdhProcExit -> EdhProg (STM ())
+importFromEntity !argsRcvr !fromEnt !exit = do
+  pgs <- ask
+  let !callerCtx@(  Context !world _ _ _ _) = edh'context pgs
+      !callerScope@(Scope !ent !this _ _  ) = contextScope callerCtx
+  contEdhSTM $ do
+    emImp <- readTVar fromEnt
+    let !artsPk = ArgsPack [] $ Map.fromAscList $ catMaybes
+          [ (case k of
+-- only named attributes, those are not symbols, are importable
+              AttrByName attrName -> case v of
+                EdhSymbol _ -> Nothing
+                _           -> Just (attrName, v)
+-- symbolic attributes are effective stripped off, this is desirable so that
+-- symbolic attributes are not importable, thus private to a module/object
+              _ -> Nothing
+            )
+          | (k, v) <- Map.toAscList emImp
+          ]
+    runEdhProg pgs $ recvEdhArgs argsRcvr artsPk $ \(_, _, scopeObj) ->
+      case scopeObj of
+        EdhObject (Object rcvd'ent rcvd'cls _)
+          | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM $ do
+            rcvd'em <- readTVar rcvd'ent
+            modifyTVar' ent $ Map.union rcvd'em
+            exitEdhSTM pgs exit (this, callerScope, nil)
+        _ -> error "bug"
+
+importEdhModule :: ArgsReceiver -> Text -> EdhProcExit -> EdhProg (STM ())
+importEdhModule !argsRcvr !impSpec !exit = do
+  pgs <- ask
+  let !callerCtx   = edh'context pgs
+      !world       = contextWorld callerCtx
+      !callerScope = contextScope callerCtx
+  if edh'in'tx pgs
+    then throwEdh EvalError "You don't import from within a transaction"
+    else
+      contEdhSTM
+      $   lookupEdhCtxAttr callerScope (AttrByName "__file__")
+      >>= \case
+            Just (EdhString fromModuPath) -> do
+              (nomPath, moduFile) <- locateEdhModule
+                pgs
+                (edhPkgPathFrom $ T.unpack fromModuPath)
+                (T.unpack impSpec)
+              let !moduId = T.pack nomPath
+              moduMap <- takeTMVar (worldModules world)
+              case Map.lookup moduId moduMap of
+                Just !moduSlot -> do
+                  -- put back immediately
+                  putTMVar (worldModules world) moduMap
+                  -- blocking wait the target module loaded, then do import
+                  readTMVar moduSlot >>= \case
+                    -- TODO GHC should be able to detect cyclic imports as 
+                    --      deadlock, find ways to report that more friendly
+                    EdhObject modu -> runEdhProg pgs
+                      $ importFromEntity argsRcvr (objEntity modu) exit
+                    importError -> -- the first importer failed loading it,
+                      -- replicate the error in this thread
+                      throwEdhFromSTM pgs EvalError $ edhValueStr importError
+                Nothing -> do  -- we are the first importer
+                  -- allocate an empty slot
+                  moduSlot <- newEmptyTMVar
+                  -- put it for global visibility
+                  putTMVar (worldModules world)
+                    $ Map.insert moduId moduSlot moduMap
+                  catchSTM
+                      (loadModule pgs moduSlot moduId moduFile $ \result ->
+                        case result of
+                          (_, _, EdhObject modu) ->
+                            -- do the import after module successfully loaded
+                            importFromEntity argsRcvr (objEntity modu) exit
+                          _ -> error "bug"
+                      )
+                    $ \(e :: SomeException) -> do
+                        -- cleanup on loading error
+                        let errStr = T.pack (show e)
+                        void $ tryPutTMVar moduSlot $ EdhString errStr
+                        moduMap' <- takeTMVar (worldModules world)
+                        case Map.lookup moduId moduMap' of
+                          Just moduSlot' -> if moduSlot' == moduSlot
+                            then putTMVar (worldModules world)
+                              $ Map.delete moduId moduMap'
+                            else putTMVar (worldModules world) moduMap'
+                          _ -> putTMVar (worldModules world) moduMap'
+                        throwSTM e
+            _ -> error "bug: no valid `__file__` in context"
+
+loadModule
+  :: EdhProgState
+  -> TMVar EdhValue
+  -> ModuleId
+  -> FilePath
+  -> EdhProcExit
+  -> STM ()
+loadModule pgs moduSlot moduId moduFile exit = if edh'in'tx pgs
+  then throwEdhFromSTM pgs
+                       EvalError
+                       "You don't load a module from within a transaction"
+  else do
+    unsafeIOToSTM (streamDecodeUtf8With lenientDecode <$> B.readFile moduFile)
+      >>= \case
+            Some moduSource _ _ -> do
+              let !callerCtx                       = edh'context pgs
+                  !world                           = contextWorld callerCtx
+                  !callerScope@(Scope _ !this _ _) = contextScope callerCtx
+                  !wops                            = worldOperators world
+              -- serialize parsing against 'worldOperators'
+              opPD <- takeTMVar wops
+              flip
+                  catchSTM
+                  (\(e :: SomeException) -> tryPutTMVar wops opPD >> throwSTM e)
+                $ do
+                    -- parse module source
+                    let (pr, opPD') = runState
+                          (runParserT parseProgram (T.unpack moduId) moduSource)
+                          opPD
+                    case pr of
+                      Left  !err   -> throwSTM $ EdhParseError err
+                      Right !stmts -> do
+                        -- release world lock as soon as parsing done successfuly
+                        putTMVar wops opPD'
+                        -- prepare the module meta data
+                        !moduEntity <- newTVar $ Map.fromList
+                          [ (AttrByName "__name__", EdhString moduId)
+                          , (AttrByName "__file__", EdhString $ T.pack moduFile)
+                          ]
+                        !moduSupers <- newTVar []
+                        let !modu = Object { objEntity = moduEntity
+                                           , objClass  = moduleClass world
+                                           , objSupers = moduSupers
+                                           }
+                        -- run statements from the module with its own context
+                        runEdhProg pgs { edh'context = moduleContext world modu
+                                       }
+                          $ evalBlock modu stmts
+                          $ \_ -> contEdhSTM $ do
+                              -- arm the successfully loaded module
+                              putTMVar moduSlot $ EdhObject modu
+                              -- switch back to module importer's scope and continue
+                              exitEdhSTM pgs
+                                         exit
+                                         (this, callerScope, EdhObject modu)
+
+moduleContext :: EdhWorld -> Object -> Context
+moduleContext !w !mo = Context { contextWorld    = w
+                               , callStack       = moduScope <| rootScope
+                               , generatorCaller = Nothing
+                               , contextMatch    = true
+                               , contextStmt     = voidStatement
+                               }
+ where
+  !moduScope = Scope (objEntity mo)
+                     mo
+                     (NE.toList rootScope)
+                     (classProcedure $ moduleClass w)
+  !rootScope = (classLexiStack $ moduleClass w)
+
+voidStatement :: StmtSrc
+voidStatement = StmtSrc
+  ( SourcePos { sourceName   = "<Genesis>"
+              , sourceLine   = mkPos 1
+              , sourceColumn = mkPos 1
+              }
+  , VoidStmt
+  )
 
 
 evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
@@ -951,11 +1139,11 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                 ( ArgsPack posArgs'' kwArgs''
                 , Map.insert (AttrByName attrName) argVal em
                 )
-            SymbolicAttr _symName -> -- todo support this ?
-                                     throwEdhFromSTM
-              pgs
-              EvalError
-              "arg renaming to symbolic attr not supported"
+            SymbolicAttr symName -> -- todo support this ?
+              throwEdhFromSTM pgs EvalError
+                $  "Do you mean `this.@"
+                <> symName
+                <> "` instead ?"
           Just addr@(IndirectRef _ _) -> do
             runEdhProg (pgs { edh'in'tx = True }) $ assignEdhTarget
               pgs
@@ -982,12 +1170,12 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
             []                   -> case argDefault of
               Just defaultExpr -> do
                 defaultVar <- newEmptyTMVar
+-- always eval the default value atomically
                 runEdhProg (pgs { edh'in'tx = True }) $ evalExpr
-
+-- don't respect `that` in context, during resolution of arg default values
                   callerThis
                   defaultExpr
                   (\(_, _, val) -> return (putTMVar defaultVar val))
-
                 defaultVal <- readTMVar defaultVar
                 return (defaultVal, posArgs', kwArgs'')
               _ ->
@@ -1160,82 +1348,4 @@ packEdhArgs' !that (!x : xs) !exit = do
               )
             )
         _ -> error "bug"
-
-
--- | resolve an attribute addressor, either alphanumeric named or symbolic
-resolveAddr :: EdhProgState -> AttrAddressor -> STM AttrKey
-resolveAddr _ (NamedAttr !attrName) = return (AttrByName attrName)
-resolveAddr !pgs (SymbolicAttr !symName) =
-  let scope = contextScope $ edh'context pgs
-  in  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
-        Just scope' -> do
-          em <- readTVar (scopeEntity scope')
-          case Map.lookup (AttrByName symName) em of
-            Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
-            Just v ->
-              throwEdhFromSTM pgs EvalError
-                $  "Not a symbol: "
-                <> T.pack (show v)
-                <> " as "
-                <> symName
-                <> " from "
-                <> T.pack (show $ thisObject scope') -- TODO this correct ?
-            Nothing -> error "bug in ctx attr resolving"
-        Nothing ->
-          throwEdhFromSTM pgs EvalError
-            $  "No symbol named "
-            <> T.pack (show symName)
-            <> " available"
-
-
--- Edh attribute resolution
-
-resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhCtxAttr scope@(Scope !ent _ lexi'stack _) !addr =
-  readTVar ent >>= \em -> if Map.member addr em
-    then -- directly present on current scope
-         return (Just scope)
-    else resolveLexicalAttr lexi'stack addr
-
-resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
-resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (scope@(Scope !ent !obj _ _) : outerScopes) addr =
-  readTVar ent >>= \em -> if Map.member addr em
-    then -- directly present on current scope
-         return (Just scope)
-    else -- go for the interesting attribute from inheritance hierarchy
-         -- of this context object, so a module as an object, can `extends`
-         -- some objects too, in addition to the `import` mechanism
-      (if ent == objEntity obj
-          -- go directly to supers as entity has just got negative result
-          then readTVar (objSupers obj) >>= resolveEdhSuperAttr addr
-          -- context scope is different entity from this context object,
-          -- start next from this object
-          else resolveEdhObjAttr obj addr
-        )
-        >>= \case
-              Just scope'from'object -> return $ Just scope'from'object
-              -- go one level outer of the lexical stack
-              Nothing                -> resolveLexicalAttr outerScopes addr
-
-resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
-resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->
-  if Map.member addr em
-    then return
-      (Just $ Scope thisEnt
-                    this
-                    (NE.toList $ classLexiStack $ objClass this)
-                    clsProc
-      )
-    else readTVar (objSupers this) >>= resolveEdhSuperAttr addr
- where
-  !thisEnt = objEntity this
-  clsProc  = classProcedure (objClass this)
-
-resolveEdhSuperAttr :: AttrKey -> [Object] -> STM (Maybe Scope)
-resolveEdhSuperAttr _ [] = return Nothing
-resolveEdhSuperAttr !addr (super : restSupers) =
-  resolveEdhObjAttr super addr >>= \case
-    Just scope -> return $ Just scope
-    Nothing    -> resolveEdhSuperAttr addr restSupers
 

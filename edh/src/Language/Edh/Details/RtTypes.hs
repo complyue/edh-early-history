@@ -65,6 +65,15 @@ itemKeyValue (ItemBySym  s  ) = EdhSymbol s
 itemKeyValue (ItemByNum  d  ) = EdhDecimal d
 itemKeyValue (ItemByBool b  ) = EdhBool b
 
+edhDictFromEntity :: Entity -> STM Dict
+edhDictFromEntity ent = do
+  em <- readTVar ent
+  (Dict <$>) $ newTVar $ Map.fromAscList
+    [ (keyAttr2Item k, v) | (k, v) <- Map.toAscList em ]
+ where
+  keyAttr2Item :: AttrKey -> ItemKey
+  keyAttr2Item (AttrByName nm ) = ItemByStr nm
+  keyAttr2Item (AttrBySym  sym) = ItemBySym sym
 
 -- | An entity in Edh is the backing storage for a scope, with
 -- possibly an object viewing this entity.
@@ -74,6 +83,10 @@ type Entity = TVar EntityStore
 type EntityStore = Map.Map AttrKey EdhValue
 data AttrKey = AttrByName !AttrName | AttrBySym !Symbol
     deriving (Eq, Ord, Show)
+
+attrKeyValue :: AttrKey -> EdhValue
+attrKeyValue (AttrByName nm ) = EdhString nm
+attrKeyValue (AttrBySym  sym) = EdhSymbol sym
 
 -- | A symbol can stand in place of an alphanumeric name, used to
 -- address an attribute from an entity object, but symbols are 
@@ -267,8 +280,11 @@ data EdhWorld = EdhWorld {
     -- | all operators declared in this world, this also used as the
     -- _world lock_ in parsing source code to be executed in this world
     , worldOperators :: !(TMVar OpPrecDict)
-    -- | all modules loaded into this world
-    , worldModules :: !(TVar (Map.Map ModuleId Object))
+    -- | all modules loaded or being loaded into this world, for each
+    -- entry, will be a transient entry containing an error value if
+    -- failed loading, or a permanent entry containing the module object
+    -- if successfully loaded
+    , worldModules :: !(TMVar (Map.Map ModuleId (TMVar EdhValue)))
     -- | interface to the embedding host runtime
     , worldRuntime :: !(TMVar EdhRuntime)
   }

@@ -62,3 +62,14 @@ instance Show InterpretError where
   show (EdhUsageError (UsageError msg)) = "🐒 " ++ T.unpack msg
 instance Exception InterpretError
 
+
+edhKnownError :: SomeException -> Maybe InterpretError
+edhKnownError err = case fromException err :: Maybe InterpretError of
+  Just e  -> Just e
+  Nothing -> case fromException err :: Maybe EvalError of
+    Just e  -> Just $ EdhEvalError e
+    Nothing -> case fromException err :: Maybe ParserError of
+      Just e  -> Just $ EdhParseError e
+      Nothing -> case fromException err :: Maybe UsageError of
+        Just e  -> Just $ EdhUsageError e
+        Nothing -> Nothing

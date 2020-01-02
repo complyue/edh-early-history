@@ -25,7 +25,7 @@ data AttrAddressor =
   deriving (Eq, Show)
 
 
-type ModuleId = FilePath
+type ModuleId = Text
 
 
 type SeqStmts = [StmtSrc]
