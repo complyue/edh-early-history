@@ -62,8 +62,8 @@ evalBlock that [] !exit = do
 evalBlock that [!ss] !exit = evalStmt that ss $ \result -> case result of
   -- last branch does match
   (!this', !scope', EdhCaseClose !val) -> exitEdhProc exit (this', scope', val)
-  -- pass end-of-block without match, give out nil
-  (!this', !scope', EdhFallthrough) -> exitEdhProc exit (this', scope', nil)
+  -- explicit `fallthrough` at end of this block, cascade to outer block
+  fall@(_ , _, EdhFallthrough) -> exitEdhProc exit fall
   -- ctrl to be propagated outwards
   brk@(_, _, EdhBreak) -> exitEdhProc exit brk
   ctn@(_, _, EdhContinue) -> exitEdhProc exit ctn

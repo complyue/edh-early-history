@@ -40,10 +40,7 @@
 
       }
 
-      // the | guard prefix will be parsed as infix (|) operator,
-      // if has a nearby left-hand expression, place a semi-colon 
-      // right before it can make sure it's parsed as expected always.
-      ; |true -> for i from g do {
+      _ -> for i from g do {
         yield pkargs(n, i)
         n += 1
       }
