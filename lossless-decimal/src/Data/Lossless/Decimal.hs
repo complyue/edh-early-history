@@ -56,19 +56,19 @@ compareNonNanDecimal (Decimal x'd x'e x'n) (Decimal y'd y'e y'n)
     else compare (x'n * y'd) (y'n * x'd * 10 ^ (y'e - x'e))
 
 instance Ord Decimal where
-    -- | this is to implement proper sorting order,
-    -- in equality and order testing, nans should be treated specially.
-    -- a nan is considered greater even compared to +inf,
-    -- so that nans are sorted to last in ascending order.
-    -- a nan is considered equal compared to another nan for stable
-    -- sorting order.
+  -- | this is to implement proper sorting order,
+  -- in equality and order testing, nans should be treated specially.
+  -- a nan is considered greater even compared to +inf,
+  -- so that nans are sorted to last in ascending order.
+  -- a nan is considered equal compared to another nan for stable
+  -- sorting order.
   compare x@(Decimal x'd _x'e x'n) y@(Decimal y'd _y'e y'n)
     | x'd == 0 && x'n == 0 = if y'd == 0 && y'n == 0 then EQ else GT
     | y'd == 0 && y'n == 0 = LT
     | otherwise            = compareNonNanDecimal x y
 
 instance Eq Decimal where
-    -- | nan equals to nothing, including another nan
+  -- | nan equals to nothing, including another nan
   x@(Decimal x'd _x'e x'n) == y@(Decimal y'd _y'e y'n)
     | -- either is nan
       (x'd == 0 && x'n == 0) || (y'd == 0 && y'n == 0) = False
