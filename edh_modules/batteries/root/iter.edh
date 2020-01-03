@@ -51,7 +51,6 @@
       GeneratorType -> for i from g(***gargs) do {
         yield pkargs(n, i)
         n += 1
-
       }
 
       if not null(gargs) then
