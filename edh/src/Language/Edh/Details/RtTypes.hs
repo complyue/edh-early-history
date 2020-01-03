@@ -430,12 +430,13 @@ instance Show HostProcedure where
 -- | An event sink is similar to a Go channel, but is broadcast
 -- in nature, in contrast to the Go channel's unicast nature.
 data EventSink = EventSink {
-        evs'mrv :: !(TVar EdhValue) -- most recent value, initially nil
-        , evs'chan :: !(TChan EdhValue) -- 
-    } deriving Eq
+    -- | most recent value, initially nil
+    evs'mrv :: !(TVar EdhValue)
+    -- | the broadcast channel
+    , evs'chan :: !(TChan EdhValue)
+  } deriving Eq
 instance Show EventSink where
-  show (EventSink e _) =
-    "[sink: " ++ show (unsafePerformIO (readTVarIO e)) ++ "]"
+  show (EventSink _ _) = "[sink]"
 
 
 -- Atop Haskell, most types in Edh the surface language, are for

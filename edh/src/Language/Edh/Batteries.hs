@@ -52,7 +52,9 @@ installEdhBatteries world = liftIO $ do
           )
 
         -- assignments
-        , ("=" , 2)
+        , ( "="
+          , 1
+          ) -- ^ make it lower than (++), so don't need to quote `a = b ++ c`
         , ("+=", 2)
         , ("-=", 2)
         , ("/=", 2)

@@ -14,7 +14,7 @@
     SymbolType -> {quiz='mistery attracts most people' fallthrough}
 
     ObjectType -> {
-      quiz='I live in ' ++ (v?__name__ |> 'no where');
+      quiz = 'I live in ' ++ v?__name__ |> 'no where';
       fallthrough
     }
 
