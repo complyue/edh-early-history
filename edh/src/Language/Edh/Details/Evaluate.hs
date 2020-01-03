@@ -104,8 +104,9 @@ evalExprs !that (x : xs) !exit = evalExpr that x $ \(this', scope', val) ->
 evalStmt' :: Object -> Stmt -> EdhProcExit -> EdhProg (STM ())
 evalStmt' that stmt exit = do
   !pgs <- ask
-  let !ctx@(  Context !world !call'stack _ _ _) = edh'context pgs
-      !scope@(Scope !ent !this _ _            ) = contextScope ctx
+  let !ctx@(Context !world !call'stack _ _ (StmtSrc (srcPos, _))) =
+        edh'context pgs
+      !scope@(Scope !ent !this _ _) = contextScope ctx
   case stmt of
 
     ExprStmt expr -> evalExpr that expr exit
@@ -206,16 +207,27 @@ evalStmt' that stmt exit = do
     OpOvrdStmt opSym opProc opPrec -> contEdhSTM $ do
       let findPredecessor :: STM (Maybe EdhValue)
           findPredecessor = do
-            resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
-              Nothing                  -> return Nothing
-              Just (Scope !ent' _ _ _) -> do
-                em <- readTVar ent'
-                case Map.lookup (AttrByName opSym) em of
-                  Nothing                       -> error "attr resolving bug"
-                  Just hostProc@(EdhHostProc _) -> return $ Just hostProc
-                  Just edhProc@( EdhOperator _) -> return $ Just edhProc
-                  -- TODO should really throw EvalError here ?
-                  _                             -> return Nothing
+            lookupEdhCtxAttr scope (AttrByName opSym) >>= \case
+              Nothing -> -- do
+                -- (EdhRuntime logger _) <- readTMVar $ worldRuntime world
+                -- logger 30 (Just $ sourcePosPretty srcPos)
+                --   $ ArgsPack
+                --       [EdhString "overriding an unavailable operator"]
+                --       Map.empty
+                return Nothing
+              Just hostOper@(EdhHostOper _ _) -> return $ Just hostOper
+              Just surfOper@(EdhOperator _  ) -> return $ Just surfOper
+              Just opVal                      -> do
+                (EdhRuntime logger _) <- readTMVar $ worldRuntime world
+                logger 30 (Just $ sourcePosPretty srcPos) $ ArgsPack
+                  [ EdhString
+                    $  "overriding an invalid operator "
+                    <> T.pack (show $ edhTypeOf opVal)
+                    <> ": "
+                    <> T.pack (show opVal)
+                  ]
+                  Map.empty
+                return Nothing
       predecessor <- findPredecessor
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
                                       , operatorProcedure   = opProc
