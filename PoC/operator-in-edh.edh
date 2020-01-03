@@ -1,15 +1,48 @@
 
 // Some fancy chars can be used in operators
 //
-// ⁉️❇️‼️♾️☢️☣️™️©️®️⚡▢◆◇◈◉◎☆★☼♻⎔⌬⏣♠️♥️♦️♣️▲▶▼◀
 // 🔀🔁🔂⏩⏪🔼⏫🔽⏬⏹️
 // 🌀📢📣🔔🔕🎵⭕
 // 🆔🆘🆚
 
+{
 
-method f (n) { r = n>5 &> n*7 |> n*3; r/11 }
-( f(2), f(8) )
+  operator 📣 5 (lhv, rhv) {
+    runtime.info <| rhv ++ ' is telling ' ++ lhv
+  }
+
+  operator 🆚 9 (lhv, rhv) {
+    runtime.info <| "🌀 What's the difference?\n     " ++ lhv ++ '\n  🆚\n     ' ++ rhv
+  }
+
+}
+
+'a tale' 📣 'the goat'
+
+let (a, b) = ( 'Orange', 'Apple', )
+a 🆚 b
 
 
-(a = 3, a += 5, a -= 7, a *= 11, a /= 17)
+{
 
+  method localOverrides * {
+    // overide the (++) operator within this procedure only, avoid
+    // polluting the module scope
+
+    scopeHere = scope() // use the reflective `scope` utility
+    testExpr = makeExpr( 'You' ++ ' and ' ++ 'me' )
+
+    before = scopeHere.eval(testExpr)
+    operator ++ (lhv, rhv) {
+      // inside the overriding operator definition, the overridden,
+      // original operator is available as was before the overide
+      lhv ++ ' ⭕ ' ++ rhv
+    }
+    after = scopeHere.eval(testExpr)
+
+    before 🆚 after
+  }
+
+}
+
+localOverrides()

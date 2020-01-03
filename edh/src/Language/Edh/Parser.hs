@@ -132,8 +132,8 @@ parseKwRecv inPack = do
   validateTgt :: Maybe AttrAddr -> Maybe AttrAddr
   validateTgt tgt = case tgt of
     Nothing      -> Nothing
-    Just ThisRef -> fail "can not overwrite this"
-    Just ThatRef -> fail "can not overwrite that"
+    Just ThisRef -> fail "Can not overwrite this"
+    Just ThatRef -> fail "Can not overwrite that"
     _            -> tgt
 
 
@@ -151,9 +151,9 @@ parseAttrAddr = do
     ]
   followingPart :: Parser Expr
   followingPart = choice
-    [ (symbol "this") *> fail "invalid this reference"
-    , (AttrExpr . DirectRef . SymbolicAttr) <$> parseAttrSym
-    , (AttrExpr . DirectRef . NamedAttr) <$> parseAttrName
+    [ symbol "this" *> fail "Unexpected this reference"
+    , AttrExpr . DirectRef . SymbolicAttr <$> parseAttrSym
+    , AttrExpr . DirectRef . NamedAttr <$> parseAttrName
     ]
   moreAddr :: Expr -> Parser AttrAddr
   moreAddr p1 =
@@ -195,14 +195,14 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
     UnpackPosArgs <$> parseExpr
   parseKwSend :: Parser ArgSender
   parseKwSend = do
-    o <- getOffset
+    errRptPos <- getOffset
     parseExpr >>= \case
       InfixExpr "=" nExpr vExpr -> case nExpr of
         AttrExpr (DirectRef (NamedAttr attrName)) ->
           return $ SendKwArg attrName vExpr
         _ -> do
-          setOffset o
-          fail $ "invalid argument name: " <> show nExpr
+          setOffset errRptPos
+          fail $ "Invalid argument name: " <> show nExpr
       vExpr -> return $ SendPosArg vExpr
 
 
@@ -249,32 +249,41 @@ isMagicProcChar c = isOperatorChar c || elem c ("[]" :: [Char])
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do
   void $ symbol "operator"
-  srcLoc   <- getSourcePos
-  opSym    <- parseOpLit
-  precDecl <- optional $ L.decimal <* sc
+  srcPos    <- getSourcePos
+  errRptPos <- getOffset
+  opSym     <- parseOpLit
+  precDecl  <- optional $ L.decimal <* sc
   -- todo restrict forms of valid args receiver for operators, e.g. 
   --  * 2 pos-args - simple lh/rh value receiving operator
   --  * 3 pos-args - caller scope + lh/rh expr receiving operator
-  argRcvr  <- parseArgsReceiver
-  body     <- parseStmt
+  argRcvr   <- parseArgsReceiver
+  body      <- parseStmt
   let procDecl = ProcDecl opSym argRcvr body
   opPD <- get
   case precDecl of
     Nothing -> case Map.lookup opSym opPD of
-      Nothing          -> fail $ "undeclared operator: " <> T.unpack opSym
+      Nothing -> do
+        setOffset errRptPos
+        fail
+          $  "You forget to specify the precedence for operator: "
+          <> T.unpack opSym
+          <> " ?"
       Just (opPrec, _) -> return $ OpOvrdStmt opSym procDecl opPrec
     Just opPrec -> do
-      when (opPrec < 0 || opPrec >= 10)
-           (fail $ "invalid operator precedence: " <> show opPrec)
+      when (opPrec < 0 || opPrec >= 10) $ do
+        setOffset errRptPos
+        fail $ "Invalid operator precedence: " <> show opPrec
       case Map.lookup opSym opPD of
-        Nothing -> return ()
-        Just (_, odl) ->
+        Nothing       -> return ()
+        Just (_, odl) -> do
+          setOffset errRptPos
           fail
-            $  "redeclaring operator: "
+            $  "Redeclaring operator "
             <> T.unpack opSym
-            <> " which has been declared at: "
+            <> " which has been declared at "
             <> T.unpack odl
-      put $ Map.insert opSym (opPrec, T.pack $ show srcLoc) opPD
+            <> ", omit the precedence if you mean to override it."
+      put $ Map.insert opSym (opPrec, T.pack $ sourcePosPretty srcPos) opPD
       return $ OpDeclStmt opSym opPrec procDecl
 
 parseTryStmt :: Parser Stmt
@@ -536,12 +545,12 @@ parsePrefixExpr = choice
   ]
  where
   requireCallOrLoop = do
-    o <- getOffset
-    e <- parseExpr
+    errRptPos <- getOffset
+    e         <- parseExpr
     case e of
       ce@CallExpr{} -> return ce
       le@ForExpr{}  -> return le
-      _             -> setOffset o >> fail "a call/for required here"
+      _             -> setOffset errRptPos >> fail "A call/for required here"
 
 
 -- besides hardcoded prefix operators, all other operators are infix binary
@@ -578,13 +587,16 @@ parseExprPrec prec =
 
   higherOp :: Precedence -> Parser (Maybe (Precedence, OpSymbol))
   higherOp prec' = do
-    beforeOp <- getParserState
+    beforeOp  <- getParserState
+    errRptPos <- getOffset
     optional parseOpLit >>= \case
       Nothing    -> return Nothing
       Just opSym -> do
         opPD <- get
         case Map.lookup opSym opPD of
-          Nothing -> fail $ "undeclared operator: (" <> T.unpack opSym <> ")"
+          Nothing -> do
+            setOffset errRptPos
+            fail $ "Undeclared operator: " <> T.unpack opSym
           Just (opPrec, _) -> if opPrec > prec'
             then return $ Just (opPrec, opSym)
             else do
