@@ -4,6 +4,9 @@
 
     data = {}
 
+    /**
+     * magic method responding to reading with an index
+     */
     method ([]) (ix) {
 
       // runtime.info <| 'Indexing with ' ++ type(ix) ++ ': ' ++ ix
@@ -50,11 +53,18 @@
         StringType -> {
           runtime.info <| 'Indexing column by name: ' ++ ix
         }
+        _ -> {
+          runtime.info <| 'Suspicious index ' ++ type(ix) ++ ': ' ++ ix
+          break // avoid actually doing indexing with this ix
+        }
       }
 
       this.data[ix]
     }
 
+    /**
+     * magic method responding to writing with an index
+     */
     method ([=]) (ix, val) this.data[ix] = val
 
   }
@@ -72,3 +82,5 @@ d['price']
 d[3:5]
 
 d[3:5:2, 0:7:3]
+
+d[3, 5, 7]
