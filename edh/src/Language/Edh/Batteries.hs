@@ -146,6 +146,7 @@ installEdhBatteries world = liftIO $ do
         , ("?" , attrTemptProc)
         , ("++", concatProc)
         , ("=<", cprhProc)
+        , ("=>", prpdProc)
         , ("+" , addProc)
         , ("-" , subsProc)
         , ("*" , mulProc)

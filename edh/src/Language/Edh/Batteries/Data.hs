@@ -176,7 +176,53 @@ dictProc !argsSender !that _ !exit = do
               exitEdhSTM pgs exit (that, callerScope, EdhDict (Dict d))
 
 
--- | operator (=<) comprehension
+val2DictEntry :: EdhProgState -> EdhValue -> STM (ItemKey, EdhValue)
+val2DictEntry _ (EdhPair (EdhType    t) v) = return (ItemByType t, v)
+val2DictEntry _ (EdhPair (EdhString  s) v) = return (ItemByStr s, v)
+val2DictEntry _ (EdhPair (EdhSymbol  s) v) = return (ItemBySym s, v)
+val2DictEntry _ (EdhPair (EdhDecimal n) v) = return (ItemByNum n, v)
+val2DictEntry _ (EdhPair (EdhBool    b) v) = return (ItemByBool b, v)
+val2DictEntry pgs (EdhPair k _v) =
+  throwEdhFromSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
+val2DictEntry _ (EdhTuple [EdhType    t, v]) = return (ItemByType t, v)
+val2DictEntry _ (EdhTuple [EdhString  s, v]) = return (ItemByStr s, v)
+val2DictEntry _ (EdhTuple [EdhSymbol  s, v]) = return (ItemBySym s, v)
+val2DictEntry _ (EdhTuple [EdhDecimal n, v]) = return (ItemByNum n, v)
+val2DictEntry _ (EdhTuple [EdhBool    b, v]) = return (ItemByBool b, v)
+val2DictEntry pgs (EdhTuple [k, _v]) =
+  throwEdhFromSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
+val2DictEntry pgs val =
+  throwEdhFromSTM pgs EvalError $ "Invalid entry for dict: " <> T.pack
+    (show val)
+
+-- | operator (=>) - prepender
+prpdProc :: EdhProcedure
+prpdProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit =
+  do
+    !pgs <- ask
+    let !callerCtx   = edh'context pgs
+        !callerScope = contextScope callerCtx
+    evalExpr that lhExpr $ \(_, _, lhVal) ->
+      evalExpr that rhExpr $ \rhResult@(_, _, rhVal) -> case rhVal of
+        EdhTuple vs ->
+          exitEdhProc exit (that, callerScope, EdhTuple $ lhVal : vs)
+        EdhList (List l) -> contEdhSTM $ do
+          modifyTVar' l (lhVal :)
+          exitEdhSTM pgs exit rhResult
+        EdhDict (Dict d) -> contEdhSTM $ do
+          (k, v) <- val2DictEntry pgs lhVal
+          modifyTVar' d (Map.insert k v)
+          exitEdhSTM pgs exit rhResult
+        _ ->
+          throwEdh EvalError
+            $  "Don't know how to prepend to "
+            <> T.pack (show $ edhTypeOf rhVal)
+            <> ": "
+            <> T.pack (show rhVal)
+prpdProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+-- | operator (=<) - comprehension
 --  * list comprehension:
 --     [] =< for x from range(10) do x*x
 --  * dict comprehension:
@@ -193,35 +239,14 @@ cprhProc :: EdhProcedure
 cprhProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit =
   do
     !pgs <- ask
-    let
-      !callerCtx   = edh'context pgs
-      !callerScope = contextScope callerCtx
-      pvlToDict :: [EdhValue] -> STM DictStore
-      pvlToDict ps = Map.fromList <$> sequence (val2ItemPair <$> ps)
-      val2ItemPair :: EdhValue -> STM (ItemKey, EdhValue)
-      val2ItemPair (EdhPair (EdhType    t) v) = return (ItemByType t, v)
-      val2ItemPair (EdhPair (EdhString  s) v) = return (ItemByStr s, v)
-      val2ItemPair (EdhPair (EdhSymbol  s) v) = return (ItemBySym s, v)
-      val2ItemPair (EdhPair (EdhDecimal n) v) = return (ItemByNum n, v)
-      val2ItemPair (EdhPair (EdhBool    b) v) = return (ItemByBool b, v)
-      val2ItemPair (EdhPair k _v) =
-        throwEdhFromSTM pgs EvalError $ "Invalid key for dict: " <> T.pack
-          (show k)
-      val2ItemPair (EdhTuple [EdhType    t, v]) = return (ItemByType t, v)
-      val2ItemPair (EdhTuple [EdhString  s, v]) = return (ItemByStr s, v)
-      val2ItemPair (EdhTuple [EdhSymbol  s, v]) = return (ItemBySym s, v)
-      val2ItemPair (EdhTuple [EdhDecimal n, v]) = return (ItemByNum n, v)
-      val2ItemPair (EdhTuple [EdhBool    b, v]) = return (ItemByBool b, v)
-      val2ItemPair (EdhTuple [k, _v]) =
-        throwEdhFromSTM pgs EvalError $ "Invalid key for dict: " <> T.pack
-          (show k)
-      val2ItemPair val =
-        throwEdhFromSTM pgs EvalError $ "Invalid entry for dict: " <> T.pack
-          (show val)
-      insertToDict :: EdhValue -> (TVar DictStore) -> STM ()
-      insertToDict p d = do
-        (k, v) <- val2ItemPair p
-        modifyTVar' d $ Map.insert k v
+    let !callerCtx   = edh'context pgs
+        !callerScope = contextScope callerCtx
+        pvlToDict :: [EdhValue] -> STM DictStore
+        pvlToDict ps = Map.fromList <$> sequence (val2DictEntry pgs <$> ps)
+        insertToDict :: EdhValue -> (TVar DictStore) -> STM ()
+        insertToDict p d = do
+          (k, v) <- val2DictEntry pgs p
+          modifyTVar' d $ Map.insert k v
     case rhExpr of
       ForExpr argsRcvr iterExpr doExpr ->
         evalExpr that lhExpr $ \lhResult@(_, _, lhVal) -> case lhVal of
