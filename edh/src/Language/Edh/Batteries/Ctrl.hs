@@ -11,8 +11,6 @@ import           Control.Concurrent.STM
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
-import           Text.Megaparsec
-
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Runtime
@@ -26,9 +24,8 @@ branchProc :: EdhProcedure
 branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
   do
     !pgs <- ask
-    let !callerCtx@(Context !world _ _ !ctxMatch (StmtSrc (srcPos, _))) =
-          edh'context pgs
-        !callerScope@(Scope !ent _ _ _) = contextScope callerCtx
+    let !callerCtx@(  Context _ _ _ !ctxMatch _) = edh'context pgs
+        !callerScope@(Scope !ent _ _ _         ) = contextScope callerCtx
     case lhExpr of
       -- | recognize `_` as similar to the wildcard pattern match in Haskell,
       -- it always matches
@@ -42,60 +39,62 @@ branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
             _              -> EdhCaseClose rhVal
           )
 
-      -- | double parenthesis invokes pattern matching
+      BlockExpr patternExpr -> case patternExpr of
+        -- ^ {( ... )} invokes pattern matching
+        --  * no comma but one pair inside, -- pair pattern
+        --  * comma-separated-attr-names, -- tuple pattern
+        --  * TODO other kinds of patterns ?
 
-      -- | tuple pattern, a special case, where a tuple expr in a single
-      -- level of parenthesis already looks like double parenthesis
-      ParenExpr (TupleExpr vExprs) -> contEdhSTM $ do
-        attrNames <- sequence $ (<$> vExprs) $ \case
-          (AttrExpr (DirectRef (NamedAttr vAttr))) -> return $ AttrByName vAttr
-          vPattern ->
-            throwEdhFromSTM pgs EvalError
-              $  "Invalid element in tuple pattern: "
-              <> T.pack (show vPattern)
-        case ctxMatch of
-          EdhTuple vs | length vs == length vExprs -> do
-            modifyTVar' ent $ Map.union $ Map.fromList $ zip attrNames vs
-            runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
-              exitEdhProc
-                exit
-                ( that'
-                , scope'
-                , case rhVal of
-                  EdhFallthrough -> EdhFallthrough
-                  _              -> EdhCaseClose rhVal
-                )
-          _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
+        -- | tuple pattern
+        [StmtSrc (_, ExprStmt (TupleExpr vExprs))] -> contEdhSTM $ do
+          attrNames <- sequence $ (<$> vExprs) $ \case
+            (AttrExpr (DirectRef (NamedAttr vAttr))) ->
+              return $ AttrByName vAttr
+            vPattern ->
+              throwEdhFromSTM pgs EvalError
+                $  "Invalid element in tuple pattern: "
+                <> T.pack (show vPattern)
+          case ctxMatch of
+            EdhTuple vs | length vs == length vExprs -> do
+              modifyTVar' ent $ Map.union $ Map.fromList $ zip attrNames vs
+              runEdhProg pgs
+                $ evalExpr that rhExpr
+                $ \(that', scope', rhVal) -> exitEdhProc
+                    exit
+                    ( that'
+                    , scope'
+                    , case rhVal of
+                      EdhFallthrough -> EdhFallthrough
+                      _              -> EdhCaseClose rhVal
+                    )
+            _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
 
-      -- | double parenthesis quoted pair pattern
-      ParenExpr (ParenExpr patternExpr) ->
-        case matchPairPattern patternExpr ctxMatch [] of
-          Just [] -> -- valid pattern, no match
-            exitEdhProc exit (that, callerScope, EdhFallthrough)
-          Just mps -> -- pattern matched
-                      contEdhSTM $ do
-            modifyTVar' ent $ Map.union (Map.fromList mps)
-            runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
-              exitEdhProc
-                exit
-                ( that'
-                , scope'
-                , case rhVal of
-                  EdhFallthrough -> EdhFallthrough
-                  _              -> EdhCaseClose rhVal
-                )
-          Nothing -> -- invalid pattern
-                     contEdhSTM $ do
-            (EdhRuntime logger _) <- readTMVar $ worldRuntime world
-            logger 30 (Just $ sourcePosPretty srcPos) $ ArgsPack
-              [ EdhString $ "Unsupported match pattern: " <> T.pack
-                  (show patternExpr)
-              ]
-              Map.empty
-            exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
+         -- | pair pattern
+        [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
+          case matchPairPattern pairPattern ctxMatch [] of
+            Nothing -> throwEdh EvalError $ "Invalid pair pattern: " <> T.pack
+              (show pairPattern)
+            Just [] -> -- valid pattern, no match
+              exitEdhProc exit (that, callerScope, EdhFallthrough)
+            Just mps -> -- pattern matched
+                        contEdhSTM $ do
+              modifyTVar' ent $ Map.union (Map.fromList mps)
+              runEdhProg pgs
+                $ evalExpr that rhExpr
+                $ \(that', scope', rhVal) -> exitEdhProc
+                    exit
+                    ( that'
+                    , scope'
+                    , case rhVal of
+                      EdhFallthrough -> EdhFallthrough
+                      _              -> EdhCaseClose rhVal
+                    )
 
-      -- TODO more kinds of match patterns to support ?
-      --      e.g. list pattern, with rest-items repacking etc.
+        -- TODO more kinds of match patterns to support ?
+        --      e.g. list pattern, with rest-items repacking etc.
+        _ -> throwEdh EvalError $ "Invalid match pattern: " <> T.pack
+          (show patternExpr)
+
 
       -- | guarded condition, ignore match target in context, just check if the
       -- condition itself is true

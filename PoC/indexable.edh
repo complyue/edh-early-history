@@ -10,31 +10,27 @@
 
       case ix of {
 
-        // parenthesis tend to be parsed as procedure calls against previous
-        // expression, prefix them with a semicolon will well disambiguous
-        // for them to be match patterns
-
-        ;((start:stop:step)) -> {
+        {(start:stop:step)} -> {
           runtime.info <| 'Indexing interleaved 1d range: ' ++ ix
           break // no way to be success on a dict
         }
 
-        ;((start:stop)) -> {
+        {(start:stop)} -> {
           runtime.info <| 'Indexing contiguous 1d range: ' ++ ix
           break // no way to be success on a dict
         }
 
-        ;((dim'1, dim'2)) -> {
+        {(dim'1, dim'2)} -> {
 
           runtime.info <| 'Indexing 2d space with: ' ++ ix
 
           case dim'1 of {
-            ;((start:stop:step)) -> {
+            {(start:stop:step)} -> {
               runtime.info <| 'Indexing interleaved 1st dimension range: ' ++ dim'1
               break // no way to be success on a dict
             }
 
-            ;((start:stop)) -> {
+            {(start:stop)} -> {
               runtime.info <| 'Indexing contiguous 1st dimension range: ' ++ dim'1
               break // no way to be success on a dict
             }
