@@ -9,6 +9,7 @@ module Language.Edh.Runtime
   , mkHostProc
   , mkHostOper
 -- TODO cherrypick what artifacts to export as for user interface
+  , module CL
   , module RT
   , module TX
   , module EV
@@ -36,6 +37,7 @@ import           Data.List.NonEmpty             ( NonEmpty(..) )
 
 import           Language.Edh.Control
 import           Language.Edh.AST
+import           Language.Edh.Details.CoreLang as CL
 import           Language.Edh.Details.RtTypes  as RT
 import           Language.Edh.Details.Tx       as TX
 import           Language.Edh.Details.Evaluate as EV

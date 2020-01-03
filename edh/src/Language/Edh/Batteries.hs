@@ -42,7 +42,7 @@ installEdhBatteries world = liftIO $ do
 
         -- | the cons operator, creates pairs in Edh
           ( ":"
-          , 1
+          , 2
           ) -- ^ why brittany insists on formatting it like this ?.?
 
         -- | attribute tempter, 

@@ -9,6 +9,7 @@ import           Control.Applicative     hiding ( many
 import           Control.Monad
 import           Control.Monad.State.Strict
 
+import           Data.Functor
 import qualified Data.Char                     as Char
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
@@ -37,8 +38,8 @@ lexeme = L.lexeme sc
 trailingComma :: Parser ()
 trailingComma = void $ optional $ symbol ","
 
-trailingColon :: Parser ()
-trailingColon = void $ optional $ symbol ";"
+optionalSemicolon :: Parser ()
+optionalSemicolon = void $ optional $ symbol ";"
 
 
 isLetter :: Char -> Bool
@@ -51,10 +52,9 @@ isDigit :: Char -> Bool
 isDigit = flip elem ['0' .. '9']
 
 isOperatorChar :: Char -> Bool
-isOperatorChar c = if (c > toEnum 128)
+isOperatorChar c = if c > toEnum 128
   then Char.isSymbol c
-  else elem c $ ("=~!@#$%^&|:<>?+-*/" :: [Char])
-
+  else elem c ("=~!@#$%^&|:<>?+-*/" :: [Char])
 
 parseProgram :: Parser SeqStmts
 parseProgram = sc *> many parseStmt <* eof
@@ -232,7 +232,19 @@ parseWhileStmt = do
   liftA2 WhileStmt parseExpr parseStmt
 
 parseProcDecl :: Parser ProcDecl
-parseProcDecl = liftA3 ProcDecl parseAlphaName parseArgsReceiver parseStmt
+parseProcDecl = liftA3 ProcDecl
+                       (parseMagicProcName <|> parseAlphaName)
+                       parseArgsReceiver
+                       parseStmt
+
+parseMagicProcName :: Parser Text
+parseMagicProcName = between (symbol "(") (symbol ")") $ lexeme $ takeWhile1P
+  (Just "magic procedure name")
+  isMagicProcChar
+
+-- to allow magic method names like ([]) ([=]) etc.
+isMagicProcChar :: Char -> Bool
+isMagicProcChar c = isOperatorChar c || elem c ("[]" :: [Char])
 
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do
@@ -296,7 +308,7 @@ parseThrowStmt = do
 
 
 parseStmt :: Parser StmtSrc
-parseStmt = do
+parseStmt = optionalSemicolon *> do
   srcPos <- getSourcePos
   StmtSrc
     .   (srcPos, )
@@ -321,7 +333,7 @@ parseStmt = do
           , parseVoidStmt
           , ExprStmt <$> parseExpr
           ]
-    <*  trailingColon
+    <*  optionalSemicolon
 
 
 parseIfExpr :: Parser Expr
@@ -427,25 +439,21 @@ parseOpName = between (symbol "(") (symbol ")") parseOpLit
 parseOpLit :: Parser Text
 parseOpLit = lexeme $ takeWhile1P (Just "operator symbol") isOperatorChar
 
-
-parseIndexer :: Parser Expr
-parseIndexer = between (symbol "[") (symbol "]") parseExpr
-
 parseBlockOrDict :: Parser Expr
-parseBlockOrDict = choice [(try $ parseBlock), parseDict]
+parseBlockOrDict = choice [try parseBlock, parseDict]
 
 parseBlock :: Parser Expr
 parseBlock =
-  symbol "{" *> (notFollowedBy $ symbol ",") *> parseBlockRest False []
+  symbol "{" *> notFollowedBy (symbol ",") *> parseBlockRest False []
  where
   parseBlockRest :: Bool -> [StmtSrc] -> Parser Expr
   parseBlockRest mustBlock t = do
-    mustBlock' <- (optional $ symbol ";") >>= \case
+    mustBlock' <- optional (symbol ";") >>= \case
       Nothing -> return mustBlock
       _       -> return True
     choice
-      [ (  symbol "}"
-        *> (return $ case t of
+      [ symbol "}"
+        $> (case t of
              [] | mustBlock' -> BlockExpr []
           -- let {} parse as empty dict instead of empty block
              []              -> DictExpr []
@@ -454,20 +462,18 @@ parseBlock =
                DictExpr [pairExpr]
              _ -> BlockExpr (reverse t)
            )
-        )
-      , (do
-          ss <- parseStmt
-          notFollowedBy (symbol ":")
-          parseBlockRest mustBlock' $ ss : t
-        )
+      , do
+        ss <- parseStmt
+        notFollowedBy (symbol ":")
+        parseBlockRest mustBlock' $ ss : t
       ]
 
 parseDict :: Parser Expr
 parseDict = symbol "{" *> parseDictRest []
  where
   parseDictRest :: [Expr] -> Parser Expr
-  parseDictRest t = (optional $ symbol ",") *> choice
-    [ (symbol "}") *> (return $ DictExpr (reverse t))
+  parseDictRest t = optional (symbol ",") *> choice
+    [ symbol "}" $> DictExpr (reverse t)
     , parseKeyValPair >>= \p -> parseDictRest $ p : t
     ]
   parseKeyValPair :: Parser Expr
@@ -483,22 +489,26 @@ parseOpAddrOrTupleOrParen :: Parser Expr
 parseOpAddrOrTupleOrParen =
   symbol "("
     *> (   (AttrExpr . DirectRef . NamedAttr <$> (parseOpLit <* symbol ")"))
-       <|> parseTupleRest False []
+       <|> parseTupleRest ")" False []
        )
- where
-  parseTupleRest :: Bool -> [Expr] -> Parser Expr
-  parseTupleRest mustTuple t = do
-    mustTuple' <- (optional $ symbol ",") >>= \case
-      Nothing -> return mustTuple
-      _       -> return True
-    choice
-      [ (symbol ")")
-        *> (case t of
-             [singleExpr] | not mustTuple' -> return $ ParenExpr singleExpr
-             _                             -> return $ TupleExpr (reverse t)
-           )
-      , parseExpr >>= \e -> parseTupleRest mustTuple' $ e : t
-      ]
+
+parseTupleRest :: Text -> Bool -> [Expr] -> Parser Expr
+parseTupleRest closeSym mustTuple t = do
+  mustTuple' <- optional (symbol ",") >>= \case
+    Nothing -> return mustTuple
+    _       -> return True
+  choice
+    [ symbol closeSym
+      $> (case t of
+           [singleExpr] | not mustTuple' ->
+             if closeSym == ")" then ParenExpr singleExpr else singleExpr
+           _ -> TupleExpr (reverse t)
+         )
+    , parseExpr >>= \e -> parseTupleRest closeSym mustTuple' $ e : t
+    ]
+
+parseIndexer :: Parser Expr
+parseIndexer = symbol "[" *> parseTupleRest "]" False []
 
 
 -- Notes:

@@ -427,6 +427,22 @@ voidStatement = StmtSrc
   )
 
 
+indexingMethodArg :: EdhProgState -> ArgsReceiver -> STM AttrName
+indexingMethodArg _ (SingleReceiver (RecvArg ixAttrName Nothing Nothing)) =
+  return ixAttrName
+indexingMethodArg _ (PackReceiver [(RecvArg ixAttrName Nothing Nothing)]) =
+  return ixAttrName
+indexingMethodArg pgs _ =
+  throwEdhFromSTM pgs EvalError "Invalid ([]) method signature"
+
+indexingAssignMethodArg
+  :: EdhProgState -> ArgsReceiver -> STM (AttrName, AttrName)
+indexingAssignMethodArg _ (PackReceiver [(RecvArg ixAttrName Nothing Nothing), (RecvArg valAttrName Nothing Nothing)])
+  = return (ixAttrName, valAttrName)
+indexingAssignMethodArg pgs _ =
+  throwEdhFromSTM pgs EvalError "Invalid ([=]) method signature"
+
+
 evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
 evalExpr that expr exit = do
   !pgs <- ask
@@ -592,7 +608,87 @@ evalExpr that expr exit = do
             throwEdh EvalError $ "Not an object: " <> T.pack (show v)
 
 
-    -- IndexExpr ixExpr tgtExpr ->
+    IndexExpr ixExpr tgtExpr -> evalExpr that ixExpr $ \(_, _, ixVal) ->
+      evalExpr that tgtExpr $ \case
+
+        -- indexing a dict
+        (that', scope', EdhDict (Dict d)) -> contEdhSTM $ do
+          ixKey <- case ixVal of
+            EdhType    t -> return $ ItemByType t
+            EdhString  s -> return $ ItemByStr s
+            EdhSymbol  s -> return $ ItemBySym s
+            EdhDecimal n -> return $ ItemByNum n
+            EdhBool    b -> return $ ItemByBool b
+            _ ->
+              throwEdhFromSTM pgs EvalError
+                $  "Invalid dict key: "
+                <> T.pack (show $ edhTypeOf ixVal)
+                <> ": "
+                <> T.pack (show ixVal)
+          ds <- readTVar d
+          case Map.lookup ixKey ds of
+            Nothing  -> exitEdhSTM pgs exit (that', scope', nil)
+            Just val -> exitEdhSTM pgs exit (that', scope', val)
+
+        -- indexing an object, by calling its ([]) method with ixVal as the single arg
+        (_, _, EdhObject obj) ->
+          contEdhSTM $ lookupEdhObjAttr obj (AttrByName "[]") >>= \case
+            Nothing ->
+              throwEdhFromSTM pgs EvalError $ "No ([]) method from: " <> T.pack
+                (show obj)
+            Just (EdhMethod (Method mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
+              -> do
+                ixAttrName <- indexingMethodArg pgs mth'args
+                ixMthEnt   <- newTVar
+                  $ Map.fromList [(AttrByName ixAttrName, ixVal)]
+                runEdhProg
+                    (pgs -- set method's scope
+                      { edh'context =
+                        (edh'context pgs)
+                          { callStack =
+                            (  Scope ixMthEnt
+                                     obj
+                                     (NE.toList mth'lexi'stack)
+                                     mthProc
+                            <| call'stack
+                            )
+                          }
+                      }
+                    )
+                  $ evalStmt obj mth'body
+                  $ \(that'', scope'', mthRtn) ->
+                      -- restore previous context after method returned
+                      local (const pgs) $ case mthRtn of
+                        EdhContinue -> throwEdh EvalError "Unexpected continue"
+                        -- allow the use of `break` to early stop a method 
+                        -- procedure with nil result
+                        EdhBreak    -> exitEdhProc exit (that, scope, nil)
+                        -- explicit return
+                        EdhReturn rtnVal ->
+                          exitEdhProc exit (that'', scope'', rtnVal)
+                        -- no explicit return, assuming it returns the last
+                        -- value from procedure execution
+                        _ -> exitEdhProc exit (that'', scope'', mthRtn)
+            Just badIndexer ->
+              throwEdhFromSTM pgs EvalError
+                $  "Malformed index method ([]) on "
+                <> T.pack (show obj)
+                <> " - "
+                <> T.pack (show $ edhTypeOf badIndexer)
+                <> ": "
+                <> T.pack (show badIndexer)
+
+        (_, _, tgtVal) ->
+          throwEdh EvalError
+            $  "Don't know how to index "
+            <> T.pack (show $ edhTypeOf tgtVal)
+            <> ": "
+            <> T.pack (show tgtVal)
+            <> " with "
+            <> T.pack (show $ edhTypeOf ixVal)
+            <> ": "
+            <> T.pack (show ixVal)
+
 
     CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
 
@@ -834,7 +930,7 @@ evalExpr that expr exit = do
                 <> T.pack (show expr)
 
 
-    _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+    -- _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
 
 
 runForLoop
