@@ -11,7 +11,7 @@
     runtime.info <| rhv ++ ' is telling ' ++ lhv
   }
 
-  operator 🆚 9 (lhv, rhv) {
+  operator 🆚 1 (lhv, rhv) {
     runtime.info <| "🌀 What's the difference?\n     " ++ lhv ++ '\n  🆚\n     ' ++ rhv
   }
 
