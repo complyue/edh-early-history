@@ -52,6 +52,14 @@ lookupEdhCtxAttr fromScope addr = resolveEdhCtxAttr fromScope addr >>= \case
     em <- readTVar ent
     return $ Map.lookup addr em
 
+lookupEdhObjAttr :: Object -> AttrKey -> STM (Maybe EdhValue)
+lookupEdhObjAttr this addr = resolveEdhObjAttr this addr >>= \case
+  Nothing                 -> return Nothing
+  Just (Scope !ent _ _ _) -> do
+    em <- readTVar ent
+    return $ Map.lookup addr em
+
+
 resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
 resolveEdhCtxAttr scope@(Scope !ent _ lexi'stack _) !addr =
   readTVar ent >>= \em -> if Map.member addr em
