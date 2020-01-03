@@ -47,7 +47,7 @@ runEdhProgram
   :: MonadIO m
   => EdhWorld
   -> Object
-  -> SeqStmts
+  -> [StmtSrc]
   -> m (Either InterpretError EdhValue)
 runEdhProgram !world !modu !stmts = liftIO $ tryJust edhKnownError $ do
   !final <- newEmptyTMVarIO

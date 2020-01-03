@@ -12,6 +12,8 @@ import           Data.Lossless.Decimal          ( Decimal )
 import           Text.Megaparsec
 
 
+type ModuleId = Text
+
 type OpSymbol = Text
 type AttrName = Text
 data AttrAddressor =
@@ -23,12 +25,6 @@ data AttrAddressor =
     --   a left hand entity object
     | SymbolicAttr !AttrName
   deriving (Eq, Show)
-
-
-type ModuleId = Text
-
-
-type SeqStmts = [StmtSrc]
 
 
 newtype StmtSrc = StmtSrc (SourcePos, Stmt)

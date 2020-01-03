@@ -56,7 +56,7 @@ isOperatorChar c = if c > toEnum 128
   then Char.isSymbol c
   else elem c ("=~!@#$%^&|:<>?+-*/" :: [Char])
 
-parseProgram :: Parser SeqStmts
+parseProgram :: Parser [StmtSrc]
 parseProgram = sc *> many parseStmt <* eof
 
 parseVoidStmt :: Parser Stmt
