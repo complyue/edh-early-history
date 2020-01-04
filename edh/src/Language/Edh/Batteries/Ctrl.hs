@@ -64,12 +64,9 @@ branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
           )
 
       BlockExpr patternExpr -> case patternExpr of
-        -- ^ {( ... )} invokes pattern matching
-        --  * no comma but one pair inside, -- pair pattern
-        --  * comma-separated-attr-names, -- tuple pattern
-        --  * TODO other kinds of patterns ?
+        -- ^ a block expr left to (->) triggers pattern matching
 
-        -- | tuple pattern
+        -- | {( x,y,z,... )} -- tuple pattern
         [StmtSrc (_, ExprStmt (TupleExpr vExprs))] -> contEdhSTM $ do
           attrNames <- sequence $ (<$> vExprs) $ \case
             (AttrExpr (DirectRef (NamedAttr vAttr))) ->
@@ -93,7 +90,7 @@ branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
                     )
             _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
 
-         -- | pair pattern
+         -- | {( x:y:z:... )} -- pair pattern
         [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
           case matchPairPattern pairPattern ctxMatch [] of
             Nothing -> throwEdh EvalError $ "Invalid pair pattern: " <> T.pack
@@ -113,6 +110,14 @@ branchProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit =
                       EdhFallthrough -> EdhFallthrough
                       _              -> EdhCaseClose rhVal
                     )
+
+        -- {{ class:obj }} -- instance pattern
+        [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr className))) (AttrExpr (DirectRef (NamedAttr objAttr)))]))]
+        -- ^ brittany-disable-next-binding doesn't work on patterns, brittany insists
+        -- on putting together the long line above, any workaround?
+          ->
+            -- TODO impl. this 
+             throwEdh EvalError "Class pattern not impl. yet"
 
         -- TODO more kinds of match patterns to support ?
         --      e.g. list pattern, with rest-items repacking etc.
