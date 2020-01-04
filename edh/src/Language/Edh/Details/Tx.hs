@@ -4,52 +4,101 @@ module Language.Edh.Details.Tx where
 import           Prelude
 import           Debug.Trace
 
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Reader
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
+import           Language.Edh.Control
 import           Language.Edh.Details.RtTypes
 
 
-driveEdhProg :: Context -> EdhProg (STM ()) -> IO ()
-driveEdhProg !ctx !prog = do
-  -- prepare program state
-  !masterTh  <- myThreadId
+driveEdhProgram :: Context -> EdhProg (STM ()) -> IO ()
+driveEdhProgram !ctx !prog = do
+  -- check async exception mask state
+  getMaskingState >>= \case
+    Unmasked -> return ()
+    _        -> throwIO
+      $ UsageError "Edh program should not run with async exceptions masked"
+
+  -- prepare program environment
+  !masterTh <- myThreadId
+  let onDescendantExc :: SomeException -> IO ()
+      onDescendantExc e = case asyncExceptionFromException e of
+        Just (asyncExc :: SomeAsyncException) ->
+          -- todo special handling here ?
+          throwTo masterTh asyncExc
+        _ -> throwTo masterTh e
+  progHaltSig <- newBroadcastTChanIO
+  !forkQueue  <- newTQueueIO
+  let
+    forkDescendants :: TChan () -> IO ()
+    forkDescendants haltSig =
+      atomically
+          (        (Just <$> readTQueue forkQueue)
+          `orElse` (Nothing <$ readTChan haltSig)
+          )
+        >>= \case
+              Nothing ->
+                -- program halted, done
+                return ()
+              Just ((!pgs, !input), !task) -> do
+                -- got one to fork, prepare state for the descendant thread
+                descQueue                 <- newTQueueIO
+                (descHaltSig :: TChan ()) <- atomically $ dupTChan progHaltSig
+                let !pgsDescendant = pgs { edh'task'queue = descQueue }
+                    !descTaskSource =
+                      (Just <$> readTQueue descQueue)
+                        `orElse` (Nothing <$ readTChan descHaltSig)
+                -- bootstrap on the descendant thread
+                atomically
+                  $ writeTQueue descQueue ((pgsDescendant, input), task)
+                void
+                  $ mask_
+                  $ forkIOWithUnmask
+                  $ \unmask -> catch (unmask $ driveEdhThread descTaskSource)
+                                     onDescendantExc
+                -- loop another iteration
+                forkDescendants haltSig
+  -- start forker thread
+  void $ mask_ $ forkIOWithUnmask $ \unmask -> catch
+    (unmask $ atomically (dupTChan progHaltSig) >>= forkDescendants)
+    onDescendantExc
+
+  -- prepare program state for master thread
   !mainQueue <- newTQueueIO
-  let !pgs   = EdhProgState masterTh mainQueue ctx False
-      !scope = contextScope ctx
+  let !scope = contextScope ctx
       !obj   = thisObject scope
-  -- queue the program for bootstrap
-  atomically $ writeTQueue mainQueue ((pgs, (obj, scope, nil)), const prog)
-
--- drive transaction executions from the master thread.
--- exceptions occurred in all threads started by this program will be re-thrown
--- asynchronously to this master thread, causing the program to abort.
-
--- TODO
---  * once the master thread finishes, should terminate all descendant threads?
---  * once the master thread aborts, should aborts all descendant threads as well?
-
-  driveProg mainQueue
+      !pgs   = EdhProgState { edh'fork'queue = forkQueue
+                            , edh'task'queue = mainQueue
+                            , edh'in'tx      = False
+                            , edh'context    = ctx
+                            }
+  -- broadcast the halt signal after the master thread done anyway
+  flip finally (atomically $ writeTChan progHaltSig ()) $ do
+    -- bootstrap the program on master thread
+    atomically $ writeTQueue mainQueue ((pgs, (obj, scope, nil)), const prog)
+    driveEdhThread $ tryReadTQueue mainQueue
  where
-  driveProg :: TQueue EdhTxTask -> IO ()
-  driveProg !mainQueue = atomically (tryReadTQueue mainQueue) >>= \case
-    Nothing      -> return () -- program finished 
+  driveEdhThread :: STM (Maybe EdhTxTask) -> IO ()
+  driveEdhThread !taskSource = atomically taskSource >>= \case
+    Nothing      -> return ()
     Just !txTask -> do
       -- run this task
       goSTM 0 txTask
-
       -- loop another iteration
-      driveProg mainQueue
+      driveEdhThread taskSource
    where
     goSTM :: Int -> EdhTxTask -> IO ()
     goSTM !rtc txTask@((!pgs, !input), !task) = do
-      when (rtc > 0) -- todo increase the threshold of reporting?
-        -- trace out the retries so the end users can be aware of them
-        $ trace (" ** stm retry #" <> show rtc)
-        $ return ()
+      when -- todo increase the threshold of reporting?
+        (rtc > 0)
+        do
+          -- trace out the retries so the end users can be aware of them
+          tid <- myThreadId
+          trace (" ** " <> show tid <> " stm retry #" <> show rtc) $ return ()
 
       -- the weird formatting below comes from brittany,
       -- not the author's preference

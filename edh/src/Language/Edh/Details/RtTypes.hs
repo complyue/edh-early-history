@@ -308,12 +308,10 @@ type EdhProg = ReaderT EdhProgState STM
 
 -- | The states of a program
 data EdhProgState = EdhProgState {
-    edh'master'thread :: !ThreadId
-    , edh'main'queue :: !(TQueue EdhTxTask)
-    , edh'context :: !Context
+    edh'fork'queue :: !(TQueue EdhTxTask)
+    , edh'task'queue :: !(TQueue EdhTxTask)
     , edh'in'tx :: !Bool
-    -- , edh'forker'thread :: !ThreadId
-    -- , edh'fork'chan :: !(TChan xxx)
+    , edh'context :: !Context
   }
 
 -- | Run an Edh program from within STM monad
@@ -341,7 +339,7 @@ exitEdhSTM pgs exit result = runEdhProg pgs $ exitEdhProc exit result
 exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
 exitEdhProc exit result = do
   pgs <- ask
-  let txq   = edh'main'queue pgs
+  let txq   = edh'task'queue pgs
       !inTx = edh'in'tx pgs
   return $ if inTx
     then join $ runReaderT (exit result) pgs

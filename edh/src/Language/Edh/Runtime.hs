@@ -57,7 +57,7 @@ runEdhProgram !world !modu !stmts = liftIO $ tryJust edhKnownError $ do
   where !ctx = moduleContext world modu
 
 runEdhProgram' :: MonadIO m => Context -> EdhProg (STM ()) -> m ()
-runEdhProgram' !ctx !prog = liftIO $ driveEdhProg ctx prog
+runEdhProgram' !ctx !prog = liftIO $ driveEdhProgram ctx prog
 
 
 createEdhWorld :: MonadIO m => m EdhWorld
