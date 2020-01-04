@@ -137,11 +137,11 @@ evalStmt' that stmt exit = do
     ReturnStmt expr -> evalExpr that expr $ \(this', scope', !val) ->
       exitEdhProc exit (this', scope', EdhReturn val)
 
-    -- TryStmt truncBody catches finallyBody -> undefined
+    -- TODO impl. this
+    -- TryStmt trunkStmt catchesList finallyStmt -> undefined
+    -- ThrowStmt excExpr                         -> undefined
 
-    -- ThrowStmt excExpr                     -> undefined
-
-    WhileStmt cndExpr bodyStmt -> do
+    WhileStmt cndExpr bodyStmt                -> do
       let !stmts = deBlock bodyStmt
           doWhile :: EdhProg (STM ())
           doWhile = do

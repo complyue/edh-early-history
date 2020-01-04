@@ -332,7 +332,7 @@ parseStmt = optionalSemicolon *> do
     -- TODO validate break/continue must within a loop construct
           , BreakStmt <$ symbol "break"
           , ContinueStmt <$ symbol "continue"
-    -- TODO validate fallthrough must within a case-of block
+    -- TODO validate fallthrough must within a branch block
           , FallthroughStmt <$ symbol "fallthrough"
           , parseOpDeclOvrdStmt
           , parseTryStmt
