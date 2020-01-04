@@ -1097,7 +1097,8 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
             ]
         (_, _, EdhDict (Dict d)) -> contEdhSTM $ do
           ds <- readTVar d
-          doIt
+          doIt -- don't be tempted to yield pairs from a dict here,
+               -- it'll be messy if some entry values are themselves pairs
             [ ArgsPack [itemKeyValue k, v] Map.empty | (k, v) <- Map.toList ds ]
         (_, _, val) ->
           throwEdh EvalError
