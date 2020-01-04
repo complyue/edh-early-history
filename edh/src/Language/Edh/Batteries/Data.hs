@@ -17,7 +17,7 @@ import           Language.Edh.AST
 import           Language.Edh.Runtime
 
 
--- | operator (:) pair constructor
+-- | operator (:) - pair constructor
 consProc :: EdhProcedure
 consProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit =
   do
@@ -33,7 +33,7 @@ consProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
--- | operator (?) attribute tempter, 
+-- | operator (?) - attribute tempter, 
 -- address an attribute off an object if possible, nil otherwise
 attrTemptProc :: EdhProcedure
 attrTemptProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit
@@ -95,7 +95,7 @@ pkargsProc :: EdhProcedure
 pkargsProc !argsSender !that _ !exit = packEdhArgs that argsSender exit
 
 
--- | operator (++) string coercing concatenation
+-- | operator (++) - string coercing concatenator
 concatProc :: EdhProcedure
 concatProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit
   = do
@@ -110,7 +110,7 @@ concatProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
--- | utility null(*args,**kwargs) - null test
+-- | utility null(*args,**kwargs) - null tester
 isNullProc :: EdhProcedure
 isNullProc !argsSender !that _ !exit = do
   !pgs <- ask
@@ -135,7 +135,7 @@ isNullProc !argsSender !that _ !exit = do
             (that, callerScope, EdhArgsPack $ ArgsPack argsNulls kwargsNulls)
 
 
--- | utility type(*args,**kwargs) - value type introspection
+-- | utility type(*args,**kwargs) - value type introspector
 typeProc :: EdhProcedure
 typeProc !argsSender !that _ !exit = do
   !pgs <- ask
@@ -156,7 +156,8 @@ typeProc !argsSender !that _ !exit = do
                 )
 
 
--- | utility dict(***pkargs, **kwargs,*args) - dict from arguments
+-- | utility dict(***pkargs,**kwargs,*args) - dict constructor by arguments
+-- can be used to convert arguments pack into dict
 dictProc :: EdhProcedure
 dictProc !argsSender !that _ !exit = do
   !pgs <- ask
@@ -222,7 +223,7 @@ prpdProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit =
 prpdProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
--- | operator (=<) - comprehension
+-- | operator (=<) - comprehension maker, appender
 --  * list comprehension:
 --     [] =< for x from range(10) do x*x
 --  * dict comprehension:
