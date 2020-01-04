@@ -23,13 +23,19 @@ driveEdhProg !ctx !prog = do
       !obj   = thisObject scope
   -- queue the program for bootstrap
   atomically $ writeTQueue mainQueue ((pgs, (obj, scope, nil)), const prog)
+
 -- drive transaction executions from the master thread.
 -- exceptions occurred in all threads started by this program will be re-thrown
--- asynchronously to this thread, causing the whole program to abort.
+-- asynchronously to this master thread, causing the program to abort.
+
+-- TODO
+--  * once the master thread finishes, should terminate all descendant threads?
+--  * once the master thread aborts, should aborts all descendant threads as well?
+
   driveProg mainQueue
  where
   driveProg :: TQueue EdhTxTask -> IO ()
-  driveProg mainQueue = atomically (tryReadTQueue mainQueue) >>= \case
+  driveProg !mainQueue = atomically (tryReadTQueue mainQueue) >>= \case
     Nothing      -> return () -- program finished 
     Just !txTask -> do
       -- run this task
@@ -40,13 +46,18 @@ driveEdhProg !ctx !prog = do
    where
     goSTM :: Int -> EdhTxTask -> IO ()
     goSTM !rtc txTask@((!pgs, !input), !task) = do
-      when (rtc > 0) $ trace (" ** stm retry #" <> show rtc) $ return ()
+      when (rtc > 0) -- todo increase the threshold of reporting?
+        -- trace out the retries so the end users can be aware of them
+        $ trace (" ** stm retry #" <> show rtc)
+        $ return ()
 
-      stmDone <-
-        atomically
+      -- the weird formatting below comes from brittany,
+      -- not the author's preference
+      (        atomically
         $        (Just <$> join (runReaderT (task input) pgs))
         `orElse` return Nothing
-      case stmDone of
-        Nothing -> goSTM (rtc + 1) txTask
-        Just () -> return ()
+        )
+        >>= \case
+              Nothing -> goSTM (rtc + 1) txTask
+              Just () -> return ()
 
