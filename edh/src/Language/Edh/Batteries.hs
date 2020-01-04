@@ -174,6 +174,7 @@ installEdhBatteries world = liftIO $ do
         , ("dict"       , dictProc)
         , ("null"       , isNullProc)
         , ("type"       , typeProc)
+        , ("error"      , errorProc)
         , ("constructor", ctorProc)
         , ("supers"     , supersProc)
         , ("scope"      , scopeObtainProc)

@@ -40,13 +40,7 @@ newtype Dict = Dict (TVar DictStore)
   deriving (Eq)
 type DictStore = Map.Map ItemKey EdhValue
 instance Show Dict where
-  show (Dict d) = if Map.null dm
-    then "{,}" -- make it obvious this is an empty dict
-    else -- advocate trailing comma here
-      "{ "
-      ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList dm ]
-      ++ "}"
-    where dm = unsafePerformIO $ readTVarIO d
+  show (Dict d) = showEdhDict ds where ds = unsafePerformIO $ readTVarIO d
 data ItemKey = ItemByType !EdhTypeValue
     | ItemByStr !Text | ItemBySym !Symbol
     | ItemByNum !Decimal | ItemByBool !Bool
@@ -57,6 +51,14 @@ instance Show ItemKey where
   show (ItemBySym  k) = show k
   show (ItemByNum  k) = showDecimal k
   show (ItemByBool k) = show $ EdhBool k
+
+showEdhDict :: DictStore -> String
+showEdhDict ds = if Map.null ds
+  then "{,}" -- make it obvious this is an empty dict
+  else -- advocate trailing comma here
+    "{ "
+    ++ concat [ show k ++ ":" ++ show v ++ ", " | (k, v) <- Map.toList ds ]
+    ++ "}"
 
 itemKeyValue :: ItemKey -> EdhValue
 itemKeyValue (ItemByType tyv) = EdhType tyv

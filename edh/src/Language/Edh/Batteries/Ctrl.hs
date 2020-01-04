@@ -16,6 +16,30 @@ import           Language.Edh.AST
 import           Language.Edh.Runtime
 
 
+-- | utility error(*args,**kwargs) - eval error reporter
+errorProc :: EdhProcedure
+errorProc !argsSender !that _ _ =
+  packEdhArgs that argsSender
+    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> if null kwargs
+        then case args of
+          [v] -> throwEdh EvalError $ edhValueStr v
+          _   -> throwEdh EvalError $ edhValueStr $ EdhTuple args
+        else
+          let !kwDict =
+                Map.fromAscList
+                  $ (<$> Map.toAscList kwargs)
+                  $ \(attrName, val) -> (ItemByStr attrName, val)
+          in
+            throwEdh EvalError
+            $ T.pack
+            $ showEdhDict
+            $ Map.union kwDict
+            $ Map.fromAscList
+                [ (ItemByNum (fromIntegral i), t)
+                | (i, t) <- zip [(0 :: Int) ..] args
+                ]
+
+
 -- | operator (->) - the brancher, if its left-hand matches, early stop its
 -- enclosing code block (commonly a case-of block, but other blocks as well),
 -- with eval-ed result of its right-hand, unless the right-hand result is
