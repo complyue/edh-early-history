@@ -346,6 +346,5 @@ cprhProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit =
               <> T.pack (show $ edhTypeOf lhVal)
               <> ": "
               <> T.pack (show lhVal)
-    -- return $ return ()
 cprhProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)

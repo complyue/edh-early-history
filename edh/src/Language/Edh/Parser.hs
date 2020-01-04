@@ -62,6 +62,34 @@ parseProgram = sc *> many parseStmt <* eof
 parseVoidStmt :: Parser Stmt
 parseVoidStmt = VoidStmt <$ symbol "pass" -- same as Python
 
+parseAtoIsoStmt :: Parser Stmt
+parseAtoIsoStmt = AtoIsoStmt <$> (symbol "ai" >> parseExpr)
+
+parseGoStmt :: Parser Stmt
+parseGoStmt = do
+  void $ symbol "go"
+  errRptPos <- getOffset
+  expr      <- parseExpr
+  case expr of
+    CallExpr{} -> return ()
+    ForExpr{}  -> return ()
+    _          -> do
+      setOffset errRptPos
+      fail "A call or for loop required here"
+  return $ GoStmt expr
+
+parseDeferStmt :: Parser Stmt
+parseDeferStmt = do
+  void $ symbol "defer"
+  errRptPos <- getOffset
+  expr      <- parseExpr
+  case expr of
+    CallExpr{} -> return ()
+    _          -> do
+      setOffset errRptPos
+      fail "A call required here"
+  return $ DeferStmt expr
+
 parseImportStmt :: Parser Stmt
 parseImportStmt = do
   void $ symbol "import"
@@ -322,7 +350,10 @@ parseStmt = optionalSemicolon *> do
   StmtSrc
     .   (srcPos, )
     <$> choice
-          [ parseImportStmt
+          [ parseAtoIsoStmt
+          , parseGoStmt
+          , parseDeferStmt
+          , parseImportStmt
           , parseLetStmt
           , parseClassStmt
           , parseExtendsStmt
@@ -524,8 +555,6 @@ parseIndexer = symbol "[" *> parseTupleRest "]" False []
 --  * (+)/(-) prefix should have highest precedence below Call/Index
 --  * (not) should have a precedence slightly higher than (&&) (||)
 --  * guard (|) should have a precedence no smaller than the branch op (->)
---  * (ai) should have lowest precedence
---  * (go)/(defer) can apply only to a call or loop
 
 parsePrefixExpr :: Parser Expr
 parsePrefixExpr = choice
@@ -539,18 +568,7 @@ parsePrefixExpr = choice
   , (symbol "|" >> notFollowedBy (satisfy isOperatorChar))
   >>  PrefixExpr Guard
   <$> parseExprPrec 1
-  , PrefixExpr AtoIso <$> (symbol "ai" >> parseExpr)
-  , PrefixExpr Go <$> (symbol "go" >> requireCallOrLoop)
-  , PrefixExpr Defer <$> (symbol "defer" >> requireCallOrLoop)
   ]
- where
-  requireCallOrLoop = do
-    errRptPos <- getOffset
-    e         <- parseExpr
-    case e of
-      ce@CallExpr{} -> return ce
-      le@ForExpr{}  -> return le
-      _             -> setOffset errRptPos >> fail "A call/for required here"
 
 
 -- besides hardcoded prefix operators, all other operators are infix binary

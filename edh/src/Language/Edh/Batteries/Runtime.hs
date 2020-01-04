@@ -4,7 +4,10 @@ module Language.Edh.Batteries.Runtime where
 import           Prelude
 -- import           Debug.Trace
 
+import           GHC.Conc                       ( unsafeIOToSTM )
+
 import           Control.Monad.Reader
+import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import qualified Data.Text                     as T
@@ -21,7 +24,7 @@ import           Language.Edh.Runtime
 
 -- | operator (<|)
 loggingProc :: EdhProcedure
-loggingProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit
+loggingProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) !that _ !exit
   = do
     !pgs <- ask
     let !callerCtx@(Context !world _ _ _ (StmtSrc (srcPos, _))) =
@@ -53,4 +56,57 @@ loggingProc (PackSender [SendPosArg !lhExpr, SendPosArg !rhExpr]) that _ !exit
       _ -> throwEdh EvalError $ "Invalid log level: " <> T.pack (show lhVal)
 loggingProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+
+keepNotify :: Int -> EdhGenrCaller -> STM ()
+keepNotify !delayMicros !genr'caller@(!pgs', !iter'cb) = do
+  unsafeIOToSTM $ threadDelay delayMicros
+  -- TODO return timestamp now instead of nil
+  runEdhProg pgs' $ iter'cb (this, scope, nil) $ \_ ->
+    keepNotify delayMicros genr'caller
+ where
+  !scope = contextScope $ edh'context pgs'
+  !this  = thisObject scope
+
+
+-- | host generator runtime.everyMicros(n) - with fixed interval
+rtEveryMicrosProc :: EdhProcedure
+rtEveryMicrosProc !argsSender !that _ _ = ask >>= \pgs -> do
+  case generatorCaller $ edh'context pgs of
+    Nothing          -> throwEdh EvalError "Can only be called as generator"
+    Just genr'caller -> case argsSender of
+      PackSender [SendPosArg !nExpr] -> evalExpr that nExpr $ \case
+        (_, _, EdhDecimal (Decimal d e n)) | d == 1 ->
+          contEdhSTM $ keepNotify (fromIntegral n * 10 ^ e) genr'caller
+        nVal -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
+      _ ->
+        throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
+
+
+-- | host generator runtime.everyMillis(n) - with fixed interval
+rtEveryMillisProc :: EdhProcedure
+rtEveryMillisProc !argsSender !that _ _ = ask >>= \pgs -> do
+  case generatorCaller $ edh'context pgs of
+    Nothing          -> throwEdh EvalError "Can only be called as generator"
+    Just genr'caller -> case argsSender of
+      PackSender [SendPosArg !nExpr] -> evalExpr that nExpr $ \case
+        (_, _, EdhDecimal (Decimal d e n)) | d == 1 ->
+          contEdhSTM $ keepNotify (fromIntegral n * 10 ^ (e + 3)) genr'caller
+        nVal -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
+      _ ->
+        throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
+
+
+-- | host generator runtime.everySeconds(n) - with fixed interval
+rtEverySecondsProc :: EdhProcedure
+rtEverySecondsProc !argsSender !that _ _ = ask >>= \pgs -> do
+  case generatorCaller $ edh'context pgs of
+    Nothing          -> throwEdh EvalError "Can only be called as generator"
+    Just genr'caller -> case argsSender of
+      PackSender [SendPosArg !nExpr] -> evalExpr that nExpr $ \case
+        (_, _, EdhDecimal (Decimal d e n)) | d == 1 ->
+          contEdhSTM $ keepNotify (fromIntegral n * 10 ^ (e + 6)) genr'caller
+        nVal -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
+      _ ->
+        throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
 

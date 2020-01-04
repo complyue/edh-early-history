@@ -168,7 +168,7 @@ installEdhBatteries world = liftIO $ do
         ]
 
       !rootProcedures <- mapM
-        (\(nm, hp) -> (AttrByName nm, ) <$> mkHostProc nm hp)
+        (\(nm, hp) -> (AttrByName nm, ) <$> mkHostProc EdhHostProc nm hp)
         [ ("Symbol"     , symbolCtorProc)
         , ("pkargs"     , pkargsProc)
         , ("dict"       , dictProc)
@@ -182,12 +182,18 @@ installEdhBatteries world = liftIO $ do
         , ("makeExpr"   , makeExprProc)
         ]
 
-      !rtEntity <- newTVar $ Map.fromList
-        [ (AttrByName "debug", EdhDecimal 10)
-        , (AttrByName "info" , EdhDecimal 20)
-        , (AttrByName "warn" , EdhDecimal 30)
-        , (AttrByName "error", EdhDecimal 40)
-        , (AttrByName "fatal", EdhDecimal 50)
+      !rtEveryMicros <- mkHostProc EdhHostGenr "everyMicros" rtEveryMicrosProc
+      !rtEveryMillis <- mkHostProc EdhHostGenr "everyMillis" rtEveryMillisProc
+      !rtEverySeconds <- mkHostProc EdhHostGenr "everySeconds" rtEverySecondsProc
+      !rtEntity      <- newTVar $ Map.fromList
+        [ (AttrByName "debug"      , EdhDecimal 10)
+        , (AttrByName "info"       , EdhDecimal 20)
+        , (AttrByName "warn"       , EdhDecimal 30)
+        , (AttrByName "error"      , EdhDecimal 40)
+        , (AttrByName "fatal"      , EdhDecimal 50)
+        , (AttrByName "everyMicros", rtEveryMicros)
+        , (AttrByName "everyMillis", rtEveryMillis)
+        , (AttrByName "everySeconds", rtEverySeconds)
         ]
       !rtSupers <- newTVar []
       let !runtime = Object { objEntity = rtEntity
@@ -215,7 +221,7 @@ installEdhBatteries world = liftIO $ do
 
 
       !scopeMethods <- mapM
-        (\(sym, hp) -> (AttrByName sym, ) <$> mkHostProc sym hp)
+        (\(sym, hp) -> (AttrByName sym, ) <$> mkHostProc EdhHostProc sym hp)
         [ ("eval"     , scopeEvalProc)
         , ("attrs"    , scopeAttrsProc)
         , ("traceback", scopeTraceBackProc)
@@ -237,9 +243,7 @@ installEdhBatteries world = liftIO $ do
 
 
       -- import the parts written in Edh 
-      runEdhProg pgs $ importEdhModule WildReceiver
-                                       "batteries/root"
-                                       (const $ return $ return ())
+      runEdhProg pgs $ importEdhModule WildReceiver "batteries/root" edhNop
 
  where
   !rootCtx    = moduleContext world $ worldRoot world

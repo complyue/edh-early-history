@@ -177,12 +177,13 @@ declareEdhOperators world declLoc opps = do
         else return (prevPrec, prevDeclLoc)
 
 
-mkHostProc :: Text -> EdhProcedure -> STM EdhValue
-mkHostProc !d !p = do
+mkHostProc
+  :: (HostProcedure -> EdhValue) -> Text -> EdhProcedure -> STM EdhValue
+mkHostProc !vc !d !p = do
   !s <- unsafeIOToSTM $ newCString $ T.unpack d
   let !hp = HostProcedure { hostProc'name = s, hostProc'proc = p }
   unsafeIOToSTM $ addFinalizer hp $ free s
-  return $ EdhHostProc hp
+  return $ vc hp
 
 mkHostOper :: EdhWorld -> OpSymbol -> EdhProcedure -> STM EdhValue
 mkHostOper world opSym proc =

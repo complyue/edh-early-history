@@ -35,24 +35,41 @@ instance Show StmtSrc where
 
 
 data Stmt = VoidStmt
+      -- atomically isolated
+    | AtoIsoStmt !Expr
+      -- similar to goroutine in Go
+    | GoStmt !Expr | DeferStmt !Expr
+      -- import with args (re)pack receiving syntax
     | ImportStmt !ArgsReceiver !Expr
+      -- assignment with args (un/re)pack sending/receiving syntax
     | LetStmt !ArgsReceiver !ArgsSender
+      -- super object declaration for a descendant object
     | ExtendsStmt !Expr
+      -- class definition
     | ClassStmt !ProcDecl
+      -- method definition
     | MethodStmt !ProcDecl
+      -- generator definition
     | GeneratorStmt !ProcDecl
+      -- while loop
     | WhileStmt !Expr !StmtSrc
+      -- control flows
     | BreakStmt | ContinueStmt
+      -- similar to fallthrough in Go
     | FallthroughStmt
+      -- operator declaration
     | OpDeclStmt !OpSymbol !Precedence !ProcDecl
+      -- operator override
     | OpOvrdStmt !OpSymbol !ProcDecl !Precedence
-    | TryStmt {
+      -- similar to exception mechanism in JavaScript
+    | ThrowStmt !Expr | TryStmt {
         try'trunk :: !StmtSrc
         , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]
         , try'finally :: !(Maybe StmtSrc)
         }
-    | ThrowStmt !Expr
+      -- early stop from a procedure
     | ReturnStmt !Expr
+      -- expression with precedence
     | ExprStmt !Expr
   deriving (Eq, Show)
 
@@ -103,8 +120,6 @@ instance Eq ProcDecl where
 
 data Prefix = PrefixPlus | PrefixMinus | Not
     | Guard -- similar to guard in Haskell
-    | AtoIso -- atomically isolated
-    | Go | Defer -- similar to goroutine in Go
   deriving (Eq, Show)
 
 data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
@@ -174,6 +189,7 @@ data EdhTypeValue = TypeType
     | ThunkType
     | HostProcType
     | HostOperType
+    | HostGenrType
     | ClassType
     | MethodType
     | OperatorType

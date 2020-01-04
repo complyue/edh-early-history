@@ -9,7 +9,6 @@ import           Control.Exception
 import           Control.Monad.Except
 import           Control.Monad.Reader
 
-import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import           Data.Foldable
@@ -375,6 +374,9 @@ type EdhProcedure -- such a procedure servs as the callee
 -- | The type for an Edh procedure's return, in continuation passing style.
 type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 
+edhNop :: EdhProcExit
+edhNop _ = return $ return ()
+
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
 getEdhErrorContext !pgs !msg =
@@ -490,6 +492,7 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
   -- * host procedure callable from Edh world
     | EdhHostProc !HostProcedure
     | EdhHostOper !Precedence !HostProcedure
+    | EdhHostGenr !HostProcedure
 
   -- * precedure definitions
     | EdhClass !Class
@@ -549,6 +552,8 @@ instance Show EdhValue where
   show (EdhHostOper prec (HostProcedure pn _)) =
     "<hostop: (" ++ nm ++ ") " ++ show prec ++ ">"
     where nm = unsafePerformIO $ peekCString pn
+  show (EdhHostGenr (HostProcedure pn _)) = "<hostgen: " ++ nm ++ ">"
+    where nm = unsafePerformIO $ peekCString pn
 
 
   show (EdhClass    v)  = show v
@@ -593,6 +598,7 @@ instance Eq EdhValue where
 
   EdhHostProc x        == EdhHostProc y        = x == y
   EdhHostOper _ x'proc == EdhHostOper _ y'proc = x'proc == y'proc
+  EdhHostGenr x        == EdhHostGenr y        = x == y
 
   EdhClass    x        == EdhClass    y        = x == y
   EdhMethod   x        == EdhMethod   y        = x == y
@@ -648,6 +654,7 @@ edhTypeOf (EdhTuple    _  ) = EdhType TupleType
 edhTypeOf (EdhArgsPack _  ) = EdhType ArgsPackType
 edhTypeOf (EdhHostProc _  ) = EdhType HostProcType
 edhTypeOf (EdhHostOper _ _) = EdhType HostOperType
+edhTypeOf (EdhHostGenr _  ) = EdhType HostGenrType
 edhTypeOf (EdhClass    _  ) = EdhType ClassType
 edhTypeOf (EdhMethod   _  ) = EdhType MethodType
 edhTypeOf (EdhOperator _  ) = EdhType OperatorType
