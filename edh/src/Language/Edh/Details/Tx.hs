@@ -15,6 +15,9 @@ import           Language.Edh.Control
 import           Language.Edh.Details.RtTypes
 
 
+-- | Edh follows GHC's program termination criteria that the main thread
+-- decides all. see:
+--   https://hackage.haskell.org/package/base/docs/Control-Concurrent.html
 driveEdhProgram :: Context -> EdhProg (STM ()) -> IO ()
 driveEdhProgram !ctx !prog = do
   -- check async exception mask state
@@ -24,25 +27,24 @@ driveEdhProgram !ctx !prog = do
       $ UsageError "Edh program should not run with async exceptions masked"
 
   -- prepare program environment
-  !masterTh <- myThreadId
+  !mainThId <- myThreadId
   let onDescendantExc :: SomeException -> IO ()
       onDescendantExc e = case asyncExceptionFromException e of
         Just (asyncExc :: SomeAsyncException) ->
           -- todo special handling here ?
-          throwTo masterTh asyncExc
-        _ -> throwTo masterTh e
+          throwTo mainThId asyncExc
+        _ -> throwTo mainThId e
   progHaltSig <- newBroadcastTChanIO
   !forkQueue  <- newTQueueIO
   let
     forkDescendants :: TChan () -> IO ()
     forkDescendants haltSig =
       atomically
-          (        (Just <$> readTQueue forkQueue)
-          `orElse` (Nothing <$ readTChan haltSig)
+          (        (Nothing <$ readTChan haltSig)
+          `orElse` (Just <$> readTQueue forkQueue)
           )
         >>= \case
-              Nothing ->
-                -- program halted, done
+              Nothing -> -- program halted, done
                 return ()
               Just ((!pgs, !input), !task) -> do
                 -- got one to fork, prepare state for the descendant thread
@@ -50,8 +52,8 @@ driveEdhProgram !ctx !prog = do
                 (descHaltSig :: TChan ()) <- atomically $ dupTChan progHaltSig
                 let !pgsDescendant = pgs { edh'task'queue = descQueue }
                     !descTaskSource =
-                      (Just <$> readTQueue descQueue)
-                        `orElse` (Nothing <$ readTChan descHaltSig)
+                      (Nothing <$ readTChan descHaltSig)
+                        `orElse` (Just <$> readTQueue descQueue)
                 -- bootstrap on the descendant thread
                 atomically
                   $ writeTQueue descQueue ((pgsDescendant, input), task)
@@ -67,7 +69,7 @@ driveEdhProgram !ctx !prog = do
     (unmask $ atomically (dupTChan progHaltSig) >>= forkDescendants)
     onDescendantExc
 
-  -- prepare program state for master thread
+  -- prepare program state for main thread
   !mainQueue <- newTQueueIO
   let !scope = contextScope ctx
       !obj   = thisObject scope
@@ -76,9 +78,9 @@ driveEdhProgram !ctx !prog = do
                             , edh'in'tx      = False
                             , edh'context    = ctx
                             }
-  -- broadcast the halt signal after the master thread done anyway
+  -- broadcast the halt signal after the main thread done anyway
   flip finally (atomically $ writeTChan progHaltSig ()) $ do
-    -- bootstrap the program on master thread
+    -- bootstrap the program on main thread
     atomically $ writeTQueue mainQueue ((pgs, (obj, scope, nil)), const prog)
     driveEdhThread $ tryReadTQueue mainQueue
  where
