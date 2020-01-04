@@ -110,7 +110,7 @@ newtype Symbol = Symbol {
     symbol'description :: CString
   } deriving (Eq, Ord)
 instance Show Symbol where
-  show (Symbol dp) = "[@" <> sd <> "]"
+  show (Symbol dp) = "<@" <> sd <> ">"
     where sd = unsafePerformIO $ peekCString dp
 mkSymbol :: String -> STM Symbol
 mkSymbol !d = unsafeIOToSTM $ do
@@ -194,12 +194,12 @@ instance Eq Scope where
   Scope x'e _ _ x'p == Scope y'e _ _ y'p = x'e == y'e && x'p == y'p
 instance Show Scope where
   show (Scope _ _ _ (ProcDecl pName argsRcvr (StmtSrc (!srcPos, _)))) =
-    "["
+    "<"
       ++ T.unpack pName
       ++ show argsRcvr
       ++ " @ "
       ++ sourcePosPretty srcPos
-      ++ "]"
+      ++ ">"
 
 
 -- | An object views an entity, with inheritance relationship 
@@ -220,7 +220,7 @@ instance Show Object where
   -- the show, as 'show' may be called from an stm transaction, stm
   -- will fail hard on encountering of nested 'atomically' calls.
   show (Object _ (Class _ (ProcDecl cn _ _)) _) =
-    "[object: " ++ T.unpack cn ++ "]"
+    "<object: " ++ T.unpack cn ++ ">"
 
 -- | View an entity as object of specified class with specified ancestors
 -- this is the black magic you want to avoid
@@ -235,14 +235,14 @@ data Class = Class {
 instance Eq Class where
   Class x's x'pd == Class y's y'pd = x's == y's && x'pd == y'pd
 instance Show Class where
-  show (Class _ (ProcDecl cn _ _)) = "[class: " ++ T.unpack cn ++ "]"
+  show (Class _ (ProcDecl cn _ _)) = "<class: " ++ T.unpack cn ++ ">"
 
 data Method = Method {
     methodLexiStack :: !(NonEmpty Scope)
     , methodProcedure :: !ProcDecl
   } deriving (Eq)
 instance Show Method where
-  show (Method _ (ProcDecl mn _ _)) = "[method: " ++ T.unpack mn ++ "]"
+  show (Method _ (ProcDecl mn _ _)) = "<method: " ++ T.unpack mn ++ ">"
 
 data Operator = Operator {
     operatorLexiStack :: !(NonEmpty Scope)
@@ -257,14 +257,14 @@ data Operator = Operator {
   } deriving (Eq)
 instance Show Operator where
   show (Operator _ (ProcDecl opSym _ _) _ prec) =
-    "[operator: (" ++ T.unpack opSym ++ ") " ++ show prec ++ " ]"
+    "<operator: (" ++ T.unpack opSym ++ ") " ++ show prec ++ ">"
 
 data GenrDef = GenrDef {
     generatorLexiStack :: !(NonEmpty Scope)
     , generatorProcedure :: !ProcDecl
   } deriving (Eq)
 instance Show GenrDef where
-  show (GenrDef _ (ProcDecl mn _ _)) = "[generator: " ++ T.unpack mn ++ "]"
+  show (GenrDef _ (ProcDecl mn _ _)) = "<generator: " ++ T.unpack mn ++ ">"
 
 
 -- | A world for Edh programs to change
@@ -423,7 +423,7 @@ data HostProcedure = HostProcedure {
 instance Eq HostProcedure where
   HostProcedure x'n _ == HostProcedure y'n _ = x'n == y'n
 instance Show HostProcedure where
-  show (HostProcedure pn _) = "[hostproc: " ++ nm ++ "]"
+  show (HostProcedure pn _) = "<hostproc: " ++ nm ++ ">"
     where nm = unsafePerformIO $ peekCString pn
 
 
@@ -436,7 +436,7 @@ data EventSink = EventSink {
     , evs'chan :: !(TChan EdhValue)
   } deriving Eq
 instance Show EventSink where
-  show (EventSink _ _) = "[sink]"
+  show (EventSink _ _) = "<sink>"
 
 
 -- Atop Haskell, most types in Edh the surface language, are for
@@ -537,7 +537,7 @@ instance Show EdhValue where
 
   show (EdhHostProc v) = show v
   show (EdhHostOper prec (HostProcedure pn _)) =
-    "[hostop: (" ++ nm ++ ") " ++ show prec ++ " ]"
+    "<hostop: (" ++ nm ++ ") " ++ show prec ++ ">"
     where nm = unsafePerformIO $ peekCString pn
 
 
@@ -546,16 +546,16 @@ instance Show EdhValue where
   show (EdhOperator v)  = show v
   show (EdhGenrDef  v)  = show v
 
-  show EdhBreak         = "[break]"
-  show EdhContinue      = "[continue]"
-  show (EdhCaseClose v) = "[caseclose: " ++ show v ++ "]"
-  show EdhFallthrough   = "[fallthrough]"
-  show (EdhYield  v)    = "[yield: " ++ show v ++ "]"
-  show (EdhReturn v)    = "[return: " ++ show v ++ "]"
+  show EdhBreak         = "<break>"
+  show EdhContinue      = "<continue>"
+  show (EdhCaseClose v) = "<caseclose: " ++ show v ++ ">"
+  show EdhFallthrough   = "<fallthrough>"
+  show (EdhYield  v)    = "<yield: " ++ show v ++ ">"
+  show (EdhReturn v)    = "<return: " ++ show v ++ ">"
 
   show (EdhSink   v)    = show v
 
-  show (EdhExpr   v)    = "[expr: " ++ show v ++ "]"
+  show (EdhExpr   v)    = "<expr: " ++ show v ++ ">"
 
 -- Note:
 --
