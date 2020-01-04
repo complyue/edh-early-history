@@ -5,7 +5,7 @@
   generator range(start, stop=nil, step=nil) {
 
     if nil == stop && nil == step then case start of {
-      // enable the hidden *Edhic* version of range
+      // enable the hidden *Edhic* version of `range` using pair
       {(start:stop:step)} -> {fallthrough}
       {(start:stop)} -> {fallthrough}
     }
