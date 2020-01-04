@@ -14,10 +14,17 @@ for n from range(5, 10, -2) do runtime.info <| ' ** iter # ' ++ n
 
 for n from range(10, 5, 2) do runtime.info <| ' ** iter # ' ++ n
 
+for n from range(5:10:2) do runtime.info <| ' ** iter # ' ++ n
+
+for n from range(7:3) do runtime.info <| ' ** iter # ' ++ n
 
 generator g * { for n from range(5) do yield pkargs(1,2,3,m=n+1) }
-for (a,m,b,c) from g() do 20 <| (a,b,c,m)
+for (a,m,b,c) from g() do runtime.info <| (a,b,c,m)
 
 
 for (i, n) from enumerate(range, 5) do runtime.info <| ' # ' ++ i ++ ' >> ' ++ n
+
+
+generator ss n while true n = yield n*n
+for n from ss(3) do { runtime.info<|n; if n > 100 then break else n }
 
