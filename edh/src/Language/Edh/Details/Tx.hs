@@ -50,7 +50,9 @@ driveEdhProgram !ctx !prog = do
                 -- got one to fork, prepare state for the descendant thread
                 descQueue                 <- newTQueueIO
                 (descHaltSig :: TChan ()) <- atomically $ dupTChan progHaltSig
-                let !pgsDescendant = pgs { edh'task'queue = descQueue }
+                let !pgsDescendant =
+                      -- the forker should have checked not in tx, enforce here
+                      pgs { edh'task'queue = descQueue, edh'in'tx = False }
                     !descTaskSource =
                       (Nothing <$ readTChan descHaltSig)
                         `orElse` (Just <$> readTQueue descQueue)
@@ -72,7 +74,7 @@ driveEdhProgram !ctx !prog = do
   -- prepare program state for main thread
   !mainQueue <- newTQueueIO
   let !scope = contextScope ctx
-      !obj   = thisObject scope
+      !this  = thisObject scope
       !pgs   = EdhProgState { edh'fork'queue = forkQueue
                             , edh'task'queue = mainQueue
                             , edh'in'tx      = False
@@ -81,7 +83,7 @@ driveEdhProgram !ctx !prog = do
   -- broadcast the halt signal after the main thread done anyway
   flip finally (atomically $ writeTChan progHaltSig ()) $ do
     -- bootstrap the program on main thread
-    atomically $ writeTQueue mainQueue ((pgs, (obj, scope, nil)), const prog)
+    atomically $ writeTQueue mainQueue ((pgs, (this, scope, nil)), const prog)
     driveEdhThread $ tryReadTQueue mainQueue
  where
   driveEdhThread :: STM (Maybe EdhTxTask) -> IO ()

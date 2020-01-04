@@ -346,6 +346,16 @@ exitEdhProc exit result = do
     else writeTQueue txq ((pgs, result), exit)
 {-# INLINE exitEdhProc #-}
 
+forkEdh :: EdhProcExit -> EdhProg (STM ()) -> EdhProg (STM ())
+forkEdh exit prog = ask >>= \pgs -> if edh'in'tx pgs
+  then throwEdh EvalError "You don't fork within a transaction"
+  else do
+    let !scope = contextScope $ edh'context pgs
+        !this  = thisObject scope
+    contEdhSTM $ do
+      writeTQueue (edh'fork'queue pgs) ((pgs, (this, scope, nil)), const prog)
+      exitEdhSTM pgs exit (this, scope, nil)
+
 -- | An atomic task, an Edh program is composed form many this kind of tasks.
 type EdhTxTask
   = ( (EdhProgState, (Object, Scope, EdhValue))
