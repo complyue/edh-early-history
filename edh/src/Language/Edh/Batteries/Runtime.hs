@@ -10,6 +10,8 @@ import           Control.Monad.Reader
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
+import           System.Clock
+
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
 
@@ -56,12 +58,15 @@ loggingProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
-keepNotify :: Int -> EdhGenrCaller -> STM ()
-keepNotify !delayMicros !genr'caller@(!pgs', !iter'cb) = do
-  unsafeIOToSTM $ threadDelay delayMicros
-  -- TODO return timestamp now instead of nil
-  runEdhProg pgs' $ iter'cb (this, scope, nil) $ \_ ->
-    keepNotify delayMicros genr'caller
+timelyNotify :: Int -> EdhGenrCaller -> STM ()
+timelyNotify !delayMicros !genr'caller@(!pgs', !iter'cb) = do
+  nanos <- (toNanoSecs <$>) $ unsafeIOToSTM $ do
+    threadDelay delayMicros
+    getTime Realtime
+  -- yield the nanosecond timestamp to iterator
+  runEdhProg pgs'
+    $ iter'cb (this, scope, EdhDecimal $ fromInteger nanos)
+    $ \_ -> timelyNotify delayMicros genr'caller
  where
   !scope = contextScope $ edh'context pgs'
   !this  = thisObject scope
@@ -75,7 +80,7 @@ rtEveryMicrosProc !argsSender !that _ _ = ask >>= \pgs -> do
     Just genr'caller -> case argsSender of
       [SendPosArg !nExpr] -> evalExpr that nExpr $ \case
         (_, _, EdhDecimal (Decimal d e n)) | d == 1 ->
-          contEdhSTM $ keepNotify (fromIntegral n * 10 ^ e) genr'caller
+          contEdhSTM $ timelyNotify (fromIntegral n * 10 ^ e) genr'caller
         nVal -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
       _ ->
         throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
@@ -89,7 +94,7 @@ rtEveryMillisProc !argsSender !that _ _ = ask >>= \pgs -> do
     Just genr'caller -> case argsSender of
       [SendPosArg !nExpr] -> evalExpr that nExpr $ \case
         (_, _, EdhDecimal (Decimal d e n)) | d == 1 ->
-          contEdhSTM $ keepNotify (fromIntegral n * 10 ^ (e + 3)) genr'caller
+          contEdhSTM $ timelyNotify (fromIntegral n * 10 ^ (e + 3)) genr'caller
         nVal -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
       _ ->
         throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
@@ -103,7 +108,7 @@ rtEverySecondsProc !argsSender !that _ _ = ask >>= \pgs -> do
     Just genr'caller -> case argsSender of
       [SendPosArg !nExpr] -> evalExpr that nExpr $ \case
         (_, _, EdhDecimal (Decimal d e n)) | d == 1 ->
-          contEdhSTM $ keepNotify (fromIntegral n * 10 ^ (e + 6)) genr'caller
+          contEdhSTM $ timelyNotify (fromIntegral n * 10 ^ (e + 6)) genr'caller
         nVal -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
       _ ->
         throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
