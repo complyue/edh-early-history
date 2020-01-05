@@ -458,7 +458,16 @@ parseLitExpr = choice
   , TypeLiteral ExprType <$ litSym "ExprType"
   , TypeLiteral TypeType <$ litSym "TypeType"
   ]
-  where litSym = hidden . symbol
+ where
+  litSym :: Text -> Parser Text
+  litSym s = hidden $ try $ string s <* choice
+    [ space1
+    , eof
+    , void $ lookAhead $ string ","
+    , void $ lookAhead $ string ";"
+    , void $ lookAhead $ string ")"
+    , void $ lookAhead $ string "}"
+    ]
 
 
 parseAttrName :: Parser Text
