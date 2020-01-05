@@ -124,7 +124,7 @@ installEdhBatteries world = liftIO $ do
           -- | publish to sink
           --     evsPub <- outEvent
         , ( "<-"
-          , 5
+          , 1
           )
 
           -- | branch

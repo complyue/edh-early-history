@@ -8,7 +8,7 @@
         <| '  📆 event#' ++ (n+=1) ++ ' 🎉  ' ++ evt
 
   go for nanos from runtime.everySeconds(1) do
-        evs <- 'NanoTimes now is ' ++ nanos
+        evs <- 'time now (in nanos) is ' ++ nanos
 
   // after main thread terminated, all forked descendant threads
   // will be terminated along with the Edh program too
