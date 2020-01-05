@@ -48,9 +48,7 @@ supersProc !argsSender that _ !exit = do
   !pgs <- ask
   let !callerCtx   = edh'context pgs
       !callerScope = contextScope callerCtx
-      !argCnt      = case argsSender of
-        SingleSender _       -> 1
-        PackSender   senders -> length senders
+      !argCnt      = length argsSender
   if argCnt < 1
     then contEdhSTM $ do
       supers <- map EdhObject <$> (readTVar $ objSupers that)
@@ -242,11 +240,9 @@ makeOpProc argsSender that _ !exit = do
 -- | utility expr(*args,**kwargs)
 makeExprProc :: EdhProcedure
 makeExprProc !argsSender !that scope !exit = case argsSender of
-  SingleSender (SendPosArg !argExpr) -> exit (that, scope, EdhExpr argExpr)
-  PackSender   []                    -> exit (that, scope, nil)
-  PackSender   [SendPosArg !argExpr] -> exit (that, scope, EdhExpr argExpr)
-  PackSender   argSenders            -> makeExprProc' argSenders exit
-  SingleSender argSender             -> makeExprProc' [argSender] exit
+  []                    -> exit (that, scope, nil)
+  [SendPosArg !argExpr] -> exit (that, scope, EdhExpr argExpr)
+  argSenders            -> makeExprProc' argSenders exit
  where
   makeExprProc' :: [ArgSender] -> EdhProcExit -> EdhProg (STM ())
   makeExprProc' [] !exit' =

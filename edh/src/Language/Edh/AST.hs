@@ -98,9 +98,7 @@ instance Show ArgReceiver where
   show (RecvRestPkArgs  nm) = "***" ++ T.unpack nm
   show (RecvArg nm _ _    ) = T.unpack nm
 
-data ArgsSender = PackSender ![ArgSender]
-    | SingleSender !ArgSender
-  deriving (Eq, Show)
+type ArgsSender = [ArgSender]
 data ArgSender = UnpackPosArgs !Expr
     | UnpackKwArgs !Expr
     | UnpackPkArgs !Expr

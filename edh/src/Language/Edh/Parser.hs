@@ -199,11 +199,11 @@ parseAttrAddr = do
 
 parseArgsSender :: Parser ArgsSender
 parseArgsSender = parsePackSender <|> do
-  SingleSender . SendPosArg <$> parseExpr
+  (: []) . SendPosArg <$> parseExpr
 
 parsePackSender :: Parser ArgsSender
 parsePackSender =
-  between (symbol "(") (symbol ")") $ PackSender . reverse <$> parseArgSends []
+  between (symbol "(") (symbol ")") $ reverse <$> parseArgSends []
 
 parseArgSends :: [ArgSender] -> Parser [ArgSender]
 parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do

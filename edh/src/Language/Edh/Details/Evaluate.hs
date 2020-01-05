@@ -837,11 +837,9 @@ evalExpr that expr exit = do
             Nothing -> error "attr resolving bug"
             -- run an operator implemented in Haskell
             Just (EdhHostOper _ (HostProcedure _ !proc)) ->
-              runEdhProg pgs $ proc
-                (PackSender [SendPosArg lhExpr, SendPosArg rhExpr])
-                this -- with current this object as the operator's that object
-                scope'
-                exit
+              -- with current this object as the operator's that object
+              runEdhProg pgs
+                $ proc [SendPosArg lhExpr, SendPosArg rhExpr] this scope' exit
             -- run an operator implemented in Edh
             Just (EdhOperator (Operator op'lexi'stack opProc@(ProcDecl _ op'args op'body) op'pred _))
               -> case op'args of
@@ -1000,7 +998,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                 (edh'context pgs') { generatorCaller = Just (pgs, recvYield) }
               }
             )
-          $ hp argsSndr that' scope' 
+          $ hp argsSndr that' scope'
           $ \result -> local (const pgs) $ exitEdhProc exit result
 
       (that', (Scope _ gnr'this _ _), EdhGenrDef (GenrDef gnr'lexi'stack gnrProc@(ProcDecl _ gnr'args gnr'body)))
@@ -1356,9 +1354,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
 packEdhArgs :: Object -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
 -- make sure values in a pack are evaluated in same tx
 packEdhArgs !that !argsSender !exit =
-  local (\s -> s { edh'in'tx = True }) $ case argsSender of
-    PackSender   !argSenders -> packEdhArgs' that argSenders exit
-    SingleSender !argSender  -> packEdhArgs' that [argSender] exit
+  local (\s -> s { edh'in'tx = True }) $ packEdhArgs' that argsSender exit
 
 packEdhArgs' :: Object -> [ArgSender] -> EdhProcExit -> EdhProg (STM ())
 packEdhArgs' !that [] !exit = do
