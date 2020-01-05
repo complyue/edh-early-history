@@ -71,11 +71,13 @@ parseGoStmt = do
   errRptPos <- getOffset
   expr      <- parseExpr
   case expr of
-    CallExpr{} -> return ()
-    ForExpr{}  -> return ()
-    _          -> do
+    BlockExpr{} -> return ()
+    CaseExpr{}  -> return ()
+    CallExpr{}  -> return ()
+    ForExpr{}   -> return ()
+    _           -> do
       setOffset errRptPos
-      fail "A call or for loop required here"
+      fail "A block, case, call or for loop should be here"
   return $ GoStmt expr
 
 parseDeferStmt :: Parser Stmt
