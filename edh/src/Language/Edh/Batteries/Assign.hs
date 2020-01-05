@@ -39,7 +39,7 @@ assignProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
             EdhDecimal n -> return $ ItemByNum n
             EdhBool    b -> return $ ItemByBool b
             _ ->
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Invalid dict key: "
                 <> T.pack (show $ edhTypeOf ixVal)
                 <> ": "
@@ -52,7 +52,7 @@ assignProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
         (_, _, EdhObject obj) ->
           contEdhSTM $ lookupEdhObjAttr obj (AttrByName "[=]") >>= \case
             Nothing ->
-              throwEdhFromSTM pgs EvalError $ "No ([=]) method from: " <> T.pack
+              throwEdhSTM pgs EvalError $ "No ([=]) method from: " <> T.pack
                 (show obj)
             Just (EdhMethod (Method mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
               -> do
@@ -93,7 +93,7 @@ assignProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                         -- value from procedure execution
                         _ -> exitEdhProc exit (that'', scope'', mthRtn)
             Just badIndexer ->
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Malformed index method ([=]) on "
                 <> T.pack (show obj)
                 <> " - "

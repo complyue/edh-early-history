@@ -70,7 +70,7 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
         attrNames <- sequence $ (<$> vExprs) $ \case
           (AttrExpr (DirectRef (NamedAttr vAttr))) -> return $ AttrByName vAttr
           vPattern ->
-            throwEdhFromSTM pgs EvalError
+            throwEdhSTM pgs EvalError
               $  "Invalid element in tuple pattern: "
               <> T.pack (show vPattern)
         case ctxMatch of

@@ -182,16 +182,16 @@ val2DictEntry _ (EdhPair (EdhSymbol  s) v) = return (ItemBySym s, v)
 val2DictEntry _ (EdhPair (EdhDecimal n) v) = return (ItemByNum n, v)
 val2DictEntry _ (EdhPair (EdhBool    b) v) = return (ItemByBool b, v)
 val2DictEntry pgs (EdhPair k _v) =
-  throwEdhFromSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
+  throwEdhSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
 val2DictEntry _ (EdhTuple [EdhType    t, v]) = return (ItemByType t, v)
 val2DictEntry _ (EdhTuple [EdhString  s, v]) = return (ItemByStr s, v)
 val2DictEntry _ (EdhTuple [EdhSymbol  s, v]) = return (ItemBySym s, v)
 val2DictEntry _ (EdhTuple [EdhDecimal n, v]) = return (ItemByNum n, v)
 val2DictEntry _ (EdhTuple [EdhBool    b, v]) = return (ItemByBool b, v)
 val2DictEntry pgs (EdhTuple [k, _v]) =
-  throwEdhFromSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
+  throwEdhSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
 val2DictEntry pgs val =
-  throwEdhFromSTM pgs EvalError $ "Invalid entry for dict: " <> T.pack
+  throwEdhSTM pgs EvalError $ "Invalid entry for dict: " <> T.pack
     (show val)
 
 -- | operator (=>) - prepender

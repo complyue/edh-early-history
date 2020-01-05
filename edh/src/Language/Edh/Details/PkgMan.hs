@@ -34,12 +34,12 @@ locateEdhModule
   :: EdhProgState -> FilePath -> FilePath -> STM (FilePath, FilePath)
 locateEdhModule !pgs !pkgPath !importPath = case splitExtension importPath of
   (_, ".edh") ->
-    throwEdhFromSTM pgs EvalError
+    throwEdhSTM pgs EvalError
       $  "You don't include the `.edh` file extension in the import: "
       <> T.pack importPath
   _ -> unsafeIOToSTM (doesPathExist pkgPath) >>= \case
     False ->
-      throwEdhFromSTM pgs EvalError $ "Path does not exist: " <> T.pack pkgPath
+      throwEdhSTM pgs EvalError $ "Path does not exist: " <> T.pack pkgPath
     True -> case stripPrefix "./" importPath of
       Just !relImp -> resolveRelImport relImp
       Nothing -> unsafeIOToSTM (canonicalizePath pkgPath) >>= resolveAbsImport
@@ -59,7 +59,7 @@ locateEdhModule !pgs !pkgPath !importPath = case splitExtension importPath of
           False ->
             -- do
             --   trace (" ** no hit: " <> edhIdxPath <> " ** " <> nomPath) $  return ()
-            throwEdhFromSTM pgs EvalError
+            throwEdhSTM pgs EvalError
               $  "No such module: "
               <> T.pack importPath
 
@@ -80,7 +80,7 @@ locateEdhModule !pgs !pkgPath !importPath = case splitExtension importPath of
             let !parentPkgPath = takeDirectory caniPkgPath
             if equalFilePath parentPkgPath caniPkgPath
               then
-                throwEdhFromSTM pgs EvalError
+                throwEdhSTM pgs EvalError
                 $  "No such module: "
                 <> T.pack importPath
               else resolveAbsImport parentPkgPath

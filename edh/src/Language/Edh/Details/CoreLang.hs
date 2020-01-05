@@ -27,7 +27,7 @@ resolveAddr !pgs (SymbolicAttr !symName) =
           case Map.lookup (AttrByName symName) em of
             Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
             Just v ->
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Not a symbol: "
                 <> T.pack (show v)
                 <> " as "
@@ -36,7 +36,7 @@ resolveAddr !pgs (SymbolicAttr !symName) =
                 <> T.pack (show $ thisObject scope') -- TODO this correct ?
             Nothing -> error "bug in ctx attr resolving"
         Nothing ->
-          throwEdhFromSTM pgs EvalError
+          throwEdhSTM pgs EvalError
             $  "No symbol named "
             <> T.pack (show symName)
             <> " available"

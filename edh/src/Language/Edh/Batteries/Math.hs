@@ -305,7 +305,7 @@ doEdhComparison
 doEdhComparison pgs exit that scope lhVal rhVal cm =
   compareEdhValue lhVal rhVal >>= \case
     Nothing ->
-      throwEdhFromSTM pgs EvalError
+      throwEdhSTM pgs EvalError
         $  "Not comparable: "
         <> T.pack (show $ edhTypeOf lhVal)
         <> " vs "

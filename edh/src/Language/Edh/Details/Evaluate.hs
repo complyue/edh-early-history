@@ -330,7 +330,7 @@ importEdhModule !argsRcvr !impSpec !exit = do
                       $ importFromEntity argsRcvr (objEntity modu) exit
                     importError -> -- the first importer failed loading it,
                       -- replicate the error in this thread
-                      throwEdhFromSTM pgs EvalError $ edhValueStr importError
+                      throwEdhSTM pgs EvalError $ edhValueStr importError
                 Nothing -> do  -- we are the first importer
                   -- allocate an empty slot
                   moduSlot <- newEmptyTMVar
@@ -367,7 +367,7 @@ loadModule
   -> EdhProcExit
   -> STM ()
 loadModule pgs moduSlot moduId moduFile exit = if edh'in'tx pgs
-  then throwEdhFromSTM pgs
+  then throwEdhSTM pgs
                        EvalError
                        "You don't load a module from within a transaction"
   else do
@@ -445,14 +445,14 @@ indexingMethodArg _ (SingleReceiver (RecvArg ixAttrName Nothing Nothing)) =
 indexingMethodArg _ (PackReceiver [(RecvArg ixAttrName Nothing Nothing)]) =
   return ixAttrName
 indexingMethodArg pgs _ =
-  throwEdhFromSTM pgs EvalError "Invalid ([]) method signature"
+  throwEdhSTM pgs EvalError "Invalid ([]) method signature"
 
 indexingAssignMethodArg
   :: EdhProgState -> ArgsReceiver -> STM (AttrName, AttrName)
 indexingAssignMethodArg _ (PackReceiver [(RecvArg ixAttrName Nothing Nothing), (RecvArg valAttrName Nothing Nothing)])
   = return (ixAttrName, valAttrName)
 indexingAssignMethodArg pgs _ =
-  throwEdhFromSTM pgs EvalError "Invalid ([=]) method signature"
+  throwEdhSTM pgs EvalError "Invalid ([=]) method signature"
 
 
 evalExpr :: Object -> Expr -> EdhProcExit -> EdhProg (STM ())
@@ -519,12 +519,12 @@ evalExpr that expr exit = do
                 EdhDecimal k -> return $ ItemByNum k
                 EdhBool    k -> return $ ItemByBool k
                 k ->
-                  throwEdhFromSTM pgs EvalError
+                  throwEdhSTM pgs EvalError
                     $  "Invalid dict key: "
                     <> T.pack (show k)
                     <> " ❌"
               pv ->
-                throwEdhFromSTM pgs EvalError
+                throwEdhSTM pgs EvalError
                   $  "Invalid dict entry: "
                   <> T.pack (show pv)
                   <> " ❌"
@@ -588,7 +588,7 @@ evalExpr that expr exit = do
       DirectRef !addr' -> contEdhSTM $ do
         !key <- resolveAddr pgs addr'
         resolveEdhCtxAttr scope key >>= \case
-          Nothing -> throwEdhFromSTM pgs EvalError $ "Not in scope: " <> T.pack
+          Nothing -> throwEdhSTM pgs EvalError $ "Not in scope: " <> T.pack
             (show addr')
           Just scope'@(Scope !ent' _ _ _) -> do
             em <- readTVar ent'
@@ -601,7 +601,7 @@ evalExpr that expr exit = do
           (_, _, EdhObject !obj) ->
             return $ resolveEdhObjAttr obj key >>= \case
               Nothing ->
-                throwEdhFromSTM pgs EvalError
+                throwEdhSTM pgs EvalError
                   $  "No such attribute "
                   <> T.pack (show key)
                   <> " from "
@@ -627,7 +627,7 @@ evalExpr that expr exit = do
             EdhDecimal n -> return $ ItemByNum n
             EdhBool    b -> return $ ItemByBool b
             _ ->
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Invalid dict key: "
                 <> T.pack (show $ edhTypeOf ixVal)
                 <> ": "
@@ -641,7 +641,7 @@ evalExpr that expr exit = do
         (_, _, EdhObject obj) ->
           contEdhSTM $ lookupEdhObjAttr obj (AttrByName "[]") >>= \case
             Nothing ->
-              throwEdhFromSTM pgs EvalError $ "No ([]) method from: " <> T.pack
+              throwEdhSTM pgs EvalError $ "No ([]) method from: " <> T.pack
                 (show obj)
             Just (EdhMethod (Method mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
               -> do
@@ -677,7 +677,7 @@ evalExpr that expr exit = do
                         -- value from procedure execution
                         _ -> exitEdhProc exit (that'', scope'', mthRtn)
             Just badIndexer ->
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Malformed index method ([]) on "
                 <> T.pack (show obj)
                 <> " - "
@@ -830,7 +830,7 @@ evalExpr that expr exit = do
     InfixExpr !opSym !lhExpr !rhExpr ->
       return $ resolveEdhCtxAttr scope (AttrByName opSym) >>= \case
         Nothing ->
-          throwEdhFromSTM pgs EvalError
+          throwEdhSTM pgs EvalError
             $  "Operator ("
             <> T.pack (show opSym)
             <> ") not in scope"
@@ -928,11 +928,11 @@ evalExpr that expr exit = do
                           )
 
                 _ ->
-                  throwEdhFromSTM pgs EvalError
+                  throwEdhSTM pgs EvalError
                     $  "Invalid operator signature: "
                     <> T.pack (show op'args)
             Just val ->
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Not callable: "
                 <> T.pack (show val)
                 <> " expressed with: "
@@ -1286,7 +1286,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                 , Map.insert (AttrByName attrName) argVal em
                 )
             SymbolicAttr symName -> -- todo support this ?
-              throwEdhFromSTM pgs EvalError
+              throwEdhSTM pgs EvalError
                 $  "Do you mean `this.@"
                 <> symName
                 <> "` instead ?"
@@ -1299,7 +1299,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
               (callerThis, callerScope, argVal)
             return (ArgsPack posArgs'' kwArgs'', em)
           tgt ->
-            throwEdhFromSTM pgs EvalError
+            throwEdhSTM pgs EvalError
               $  "Invalid argument retarget: "
               <> T.pack (show tgt)
      where
@@ -1325,16 +1325,16 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                 defaultVal <- readTMVar defaultVar
                 return (defaultVal, posArgs', kwArgs'')
               _ ->
-                throwEdhFromSTM pgs EvalError $ "Missing argument: " <> argName
+                throwEdhSTM pgs EvalError $ "Missing argument: " <> argName
     woResidual :: ArgsPack -> EntityStore -> STM Entity
     woResidual (ArgsPack !posResidual !kwResidual) em
       | not (null posResidual)
-      = throwEdhFromSTM pgs EvalError
+      = throwEdhSTM pgs EvalError
         $  "Extraneous "
         <> T.pack (show $ length posResidual)
         <> " positional argument(s)"
       | not (Map.null kwResidual)
-      = throwEdhFromSTM pgs EvalError
+      = throwEdhSTM pgs EvalError
         $  "Extraneous keyword arguments: "
         <> T.unwords (Map.keys kwResidual)
       | otherwise
@@ -1360,7 +1360,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
         ent <- newTVar $ Map.mapKeys AttrByName kwArgs
         doReturn ent
       else
-        throwEdhFromSTM pgs EvalError
+        throwEdhSTM pgs EvalError
         $  "Unexpected "
         <> T.pack (show $ length posArgs)
         <> " positional argument(s) to wild receiver"
@@ -1385,14 +1385,14 @@ packEdhArgs' !that (!x : xs) !exit = do
       edhVal2Kw = \case
         EdhString s -> return s
         k ->
-          throwEdhFromSTM pgs EvalError
+          throwEdhSTM pgs EvalError
             $  "Invalid argument keyword from value: "
             <> T.pack (show k)
       dictKey2Kw :: ItemKey -> STM AttrName
       dictKey2Kw = \case
         ItemByStr !name -> return name
         k ->
-          throwEdhFromSTM pgs EvalError
+          throwEdhSTM pgs EvalError
             $  "Invalid argument keyword from dict key: "
             <> T.pack (show k)
   case x of
