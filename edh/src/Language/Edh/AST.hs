@@ -34,23 +34,45 @@ instance Show StmtSrc where
   show (StmtSrc (sp, _)) = "Edh statement @ " ++ sourcePosPretty sp
 
 
-data Stmt = VoidStmt
-      -- atomically isolated
+data Stmt =
+      -- literal `pass` to fill a place where a statement needed,
+      -- same as in Python
+      VoidStmt
+      -- atomically isolated, mark a code section for transaction bounds
     | AtoIsoStmt !Expr
-      -- similar to goroutine in Go
-    | GoStmt !Expr | DeferStmt !Expr
+      -- similar to `go` in Go, starts goroutine
+    | GoStmt !Expr
+      -- not similar to `defer` in Go (in Go `defer` snapshots arg values
+      -- and schedules execution on func return), but in Edh `defer`
+      -- schedules execution on thread termination
+    | DeferStmt !Expr
       -- import with args (re)pack receiving syntax
     | ImportStmt !ArgsReceiver !Expr
       -- assignment with args (un/re)pack sending/receiving syntax
     | LetStmt !ArgsReceiver !ArgsSender
       -- super object declaration for a descendant object
     | ExtendsStmt !Expr
-      -- class definition
+      -- class (constructor) procedure definition
     | ClassStmt !ProcDecl
-      -- method definition
+      -- method procedure definition
     | MethodStmt !ProcDecl
-      -- generator definition
+      -- generator procedure definition
     | GeneratorStmt !ProcDecl
+      -- reactor declaration, a reactor procedure is not bound to a name,
+      -- its bound to an (event) `sink` with the calling thread as context,
+      -- when an event fires from that (event) `sink`, the bound reactor
+      -- is scheduled to run by the context thread, after its currernt
+      -- transaction finishes, a reactor procedure can declare to receive
+      -- a resume exit, it can continue execution of the thread with the
+      -- resume exit, or simply return to terminate the thread
+      -- the reactor mechanism is somewhat similar to traditional signal
+      -- handler mechanism in OS process management
+    | ReactorStmt !Expr !ArgsReceiver !StmtSrc
+      -- interpreter declaration, an interpreter procedure is not otherwise
+      -- different from a method procedure, except it receives arguments
+      -- in expression form other than values, in addition to the reflective
+      -- `callerScope` as first argument
+    | InterpreterStmt !ProcDecl
       -- while loop
     | WhileStmt !Expr !StmtSrc
       -- control flows
@@ -184,7 +206,6 @@ data EdhTypeValue = TypeType
     | TupleType
     | ArgsPackType
     | BlockType
-    | ThunkType
     | HostProcType
     | HostOperType
     | HostGenrType
@@ -192,8 +213,8 @@ data EdhTypeValue = TypeType
     | MethodType
     | OperatorType
     | GeneratorType
+    | InterpreterType
     | FlowCtrlType -- for break/continue/fallthrough/yield/return
-    | GenrIterType
     | SinkType
     | ExprType
   deriving (Eq, Ord, Show)

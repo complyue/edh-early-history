@@ -267,6 +267,14 @@ data GenrDef = GenrDef {
 instance Show GenrDef where
   show (GenrDef _ (ProcDecl mn _ _)) = "<generator: " ++ T.unpack mn ++ ">"
 
+data Interpreter = Interpreter {
+    interpreterLexiStack :: !(NonEmpty Scope)
+    , interpreterProcedure :: !ProcDecl
+  } deriving (Eq)
+instance Show Interpreter where
+  show (Interpreter _ (ProcDecl mn _ _)) =
+    "<interpreter: " ++ T.unpack mn ++ ">"
+
 
 -- | A world for Edh programs to change
 data EdhWorld = EdhWorld {
@@ -521,6 +529,7 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     | EdhMethod !Method
     | EdhOperator !Operator
     | EdhGenrDef !GenrDef
+    | EdhInterpreter !Interpreter
 
   -- * flow control
     | EdhBreak | EdhContinue
@@ -578,21 +587,22 @@ instance Show EdhValue where
     where nm = unsafePerformIO $ peekCString pn
 
 
-  show (EdhClass    v)  = show v
-  show (EdhMethod   v)  = show v
-  show (EdhOperator v)  = show v
-  show (EdhGenrDef  v)  = show v
+  show (EdhClass       v) = show v
+  show (EdhMethod      v) = show v
+  show (EdhOperator    v) = show v
+  show (EdhGenrDef     v) = show v
+  show (EdhInterpreter v) = show v
 
-  show EdhBreak         = "<break>"
-  show EdhContinue      = "<continue>"
-  show (EdhCaseClose v) = "<caseclose: " ++ show v ++ ">"
-  show EdhFallthrough   = "<fallthrough>"
-  show (EdhYield  v)    = "<yield: " ++ show v ++ ">"
-  show (EdhReturn v)    = "<return: " ++ show v ++ ">"
+  show EdhBreak           = "<break>"
+  show EdhContinue        = "<continue>"
+  show (EdhCaseClose v)   = "<caseclose: " ++ show v ++ ">"
+  show EdhFallthrough     = "<fallthrough>"
+  show (EdhYield  v)      = "<yield: " ++ show v ++ ">"
+  show (EdhReturn v)      = "<return: " ++ show v ++ ">"
 
-  show (EdhSink   v)    = show v
+  show (EdhSink   v)      = show v
 
-  show (EdhExpr   v)    = "<expr: " ++ show v ++ ">"
+  show (EdhExpr   v)      = "<expr: " ++ show v ++ ">"
 
 -- Note:
 --
@@ -620,12 +630,13 @@ instance Eq EdhValue where
 
   EdhHostProc x        == EdhHostProc y        = x == y
   EdhHostOper _ x'proc == EdhHostOper _ y'proc = x'proc == y'proc
-  EdhHostGenr x        == EdhHostGenr y        = x == y
+  EdhHostGenr    x     == EdhHostGenr    y     = x == y
 
-  EdhClass    x        == EdhClass    y        = x == y
-  EdhMethod   x        == EdhMethod   y        = x == y
-  EdhOperator x        == EdhOperator y        = x == y
-  EdhGenrDef  x        == EdhGenrDef  y        = x == y
+  EdhClass       x     == EdhClass       y     = x == y
+  EdhMethod      x     == EdhMethod      y     = x == y
+  EdhOperator    x     == EdhOperator    y     = x == y
+  EdhGenrDef     x     == EdhGenrDef     y     = x == y
+  EdhInterpreter x     == EdhInterpreter y     = x == y
 
   EdhBreak             == EdhBreak             = True
   EdhContinue          == EdhContinue          = True
@@ -663,34 +674,35 @@ false = EdhBool False
 
 edhTypeOf :: EdhValue -> EdhValue
 
-edhTypeOf EdhNil            = nil
-edhTypeOf (EdhDecimal _   ) = EdhType DecimalType
-edhTypeOf (EdhBool    _   ) = EdhType BoolType
-edhTypeOf (EdhString  _   ) = EdhType StringType
-edhTypeOf (EdhSymbol  _   ) = EdhType SymbolType
-edhTypeOf (EdhObject  _   ) = EdhType ObjectType
-edhTypeOf (EdhDict    _   ) = EdhType DictType
-edhTypeOf (EdhList    _   ) = EdhType ListType
-edhTypeOf (EdhPair _ _    ) = EdhType PairType
-edhTypeOf (EdhTuple    _  ) = EdhType TupleType
-edhTypeOf (EdhArgsPack _  ) = EdhType ArgsPackType
-edhTypeOf (EdhHostProc _  ) = EdhType HostProcType
-edhTypeOf (EdhHostOper _ _) = EdhType HostOperType
-edhTypeOf (EdhHostGenr _  ) = EdhType HostGenrType
-edhTypeOf (EdhClass    _  ) = EdhType ClassType
-edhTypeOf (EdhMethod   _  ) = EdhType MethodType
-edhTypeOf (EdhOperator _  ) = EdhType OperatorType
-edhTypeOf (EdhGenrDef  _  ) = EdhType GeneratorType
+edhTypeOf EdhNil             = nil
+edhTypeOf (EdhDecimal _    ) = EdhType DecimalType
+edhTypeOf (EdhBool    _    ) = EdhType BoolType
+edhTypeOf (EdhString  _    ) = EdhType StringType
+edhTypeOf (EdhSymbol  _    ) = EdhType SymbolType
+edhTypeOf (EdhObject  _    ) = EdhType ObjectType
+edhTypeOf (EdhDict    _    ) = EdhType DictType
+edhTypeOf (EdhList    _    ) = EdhType ListType
+edhTypeOf (EdhPair _ _     ) = EdhType PairType
+edhTypeOf (EdhTuple    _   ) = EdhType TupleType
+edhTypeOf (EdhArgsPack _   ) = EdhType ArgsPackType
+edhTypeOf (EdhHostProc _   ) = EdhType HostProcType
+edhTypeOf (EdhHostOper _ _ ) = EdhType HostOperType
+edhTypeOf (EdhHostGenr    _) = EdhType HostGenrType
+edhTypeOf (EdhClass       _) = EdhType ClassType
+edhTypeOf (EdhMethod      _) = EdhType MethodType
+edhTypeOf (EdhOperator    _) = EdhType OperatorType
+edhTypeOf (EdhGenrDef     _) = EdhType GeneratorType
+edhTypeOf (EdhInterpreter _) = EdhType InterpreterType
 
-edhTypeOf EdhBreak          = EdhType FlowCtrlType
-edhTypeOf EdhContinue       = EdhType FlowCtrlType
-edhTypeOf (EdhCaseClose _)  = EdhType FlowCtrlType
-edhTypeOf EdhFallthrough    = EdhType FlowCtrlType
-edhTypeOf (EdhYield  _)     = EdhType FlowCtrlType
-edhTypeOf (EdhReturn _)     = EdhType FlowCtrlType
+edhTypeOf EdhBreak           = EdhType FlowCtrlType
+edhTypeOf EdhContinue        = EdhType FlowCtrlType
+edhTypeOf (EdhCaseClose _)   = EdhType FlowCtrlType
+edhTypeOf EdhFallthrough     = EdhType FlowCtrlType
+edhTypeOf (EdhYield  _)      = EdhType FlowCtrlType
+edhTypeOf (EdhReturn _)      = EdhType FlowCtrlType
 
-edhTypeOf (EdhSink   _)     = EdhType SinkType
-edhTypeOf (EdhExpr   _)     = EdhType ExprType
+edhTypeOf (EdhSink   _)      = EdhType SinkType
+edhTypeOf (EdhExpr   _)      = EdhType ExprType
 
-edhTypeOf (EdhType   _)     = EdhType TypeType
+edhTypeOf (EdhType   _)      = EdhType TypeType
 

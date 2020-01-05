@@ -35,6 +35,9 @@ symbol = L.symbol sc
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
+keyword :: Text -> Parser Text
+keyword kw = lexeme (string kw <* notFollowedBy alphaNumChar)
+
 trailingComma :: Parser ()
 trailingComma = void $ optional $ symbol ","
 
@@ -63,11 +66,11 @@ parseVoidStmt :: Parser Stmt
 parseVoidStmt = VoidStmt <$ symbol "pass" -- same as Python
 
 parseAtoIsoStmt :: Parser Stmt
-parseAtoIsoStmt = AtoIsoStmt <$> (symbol "ai" >> parseExpr)
+parseAtoIsoStmt = AtoIsoStmt <$> (keyword "ai" >> parseExpr)
 
 parseGoStmt :: Parser Stmt
 parseGoStmt = do
-  void $ symbol "go"
+  void $ keyword "go"
   errRptPos <- getOffset
   expr      <- parseExpr
   case expr of
@@ -82,7 +85,7 @@ parseGoStmt = do
 
 parseDeferStmt :: Parser Stmt
 parseDeferStmt = do
-  void $ symbol "defer"
+  void $ keyword "defer"
   errRptPos <- getOffset
   expr      <- parseExpr
   case expr of
@@ -94,12 +97,12 @@ parseDeferStmt = do
 
 parseImportStmt :: Parser Stmt
 parseImportStmt = do
-  void $ symbol "import"
+  void $ keyword "import"
   liftA2 ImportStmt parseArgsReceiver parseExpr
 
 parseLetStmt :: Parser Stmt
 parseLetStmt = do
-  void $ symbol "let"
+  void $ keyword "let"
   receiver <- parseArgsReceiver
   void $ symbol "="
   LetStmt receiver <$> parseArgsSender
@@ -144,7 +147,7 @@ parseArgRecvs rs kwConsumed posConsumed =
 
 parseRetarget :: Parser AttrAddr
 parseRetarget = do
-  void $ symbol "as"
+  void $ keyword "as"
   parseAttrAddr
 
 parseArgLetExpr :: Parser Expr
@@ -174,14 +177,14 @@ parseAttrAddr = do
  where
   leadingPart :: Parser Expr
   leadingPart = choice
-    [ AttrExpr ThisRef <$ symbol "this"
-    , AttrExpr ThatRef <$ symbol "that"
+    [ AttrExpr ThisRef <$ keyword "this"
+    , AttrExpr ThatRef <$ keyword "that"
     , AttrExpr . DirectRef . SymbolicAttr <$> parseAttrSym
     , AttrExpr . DirectRef . NamedAttr <$> parseAttrName
     ]
   followingPart :: Parser Expr
   followingPart = choice
-    [ symbol "this" *> fail "Unexpected this reference"
+    [ keyword "this" *> fail "Unexpected this reference"
     , AttrExpr . DirectRef . SymbolicAttr <$> parseAttrSym
     , AttrExpr . DirectRef . NamedAttr <$> parseAttrName
     ]
@@ -238,27 +241,35 @@ parseArgSends ss = (lookAhead (symbol ")") >> return ss) <|> do
 
 parseClassStmt :: Parser Stmt
 parseClassStmt = do
-  void $ symbol "class"
+  void $ keyword "class"
   ClassStmt <$> parseProcDecl
 
 parseExtendsStmt :: Parser Stmt
 parseExtendsStmt = do
-  void $ symbol "extends"
+  void $ keyword "extends"
   ExtendsStmt <$> parseExpr
 
 parseMethodStmt :: Parser Stmt
 parseMethodStmt = do
-  void $ symbol "method"
+  void $ keyword "method"
   MethodStmt <$> parseProcDecl
 
 parseGeneratorStmt :: Parser Stmt
 parseGeneratorStmt = do
-  void $ symbol "generator"
+  void $ keyword "generator"
   GeneratorStmt <$> parseProcDecl
+
+parseReactorStmt :: Parser Stmt
+parseReactorStmt =
+  keyword "reactor" >> liftA3 ReactorStmt parseExpr parseArgsReceiver parseStmt
+
+parseInterpreterStmt :: Parser Stmt
+parseInterpreterStmt =
+  InterpreterStmt <$> (keyword "interpreter" >> parseProcDecl)
 
 parseWhileStmt :: Parser Stmt
 parseWhileStmt = do
-  void $ symbol "while"
+  void $ keyword "while"
   liftA2 WhileStmt parseExpr parseStmt
 
 parseProcDecl :: Parser ProcDecl
@@ -278,7 +289,7 @@ isMagicProcChar c = isOperatorChar c || elem c ("[]" :: [Char])
 
 parseOpDeclOvrdStmt :: Parser Stmt
 parseOpDeclOvrdStmt = do
-  void $ symbol "operator"
+  void $ keyword "operator"
   srcPos    <- getSourcePos
   errRptPos <- getOffset
   opSym     <- parseOpLit
@@ -318,31 +329,31 @@ parseOpDeclOvrdStmt = do
 
 parseTryStmt :: Parser Stmt
 parseTryStmt = do
-  void $ symbol "try"
+  void $ keyword "try"
   trunk   <- parseStmt
   catches <- many parseCatch
   final   <- optional $ do
-    void $ symbol "finally"
+    void $ keyword "finally"
     parseStmt
   return $ TryStmt trunk catches final
  where
   parseCatch = do
-    void $ symbol "catch"
+    void $ keyword "catch"
     excClass <- parseExpr
     an       <- optional $ do
-      void $ symbol "as"
+      void $ keyword "as"
       parseAttrName
     recov <- parseStmt
     return (excClass, an, recov)
 
 parseReturnStmt :: Parser Stmt
 parseReturnStmt = do
-  void $ symbol "return"
+  void $ keyword "return"
   ReturnStmt <$> parseExpr
 
 parseThrowStmt :: Parser Stmt
 parseThrowStmt = do
-  void $ symbol "throw"
+  void $ keyword "throw"
   ThrowStmt <$> parseExpr
 
 
@@ -361,12 +372,14 @@ parseStmt = optionalSemicolon *> do
           , parseExtendsStmt
           , parseMethodStmt
           , parseGeneratorStmt
+          , parseReactorStmt
+          , parseInterpreterStmt
           , parseWhileStmt
     -- TODO validate break/continue must within a loop construct
-          , BreakStmt <$ symbol "break"
-          , ContinueStmt <$ symbol "continue"
+          , BreakStmt <$ keyword "break"
+          , ContinueStmt <$ keyword "continue"
     -- TODO validate fallthrough must within a branch block
-          , FallthroughStmt <$ symbol "fallthrough"
+          , FallthroughStmt <$ keyword "fallthrough"
           , parseOpDeclOvrdStmt
           , parseTryStmt
     -- TODO validate yield must within a generator procedure
@@ -380,34 +393,34 @@ parseStmt = optionalSemicolon *> do
 
 parseIfExpr :: Parser Expr
 parseIfExpr = do
-  void $ symbol "if"
+  void $ keyword "if"
   cond <- parseExpr
-  void $ symbol "then"
+  void $ keyword "then"
   cseq <- parseStmt
   alt  <- optional $ do
-    void $ symbol "else"
+    void $ keyword "else"
     parseStmt
   return $ IfExpr cond cseq alt
 
 parseCaseExpr :: Parser Expr
 parseCaseExpr = do
-  void $ symbol "case"
+  void $ keyword "case"
   tgt <- parseExpr
-  void $ symbol "of"
+  void $ keyword "of"
   CaseExpr tgt <$> parseStmt
 
 parseYieldExpr :: Parser Expr
 parseYieldExpr = do
-  void $ symbol "yield"
+  void $ keyword "yield"
   YieldExpr <$> parseExpr
 
 parseForExpr :: Parser Expr
 parseForExpr = do
-  void $ symbol "for"
+  void $ keyword "for"
   ar <- parseArgsReceiver
-  void $ symbol "from"
+  void $ keyword "from"
   iter <- parseExpr
-  void $ symbol "do"
+  void $ keyword "do"
   ForExpr ar iter <$> parseExpr
 
 parseListExpr :: Parser Expr
@@ -421,7 +434,7 @@ parseStringLit = lexeme $ do
 
 parseBoolLit :: Parser Bool
 parseBoolLit =
-  (symbol "true" *> return True) <|> (symbol "false" *> return False)
+  (keyword "true" *> return True) <|> (keyword "false" *> return False)
 
 parseDecLit :: Parser Decimal
 parseDecLit = lexeme $ do -- todo support HEX/OCT ?
@@ -430,47 +443,41 @@ parseDecLit = lexeme $ do -- todo support HEX/OCT ?
 
 parseLitExpr :: Parser Literal
 parseLitExpr = choice
-  [ NilLiteral <$ litSym "nil"
+  [ NilLiteral <$ litKw "nil"
   , BoolLiteral <$> parseBoolLit
   , StringLiteral <$> parseStringLit
-  , SinkCtor <$ litSym "sink"
-  , DecLiteral D.nan <$ litSym "nan"
-  , DecLiteral D.inf <$ litSym "inf"
+  , SinkCtor <$ litKw "sink"
+  , DecLiteral D.nan <$ litKw "nan"
+  , DecLiteral D.inf <$ litKw "inf"
   , DecLiteral <$> parseDecLit
 
     -- todo use template-haskell here to avoid manual sync with 'EdhTypeValue'
-  , TypeLiteral DecimalType <$ litSym "DecimalType"
-  , TypeLiteral BoolType <$ litSym "BoolType"
-  , TypeLiteral StringType <$ litSym "StringType"
-  , TypeLiteral SymbolType <$ litSym "SymbolType"
-  , TypeLiteral ObjectType <$ litSym "ObjectType"
-  , TypeLiteral DictType <$ litSym "DictType"
-  , TypeLiteral ListType <$ litSym "ListType"
-  , TypeLiteral TupleType <$ litSym "TupleType"
-  , TypeLiteral BlockType <$ litSym "BlockType"
-  , TypeLiteral ThunkType <$ litSym "ThunkType"
-  , TypeLiteral HostProcType <$ litSym "HostProcType"
-  , TypeLiteral ClassType <$ litSym "ClassType"
-  , TypeLiteral MethodType <$ litSym "MethodType"
-  , TypeLiteral OperatorType <$ litSym "OperatorType"
-  , TypeLiteral GeneratorType <$ litSym "GeneratorType"
-  , TypeLiteral FlowCtrlType <$ litSym "FlowCtrlType"
-  , TypeLiteral GenrIterType <$ litSym "GenrIterType"
-  , TypeLiteral SinkType <$ litSym "SinkType"
-  , TypeLiteral ExprType <$ litSym "ExprType"
-  , TypeLiteral TypeType <$ litSym "TypeType"
+  , TypeLiteral DecimalType <$ litKw "DecimalType"
+  , TypeLiteral BoolType <$ litKw "BoolType"
+  , TypeLiteral StringType <$ litKw "StringType"
+  , TypeLiteral SymbolType <$ litKw "SymbolType"
+  , TypeLiteral ObjectType <$ litKw "ObjectType"
+  , TypeLiteral DictType <$ litKw "DictType"
+  , TypeLiteral ListType <$ litKw "ListType"
+  , TypeLiteral TupleType <$ litKw "TupleType"
+  , TypeLiteral ArgsPackType <$ litKw "ArgsPackType"
+  , TypeLiteral BlockType <$ litKw "BlockType"
+  , TypeLiteral HostProcType <$ litKw "HostProcType"
+  , TypeLiteral HostOperType <$ litKw "HostOperType"
+  , TypeLiteral HostGenrType <$ litKw "HostGenrType"
+  , TypeLiteral ClassType <$ litKw "ClassType"
+  , TypeLiteral MethodType <$ litKw "MethodType"
+  , TypeLiteral OperatorType <$ litKw "OperatorType"
+  , TypeLiteral GeneratorType <$ litKw "GeneratorType"
+  , TypeLiteral InterpreterType <$ litKw "InterpreterType"
+  , TypeLiteral FlowCtrlType <$ litKw "FlowCtrlType"
+  , TypeLiteral SinkType <$ litKw "SinkType"
+  , TypeLiteral ExprType <$ litKw "ExprType"
+  , TypeLiteral TypeType <$ litKw "TypeType"
   ]
- where
-  litSym :: Text -> Parser Text
-  litSym s = hidden $ try $ string s <* choice
-    [ space1
-    , eof
-    , void $ lookAhead $ string ","
-    , void $ lookAhead $ string ";"
-    , void $ lookAhead $ string ")"
-    , void $ lookAhead $ string "}"
-    ]
-
+  where
+-- | there're just too many of them, annoying if all listed in err rpt
+        litKw = hidden . keyword
 
 parseAttrName :: Parser Text
 parseAttrName = parseOpName <|> parseAlphaName

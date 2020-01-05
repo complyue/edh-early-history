@@ -242,30 +242,5 @@ makeExprProc :: EdhProcedure
 makeExprProc !argsSender !that scope !exit = case argsSender of
   []                    -> exit (that, scope, nil)
   [SendPosArg !argExpr] -> exit (that, scope, EdhExpr argExpr)
-  argSenders            -> makeExprProc' argSenders exit
- where
-  makeExprProc' :: [ArgSender] -> EdhProcExit -> EdhProg (STM ())
-  makeExprProc' [] !exit' =
-    exit' (that, scope, EdhArgsPack $ ArgsPack [] Map.empty)
-  makeExprProc' (!x : xs) !exit' = case x of
-    UnpackPosArgs _ -> throwEdh EvalError "not possible to unpack to expr"
-    UnpackKwArgs _ -> throwEdh EvalError "not possible to unpack to expr"
-    UnpackPkArgs _ -> throwEdh EvalError "not possible to unpack to expr"
-    SendPosArg !argExpr -> makeExprProc' xs $ \(_, _, !pk) -> case pk of
-      (EdhArgsPack (ArgsPack !posArgs !kwArgs)) ->
-        exit'
-          ( that
-          , scope
-          , EdhArgsPack $ ArgsPack (EdhExpr argExpr : posArgs) kwArgs
-          )
-      _ -> error "bug"
-    SendKwArg !kw !argExpr -> makeExprProc' xs $ \(_, _, !pk) -> case pk of
-      (EdhArgsPack (ArgsPack !posArgs !kwArgs)) -> exit'
-        ( that
-        , scope
-        , EdhArgsPack $ ArgsPack posArgs $ Map.insert kw
-                                                      (EdhExpr argExpr)
-                                                      kwArgs
-        )
-      _ -> error "bug"
+  argSenders            -> packEdhExprs that argSenders exit
 

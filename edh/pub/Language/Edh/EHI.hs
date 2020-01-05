@@ -12,7 +12,7 @@
 module Language.Edh.EHI
   (
     -- * Monadic API
-    EdhInterpreter
+    EdhEnv
   , EdhSession
     -- ** Interpreter entry point    
   , runEdh
@@ -25,7 +25,7 @@ module Language.Edh.EHI
     -- ** Exceptions
   , InterpretError(..)
 
-    -- * Pure API
+    -- * IO API
   , createEdhWorld
   , installEdhBatteries
   , runEdhModule
@@ -40,7 +40,7 @@ module Language.Edh.EHI
   , nan
   , inf
   , D.Decimal(..)
-    -- ** Reflection
+    -- ** Structured values
   , EdhWorld
   , Symbol
   , Entity
@@ -81,10 +81,7 @@ evalEdh code = do
     Right v   -> return v
 
 runEdhSession
-  :: ModuleId
-  -> Text
-  -> EdhSession a
-  -> EdhInterpreter (Either InterpretError a)
+  :: ModuleId -> Text -> EdhSession a -> EdhEnv (Either InterpretError a)
 runEdhSession moduId moduSource (ReaderT f) = do
   world <- ask
   runEdhModule world moduId moduSource >>= \case
@@ -92,17 +89,17 @@ runEdhSession moduId moduSource (ReaderT f) = do
     Right modu -> liftIO $ tryJust Just $ f (world, modu)
 
 
-runEdh :: MonadIO m => EdhInterpreter a -> m a
+runEdh :: MonadIO m => EdhEnv a -> m a
 runEdh (ReaderT f) = liftIO $ do
   world <- createEdhWorld
   installEdhBatteries world
   f world
 
-runEdhWithoutBatteries :: MonadIO m => EdhInterpreter a -> m a
+runEdhWithoutBatteries :: MonadIO m => EdhEnv a -> m a
 runEdhWithoutBatteries (ReaderT f) = liftIO $ createEdhWorld >>= f
 
 
 type EdhSession a = ReaderT (EdhWorld, Object) IO a
 
-type EdhInterpreter a = ReaderT EdhWorld IO a
+type EdhEnv a = ReaderT EdhWorld IO a
 

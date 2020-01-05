@@ -148,7 +148,11 @@ evalStmt' that stmt exit = do
 
     GoStmt expr -> forkEdh exit $ evalExpr that expr edhNop
 
-    -- TODO impl this
+    -- TODO impl. this
+    ReactorStmt sinkExpr argsRcvr reactionStmt ->
+      throwEdh EvalError "reactor not impl. yet"
+
+    -- TODO impl. this
     DeferStmt expr -> throwEdh EvalError "defer scheduler not impl. yet"
 
     -- TODO impl. this
@@ -208,6 +212,16 @@ evalStmt' that stmt exit = do
                                        }
         modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
         exitEdhSTM pgs exit (this, scope, gdf)
+
+    InterpreterStmt pd@(ProcDecl name _ _) -> if name == "_"
+      then throwEdh EvalError "`_` can not be used as interpreter name"
+      else contEdhSTM $ do
+        let mth = EdhInterpreter $ Interpreter
+              { interpreterLexiStack = call'stack
+              , interpreterProcedure = pd
+              }
+        modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
+        exitEdhSTM pgs exit (this, scope, mth)
 
     OpDeclStmt opSym opPrec opProc -> contEdhSTM $ do
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
@@ -820,6 +834,50 @@ evalExpr that expr exit = do
       (_, _, EdhGenrDef _) ->
         throwEdh EvalError "Can only call a generator method by for-from-do"
 
+      -- calling an interpreter procedure
+      (that', (Scope _ mth'this _ _), EdhInterpreter (Interpreter mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
+        -> do
+          let !calleeCtx = ctx { callStack = mth'lexi'stack }
+          packEdhExprs that' argsSndr $ \(_, _, pk) -> case pk of
+            EdhArgsPack (ArgsPack args kwargs) -> contEdhSTM $ do
+              scopeWrapper <- mkScopeWrapper world scope
+              runEdhProg pgs
+                $ recvEdhArgs
+                    calleeCtx
+                    mth'args
+                    (ArgsPack (EdhObject scopeWrapper : args) kwargs)
+                $ \(_, _, scopeObj) -> case scopeObj of
+                    EdhObject (Object rcvd'ent rcvd'cls _)
+                      | rcvd'cls == (objClass $ scopeSuper world)
+                      -> local
+                          (const pgs
+                            { edh'context =
+                              ctx
+                                { callStack = Scope rcvd'ent
+                                                    mth'this
+                                                    (NE.toList mth'lexi'stack)
+                                                    mthProc
+                                                <| call'stack
+                                }
+                            }
+                          )
+                        $ evalStmt that mth'body
+                          -- pop call stack after interpreter proc returned
+                        $ \(that'', scope'', mthRtn) ->
+                            local (const pgs) $ exitEdhProc
+                              exit
+                              ( that''
+                              , scope''
+                              , case mthRtn of
+                                -- explicit return
+                                EdhReturn rtnVal -> rtnVal
+                                -- no explicit return, assuming it returns the last
+                                -- value from procedure execution
+                                _                -> mthRtn
+                              )
+                    _ -> error "bug"
+            _ -> error "bug"
+
       (_, _, val) ->
         throwEdh EvalError
           $  "Can not call: "
@@ -864,10 +922,10 @@ evalExpr that expr exit = do
 -- push operator procedure's scope to call stack
                       runEdhProg pgs
                           { edh'context =
-                            (edh'context pgs)
+                            ctx
                               { callStack =
                                 (  Scope opEnt
-                                         this
+                                         this -- todo should use op's lexi this instead ?
                                          (NE.toList op'lexi'stack)
                                          opProc
                                 <| call'stack
@@ -906,9 +964,9 @@ evalExpr that expr exit = do
 -- push operator procedure's scope to call stack
                     runEdhProg pgs
                         { edh'context =
-                          (edh'context pgs)
+                          ctx
                             { callStack = Scope opEnt
-                                                this
+                                                this -- todo should use op's lexi this instead ?
                                                 (NE.toList op'lexi'stack)
                                                 opProc
                                             <| call'stack
@@ -1407,6 +1465,36 @@ recvEdhArgs !calleeCtx !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
         $  "Unexpected "
         <> T.pack (show $ length posArgs)
         <> " positional argument(s) to wild receiver"
+
+
+packEdhExprs :: Object -> [ArgSender] -> EdhProcExit -> EdhProg (STM ())
+packEdhExprs that [] !exit' = do
+  pgs <- ask
+  let scope = contextScope $ edh'context pgs
+  exit' (that, scope, EdhArgsPack $ ArgsPack [] Map.empty)
+packEdhExprs that (!x : xs) !exit' = case x of
+  UnpackPosArgs _ -> throwEdh EvalError "unpack to expr not supported yet"
+  UnpackKwArgs _ -> throwEdh EvalError "unpack to expr not supported yet"
+  UnpackPkArgs _ -> throwEdh EvalError "unpack to expr not supported yet"
+  SendPosArg !argExpr -> packEdhExprs that xs $ \(that', scope, !pk) ->
+    case pk of
+      (EdhArgsPack (ArgsPack !posArgs !kwArgs)) ->
+        exit'
+          ( that'
+          , scope
+          , EdhArgsPack $ ArgsPack (EdhExpr argExpr : posArgs) kwArgs
+          )
+      _ -> error "bug"
+  SendKwArg !kw !argExpr -> packEdhExprs that xs $ \(that', scope, !pk) ->
+    case pk of
+      (EdhArgsPack (ArgsPack !posArgs !kwArgs)) -> exit'
+        ( that'
+        , scope
+        , EdhArgsPack $ ArgsPack posArgs $ Map.insert kw
+                                                      (EdhExpr argExpr)
+                                                      kwArgs
+        )
+      _ -> error "bug"
 
 
 packEdhArgs :: Object -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
