@@ -149,6 +149,7 @@ installEdhBatteries world = liftIO $ do
         , ("++", concatProc)
         , ("=<", cprhProc)
         , ("=>", prpdProc)
+        , ("<-", evtPubProc)
         , ("+" , addProc)
         , ("-" , subsProc)
         , ("*" , mulProc)
@@ -182,17 +183,19 @@ installEdhBatteries world = liftIO $ do
         , ("makeExpr"   , makeExprProc)
         ]
 
-      !rtEveryMicros <- mkHostProc EdhHostGenr "everyMicros" rtEveryMicrosProc
-      !rtEveryMillis <- mkHostProc EdhHostGenr "everyMillis" rtEveryMillisProc
-      !rtEverySeconds <- mkHostProc EdhHostGenr "everySeconds" rtEverySecondsProc
-      !rtEntity      <- newTVar $ Map.fromList
-        [ (AttrByName "debug"      , EdhDecimal 10)
-        , (AttrByName "info"       , EdhDecimal 20)
-        , (AttrByName "warn"       , EdhDecimal 30)
-        , (AttrByName "error"      , EdhDecimal 40)
-        , (AttrByName "fatal"      , EdhDecimal 50)
-        , (AttrByName "everyMicros", rtEveryMicros)
-        , (AttrByName "everyMillis", rtEveryMillis)
+      !rtEveryMicros  <- mkHostProc EdhHostGenr "everyMicros" rtEveryMicrosProc
+      !rtEveryMillis  <- mkHostProc EdhHostGenr "everyMillis" rtEveryMillisProc
+      !rtEverySeconds <- mkHostProc EdhHostGenr
+                                    "everySeconds"
+                                    rtEverySecondsProc
+      !rtEntity <- newTVar $ Map.fromList
+        [ (AttrByName "debug"       , EdhDecimal 10)
+        , (AttrByName "info"        , EdhDecimal 20)
+        , (AttrByName "warn"        , EdhDecimal 30)
+        , (AttrByName "error"       , EdhDecimal 40)
+        , (AttrByName "fatal"       , EdhDecimal 50)
+        , (AttrByName "everyMicros" , rtEveryMicros)
+        , (AttrByName "everyMillis" , rtEveryMillis)
         , (AttrByName "everySeconds", rtEverySeconds)
         ]
       !rtSupers <- newTVar []

@@ -34,8 +34,8 @@ driveEdhProgram !ctx !prog = do
           -- todo special handling here ?
           throwTo mainThId asyncExc
         _ -> throwTo mainThId e
-  progHaltSig <- newBroadcastTChanIO
-  !forkQueue  <- newTQueueIO
+  !(progHaltSig :: TChan ()      ) <- newBroadcastTChanIO
+  !(forkQueue :: TQueue EdhTxTask) <- newTQueueIO
   let
     forkDescendants :: TChan () -> IO ()
     forkDescendants haltSig =
@@ -46,9 +46,9 @@ driveEdhProgram !ctx !prog = do
         >>= \case
               Nothing -> -- program halted, done
                 return ()
-              Just ((!pgs, !input), !task) -> do
+              Just (EdhTxTask !pgs _ !input !task) -> do
                 -- got one to fork, prepare state for the descendant thread
-                descQueue                 <- newTQueueIO
+                !(descQueue :: TQueue EdhTxTask) <- newTQueueIO
                 (descHaltSig :: TChan ()) <- atomically $ dupTChan progHaltSig
                 let !pgsDescendant =
                       -- the forker should have checked not in tx, enforce here
@@ -57,8 +57,9 @@ driveEdhProgram !ctx !prog = do
                       (Nothing <$ readTChan descHaltSig)
                         `orElse` (tryReadTQueue descQueue)
                 -- bootstrap on the descendant thread
-                atomically
-                  $ writeTQueue descQueue ((pgsDescendant, input), task)
+                atomically $ writeTQueue
+                  descQueue
+                  (EdhTxTask pgsDescendant False input task)
                 void
                   $ mask_
                   $ forkIOWithUnmask
@@ -76,7 +77,7 @@ driveEdhProgram !ctx !prog = do
   -- broadcast the halt signal after the main thread done anyway
   flip finally (atomically $ writeTChan progHaltSig ()) $ do
     -- prepare program state for main thread
-    !mainQueue <- newTQueueIO
+    !(mainQueue :: TQueue EdhTxTask) <- newTQueueIO
     let !scope = contextScope ctx
         !this  = thisObject scope
         !pgs   = EdhProgState { edh'fork'queue = forkQueue
@@ -85,7 +86,9 @@ driveEdhProgram !ctx !prog = do
                               , edh'context    = ctx
                               }
     -- bootstrap the program on main thread
-    atomically $ writeTQueue mainQueue ((pgs, (this, scope, nil)), const prog)
+    atomically $ writeTQueue
+      mainQueue
+      (EdhTxTask pgs False (this, scope, nil) (const prog))
     -- drive the program from main thread
     driveEdhThread $ tryReadTQueue mainQueue
  where
@@ -99,21 +102,24 @@ driveEdhProgram !ctx !prog = do
       driveEdhThread taskSource
    where
     goSTM :: Int -> EdhTxTask -> IO ()
-    goSTM !rtc txTask@((!pgs, !input), !task) = do
-      when -- todo increase the threshold of reporting?
-        (rtc > 0)
-        do
-          -- trace out the retries so the end users can be aware of them
-          tid <- myThreadId
-          trace (" ** " <> show tid <> " stm retry #" <> show rtc) $ return ()
+    goSTM !rtc txTask@(EdhTxTask !pgs !wait !input !task) = if wait
+      then -- let stm do the retry, for blocking read of a 'TChan' etc.
+           atomically $ join (runReaderT (task input) pgs)
+      else do -- blocking wait not expected, track stm retries explicitly
+        when -- todo increase the threshold of reporting?
+          (rtc > 0)
+          do
+            -- trace out the retries so the end users can be aware of them
+            tid <- myThreadId
+            trace (" ** " <> show tid <> " stm retry #" <> show rtc) $ return ()
 
-      -- the weird formatting below comes from brittany,
-      -- not the author's preference
-      (        atomically
-        $        (Just <$> join (runReaderT (task input) pgs))
-        `orElse` return Nothing
-        )
-        >>= \case
-              Nothing -> goSTM (rtc + 1) txTask
-              Just () -> return ()
+        -- the weird formatting below comes from brittany,
+        -- not the author's preference
+        (        atomically
+          $        (Just <$> join (runReaderT (task input) pgs))
+          `orElse` return Nothing
+          )
+          >>= \case
+                Nothing -> goSTM (rtc + 1) txTask
+                Just () -> return ()
 

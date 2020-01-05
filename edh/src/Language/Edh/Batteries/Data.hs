@@ -14,6 +14,7 @@ import           Text.Megaparsec
 
 import           Language.Edh.Control
 import           Language.Edh.AST
+import           Language.Edh.Event
 import           Language.Edh.Runtime
 
 
@@ -343,3 +344,23 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
             <> T.pack (show lhVal)
 cprhProc !argsSender _ _ _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+
+
+-- | operator (<-) - event publisher
+evtPubProc :: EdhProcedure
+evtPubProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
+  !pgs <- ask
+  evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+    EdhSink es -> evalExpr that rhExpr $ \rhResult@(_, _, rhVal) ->
+      contEdhSTM $ do
+        publishEvent es rhVal
+        exitEdhSTM pgs exit rhResult
+    _ ->
+      throwEdh EvalError
+        $  "Can only publish event to a sink, not "
+        <> T.pack (show $ edhTypeOf lhVal)
+        <> ": "
+        <> T.pack (show lhVal)
+evtPubProc !argsSender _ _ _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+

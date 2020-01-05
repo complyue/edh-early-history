@@ -315,8 +315,19 @@ data EdhProgState = EdhProgState {
 
 -- | Run an Edh program from within STM monad
 runEdhProg :: EdhProgState -> EdhProg (STM ()) -> STM ()
-runEdhProg pgs prog = join $ runReaderT prog pgs
+runEdhProg !pgs !prog = join $ runReaderT prog pgs
 {-# INLINE runEdhProg #-}
+
+forkEdh :: EdhProcExit -> EdhProg (STM ()) -> EdhProg (STM ())
+forkEdh exit prog = ask >>= \pgs -> if edh'in'tx pgs
+  then throwEdh EvalError "You don't fork within a transaction"
+  else do
+    let !scope = contextScope $ edh'context pgs
+        !this  = thisObject scope
+    contEdhSTM $ do
+      writeTQueue (edh'fork'queue pgs)
+        $ EdhTxTask pgs False (this, scope, nil) (const prog)
+      exitEdhSTM pgs exit (this, scope, nil)
 
 -- | Continue an Edh program with stm computation, there must be NO further
 -- action following this statement, or the stm computation is just lost.
@@ -329,37 +340,50 @@ contEdhSTM = return
 
 -- | Exit an stm computation to the specified Edh continuation
 exitEdhSTM :: EdhProgState -> EdhProcExit -> (Object, Scope, EdhValue) -> STM ()
-exitEdhSTM pgs exit result = runEdhProg pgs $ exitEdhProc exit result
+exitEdhSTM !pgs !exit !result = runEdhProg pgs $ exitEdhProc exit result
 {-# INLINE exitEdhSTM #-}
 
 -- | Convenient function to be used as short-hand to return from an Edh
 -- procedure (or functions with similar signature), this sets transaction
 -- boundaries wrt tx stated in the program's current state.
 exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
-exitEdhProc exit result = do
-  pgs <- ask
-  let txq   = edh'task'queue pgs
-      !inTx = edh'in'tx pgs
-  return $ if inTx
-    then join $ runReaderT (exit result) pgs
-    else writeTQueue txq ((pgs, result), exit)
+exitEdhProc !exit !result = ask >>= \pgs -> return $ if edh'in'tx pgs
+  then join $ runReaderT (exit result) pgs
+  else writeTQueue (edh'task'queue pgs) $ EdhTxTask pgs False result exit
 {-# INLINE exitEdhProc #-}
 
-forkEdh :: EdhProcExit -> EdhProg (STM ()) -> EdhProg (STM ())
-forkEdh exit prog = ask >>= \pgs -> if edh'in'tx pgs
-  then throwEdh EvalError "You don't fork within a transaction"
+-- | An atomic task, an Edh program is composed form many this kind of tasks.
+data EdhTxTask = EdhTxTask {
+    edh'task'pgs :: !EdhProgState
+    , edh'task'wait :: !Bool
+    , edh'task'input :: !(Object, Scope, EdhValue)
+    , edh'task'job :: !((Object, Scope, EdhValue) -> EdhProg (STM ()))
+  }
+
+-- | Instruct the Edh program driver to not auto retry the specified stm
+-- action, i.e. let stm retry it automatically (e.g. to blocking read a 'TChan')
+waitEdhSTM :: EdhProgState -> STM EdhValue -> (EdhValue -> STM ()) -> STM ()
+waitEdhSTM !pgs !act !exit = if edh'in'tx pgs
+  then throwEdhFromSTM pgs
+                       EvalError
+                       "You don't wait stm from within a transaction"
   else do
     let !scope = contextScope $ edh'context pgs
         !this  = thisObject scope
-    contEdhSTM $ do
-      writeTQueue (edh'fork'queue pgs) ((pgs, (this, scope, nil)), const prog)
-      exitEdhSTM pgs exit (this, scope, nil)
-
--- | An atomic task, an Edh program is composed form many this kind of tasks.
-type EdhTxTask
-  = ( (EdhProgState, (Object, Scope, EdhValue))
-    , (Object, Scope, EdhValue) -> EdhProg (STM ())
-    )
+    writeTQueue
+      (edh'task'queue pgs)
+      EdhTxTask
+        { edh'task'pgs   = pgs
+        , edh'task'wait  = True
+        , edh'task'input = (this, scope, nil)
+        , edh'task'job   = \_ -> return $ act >>= \val -> writeTQueue
+                             (edh'task'queue pgs)
+                             EdhTxTask { edh'task'pgs   = pgs
+                                       , edh'task'wait  = False
+                                       , edh'task'input = (this, scope, nil)
+                                       , edh'task'job = \_ -> return $ exit val
+                                       }
+        }
 
 -- | Type of a procedure in host language that can be called from Edh code.
 --
@@ -374,6 +398,7 @@ type EdhProcedure -- such a procedure servs as the callee
 -- | The type for an Edh procedure's return, in continuation passing style.
 type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 
+-- | If you don't know what's this, you don't need to know
 edhNop :: EdhProcExit
 edhNop _ = return $ return ()
 
@@ -440,7 +465,7 @@ instance Show HostProcedure where
 
 
 -- | An event sink is similar to a Go channel, but is broadcast
--- in nature, in contrast to the Go channel's unicast nature.
+-- in nature, in contrast to the unicast nature of channels in Go.
 data EventSink = EventSink {
     -- | most recent value, initially nil
     evs'mrv :: !(TVar EdhValue)

@@ -1,0 +1,17 @@
+
+{
+
+  evs = sink
+
+  n = 0
+  go for evt from evs do runtime.info
+        <| '  📆 event#' ++ (n+=1) ++ ' 🎉  ' ++ evt
+
+  go for nanos from runtime.everySeconds(1) do
+        evs <- 'NanoTimes now is ' ++ nanos
+
+  // after main thread terminated, all forked descendant threads
+  // will be terminated along with the Edh program too
+  for _ from runtime.everySeconds(5) do { break }
+
+}

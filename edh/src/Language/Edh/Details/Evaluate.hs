@@ -29,6 +29,7 @@ import           Text.Megaparsec
 import           Language.Edh.Control
 import           Language.Edh.AST
 import           Language.Edh.Parser
+import           Language.Edh.Event
 import           Language.Edh.Details.RtTypes
 import           Language.Edh.Details.CoreLang
 import           Language.Edh.Details.PkgMan
@@ -467,8 +468,10 @@ evalExpr that expr exit = do
       BoolLiteral   v -> exitEdhProc exit (this, scope, EdhBool v)
       NilLiteral      -> exitEdhProc exit (this, scope, nil)
       TypeLiteral v   -> exitEdhProc exit (this, scope, EdhType v)
-      -- TODO impl this
-      SinkCtor        -> throwEdh EvalError "sink ctor not impl. yet"
+
+      SinkCtor        -> contEdhSTM $ do
+        es <- newEventSink
+        exitEdhSTM pgs exit (this, scope, EdhSink es)
 
     PrefixExpr prefix expr' -> case prefix of
       PrefixPlus  -> evalExpr that expr' exit
@@ -1062,9 +1065,8 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
           <> ": "
           <> T.pack (show val)
     _ -> do
-      let doIt :: [ArgsPack] -> STM ()
-          doIt [] = exitEdhSTM pgs exit (that, scope, nil)
-          doIt (pk : pks) =
+      let do1 :: ArgsPack -> STM () -> STM ()
+          do1 !pk !next =
             runEdhProg pgs $ recvEdhArgs argsRcvr pk $ \(_, _, scopeObj') ->
               case scopeObj' of
                 EdhObject (Object rcvd'ent' rcvd'cls' _)
@@ -1081,11 +1083,23 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                         -- continue for loop
                          doResult                -> contEdhSTM $ do
                            iterCollector doResult
-                           doIt pks
+                           next
                 _ -> error "bug"
+          iterThem :: [ArgsPack] -> STM ()
+          iterThem []         = exitEdhSTM pgs exit (that, scope, nil)
+          iterThem (pk : pks) = do1 pk $ iterThem pks
+          iterEvt :: TChan EdhValue -> STM ()
+          iterEvt !subChan = waitEdhSTM pgs (readTChan subChan) $ \case
+            EdhArgsPack pk -> do1 pk $ iterEvt subChan
+            val            -> do1 (ArgsPack [val] Map.empty) $ iterEvt subChan
       evalExpr that iterExpr $ \case
-        (_, _, EdhSink evs) -> undefined
-        (_, _, EdhTuple vs) -> contEdhSTM $ doIt
+
+        (_, _, EdhSink (EventSink _ chan)) -> contEdhSTM $ do
+          -- duplicate a subscriber's channel from the broadcast channel
+          subChan <- dupTChan chan
+          iterEvt subChan -- iterate over the reader channel
+
+        (_, _, EdhTuple vs) -> contEdhSTM $ iterThem
           [ case val of
               EdhArgsPack pk' -> pk'
               _               -> ArgsPack [val] Map.empty
@@ -1093,7 +1107,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
           ]
         (_, _, EdhList (List l)) -> contEdhSTM $ do
           ll <- readTVar l
-          doIt
+          iterThem
             [ case val of
                 EdhArgsPack pk' -> pk'
                 _               -> ArgsPack [val] Map.empty
@@ -1101,9 +1115,10 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
             ]
         (_, _, EdhDict (Dict d)) -> contEdhSTM $ do
           ds <- readTVar d
-          doIt -- don't be tempted to yield pairs from a dict here,
+          iterThem -- don't be tempted to yield pairs from a dict here,
                -- it'll be messy if some entry values are themselves pairs
             [ ArgsPack [itemKeyValue k, v] Map.empty | (k, v) <- Map.toList ds ]
+
         (_, _, val) ->
           throwEdh EvalError
             $  "Can not iterate over "
