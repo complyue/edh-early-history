@@ -110,25 +110,27 @@ evalStmt' that stmt exit = do
       !scope@(Scope !ent !this _ _) = contextScope ctx
   case stmt of
 
-    ExprStmt expr -> evalExpr that expr exit
+    ExprStmt expr             -> evalExpr that expr exit
 
-    LetStmt argsRcvr argsSndr ->
+    LetStmt argsRcvr argsSndr -> do
       -- ensure args sending and receiving happens within a same tx
       -- for atomicity of the let statement
-      local (\pgs' -> pgs' { edh'in'tx = True })
+      local (const pgs { edh'in'tx = True })
         $ packEdhArgs that argsSndr
         $ \(_, _, pkv) -> case pkv of
-            EdhArgsPack pk -> recvEdhArgs argsRcvr pk $ \(_, _, scopeObj) ->
-              case scopeObj of
-                EdhObject (Object rcvd'ent rcvd'cls _)
-                  | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM $ do
-                    -- overwrite current scope entity with attributes from
-                    -- the received entity
-                    um <- readTVar rcvd'ent
-                    modifyTVar' ent $ \em -> Map.union um em
-                    -- let statement evaluates to nil always
-                    exitEdhSTM pgs exit (this, scope, nil)
-                _ -> error "bug"
+            EdhArgsPack pk ->
+              recvEdhArgs ctx argsRcvr pk $ \(_, _, scopeObj) ->
+                case scopeObj of
+                  EdhObject (Object rcvd'ent rcvd'cls _)
+                    | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
+                    $  do
+                      -- overwrite current scope entity with attributes from
+                      -- the received entity
+                         um <- readTVar rcvd'ent
+                         modifyTVar' ent $ \em -> Map.union um em
+                         -- let statement evaluates to nil always
+                         exitEdhSTM pgs exit (this, scope, nil)
+                  _ -> error "bug"
             _ -> error "bug"
 
     BreakStmt       -> exitEdhProc exit (this, scope, EdhBreak)
@@ -273,8 +275,8 @@ evalStmt' that stmt exit = do
 importFromEntity :: ArgsReceiver -> Entity -> EdhProcExit -> EdhProg (STM ())
 importFromEntity !argsRcvr !fromEnt !exit = do
   pgs <- ask
-  let !callerCtx@(  Context !world _ _ _ _) = edh'context pgs
-      !callerScope@(Scope !ent !this _ _  ) = contextScope callerCtx
+  let !ctx@(  Context !world _ _ _ _) = edh'context pgs
+      !scope@(Scope !ent !this _ _  ) = contextScope ctx
   contEdhSTM $ do
     emImp <- readTVar fromEnt
     let !artsPk = ArgsPack [] $ Map.fromAscList $ catMaybes
@@ -290,74 +292,70 @@ importFromEntity !argsRcvr !fromEnt !exit = do
             )
           | (k, v) <- Map.toAscList emImp
           ]
-    runEdhProg pgs $ recvEdhArgs argsRcvr artsPk $ \(_, _, scopeObj) ->
+    runEdhProg pgs $ recvEdhArgs ctx argsRcvr artsPk $ \(_, _, scopeObj) ->
       case scopeObj of
         EdhObject (Object rcvd'ent rcvd'cls _)
           | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM $ do
             rcvd'em <- readTVar rcvd'ent
             modifyTVar' ent $ Map.union rcvd'em
-            exitEdhSTM pgs exit (this, callerScope, nil)
+            exitEdhSTM pgs exit (this, scope, nil)
         _ -> error "bug"
 
 importEdhModule :: ArgsReceiver -> Text -> EdhProcExit -> EdhProg (STM ())
 importEdhModule !argsRcvr !impSpec !exit = do
   pgs <- ask
-  let !callerCtx   = edh'context pgs
-      !world       = contextWorld callerCtx
-      !callerScope = contextScope callerCtx
+  let !ctx   = edh'context pgs
+      !world = contextWorld ctx
+      !scope = contextScope ctx
   if edh'in'tx pgs
     then throwEdh EvalError "You don't import from within a transaction"
-    else
-      contEdhSTM
-      $   lookupEdhCtxAttr callerScope (AttrByName "__file__")
-      >>= \case
-            Just (EdhString fromModuPath) -> do
-              (nomPath, moduFile) <- locateEdhModule
-                pgs
-                (edhPkgPathFrom $ T.unpack fromModuPath)
-                (T.unpack impSpec)
-              let !moduId = T.pack nomPath
-              moduMap <- takeTMVar (worldModules world)
-              case Map.lookup moduId moduMap of
-                Just !moduSlot -> do
-                  -- put back immediately
-                  putTMVar (worldModules world) moduMap
-                  -- blocking wait the target module loaded, then do import
-                  readTMVar moduSlot >>= \case
-                    -- TODO GHC should be able to detect cyclic imports as 
-                    --      deadlock, find ways to report that more friendly
-                    EdhObject modu -> runEdhProg pgs
-                      $ importFromEntity argsRcvr (objEntity modu) exit
-                    importError -> -- the first importer failed loading it,
-                      -- replicate the error in this thread
-                      throwEdhSTM pgs EvalError $ edhValueStr importError
-                Nothing -> do  -- we are the first importer
-                  -- allocate an empty slot
-                  moduSlot <- newEmptyTMVar
-                  -- put it for global visibility
-                  putTMVar (worldModules world)
-                    $ Map.insert moduId moduSlot moduMap
-                  catchSTM
-                      (loadModule pgs moduSlot moduId moduFile $ \result ->
-                        case result of
-                          (_, _, EdhObject modu) ->
-                            -- do the import after module successfully loaded
-                            importFromEntity argsRcvr (objEntity modu) exit
-                          _ -> error "bug"
-                      )
-                    $ \(e :: SomeException) -> do
-                        -- cleanup on loading error
-                        let errStr = T.pack (show e)
-                        void $ tryPutTMVar moduSlot $ EdhString errStr
-                        moduMap' <- takeTMVar (worldModules world)
-                        case Map.lookup moduId moduMap' of
-                          Just moduSlot' -> if moduSlot' == moduSlot
-                            then putTMVar (worldModules world)
-                              $ Map.delete moduId moduMap'
-                            else putTMVar (worldModules world) moduMap'
-                          _ -> putTMVar (worldModules world) moduMap'
-                        throwSTM e
-            _ -> error "bug: no valid `__file__` in context"
+    else contEdhSTM $ lookupEdhCtxAttr scope (AttrByName "__file__") >>= \case
+      Just (EdhString fromModuPath) -> do
+        (nomPath, moduFile) <- locateEdhModule
+          pgs
+          (edhPkgPathFrom $ T.unpack fromModuPath)
+          (T.unpack impSpec)
+        let !moduId = T.pack nomPath
+        moduMap <- takeTMVar (worldModules world)
+        case Map.lookup moduId moduMap of
+          Just !moduSlot -> do
+            -- put back immediately
+            putTMVar (worldModules world) moduMap
+            -- blocking wait the target module loaded, then do import
+            readTMVar moduSlot >>= \case
+              -- TODO GHC should be able to detect cyclic imports as 
+              --      deadlock, find ways to report that more friendly
+              EdhObject modu ->
+                runEdhProg pgs $ importFromEntity argsRcvr (objEntity modu) exit
+              importError -> -- the first importer failed loading it,
+                -- replicate the error in this thread
+                throwEdhSTM pgs EvalError $ edhValueStr importError
+          Nothing -> do  -- we are the first importer
+            -- allocate an empty slot
+            moduSlot <- newEmptyTMVar
+            -- put it for global visibility
+            putTMVar (worldModules world) $ Map.insert moduId moduSlot moduMap
+            catchSTM
+                (loadModule pgs moduSlot moduId moduFile $ \result ->
+                  case result of
+                    (_, _, EdhObject modu) ->
+                      -- do the import after module successfully loaded
+                      importFromEntity argsRcvr (objEntity modu) exit
+                    _ -> error "bug"
+                )
+              $ \(e :: SomeException) -> do
+                  -- cleanup on loading error
+                  let errStr = T.pack (show e)
+                  void $ tryPutTMVar moduSlot $ EdhString errStr
+                  moduMap' <- takeTMVar (worldModules world)
+                  case Map.lookup moduId moduMap' of
+                    Just moduSlot' -> if moduSlot' == moduSlot
+                      then putTMVar (worldModules world)
+                        $ Map.delete moduId moduMap'
+                      else putTMVar (worldModules world) moduMap'
+                    _ -> putTMVar (worldModules world) moduMap'
+                  throwSTM e
+      _ -> error "bug: no valid `__file__` in context"
 
 loadModule
   :: EdhProgState
@@ -368,16 +366,16 @@ loadModule
   -> STM ()
 loadModule pgs moduSlot moduId moduFile exit = if edh'in'tx pgs
   then throwEdhSTM pgs
-                       EvalError
-                       "You don't load a module from within a transaction"
+                   EvalError
+                   "You don't load a module from within a transaction"
   else do
     unsafeIOToSTM (streamDecodeUtf8With lenientDecode <$> B.readFile moduFile)
       >>= \case
             Some moduSource _ _ -> do
-              let !callerCtx                       = edh'context pgs
-                  !world                           = contextWorld callerCtx
-                  !callerScope@(Scope _ !this _ _) = contextScope callerCtx
-                  !wops                            = worldOperators world
+              let !ctx                       = edh'context pgs
+                  !world                     = contextWorld ctx
+                  !scope@(Scope _ !this _ _) = contextScope ctx
+                  !wops                      = worldOperators world
               -- serialize parsing against 'worldOperators'
               opPD <- takeTMVar wops
               flip
@@ -411,9 +409,7 @@ loadModule pgs moduSlot moduId moduFile exit = if edh'in'tx pgs
                               -- arm the successfully loaded module
                               putTMVar moduSlot $ EdhObject modu
                               -- switch back to module importer's scope and continue
-                              exitEdhSTM pgs
-                                         exit
-                                         (this, callerScope, EdhObject modu)
+                              exitEdhSTM pgs exit (this, scope, EdhObject modu)
 
 moduleContext :: EdhWorld -> Object -> Context
 moduleContext !w !mo = Context { contextWorld    = w
@@ -588,8 +584,8 @@ evalExpr that expr exit = do
       DirectRef !addr' -> contEdhSTM $ do
         !key <- resolveAddr pgs addr'
         resolveEdhCtxAttr scope key >>= \case
-          Nothing -> throwEdhSTM pgs EvalError $ "Not in scope: " <> T.pack
-            (show addr')
+          Nothing ->
+            throwEdhSTM pgs EvalError $ "Not in scope: " <> T.pack (show addr')
           Just scope'@(Scope !ent' _ _ _) -> do
             em <- readTVar ent'
             case Map.lookup key em of
@@ -710,111 +706,116 @@ evalExpr that expr exit = do
 
       -- calling a class (constructor) procedure
       (that', _, EdhClass cls@(Class cls'lexi'stack clsProc@(ProcDecl _ proc'args proc'body)))
-        ->
+        -> do
           -- ensure args sending and receiving happens within a same tx for atomicity of
           -- the call making
-           local (\pgs' -> pgs' { edh'in'tx = True })
-          $ packEdhArgs that argsSndr
-          $ \(_, _, pkv) -> case pkv of
-              EdhArgsPack pk ->
-                recvEdhArgs proc'args pk $ \(_, _, scopeObj) -> case scopeObj of
-                  EdhObject (Object rcvd'ent rcvd'cls _)
-                    | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
-                    $  do
-                         newThis <- viewAsEdhObject rcvd'ent cls []
-                         runEdhProg pgs
-                             -- set new object's scope
-                             { edh'context =
-                               (edh'context pgs)
-                                 -- use this as the scope entity of instance ctor execution
-                                 { callStack =
-                                   (  Scope rcvd'ent
-                                            newThis
-                                            (NE.toList cls'lexi'stack)
-                                            clsProc
-                                   <| call'stack
-                                   )
-                                 }
-                             -- restore original tx state after args received
-                             , edh'in'tx   = edh'in'tx pgs
-                             }
-                           $ evalStmt that' proc'body
-                           $ \(that'', scope'', ctorRtn) ->
-                            -- restore previous context after ctor returned 
-                               local (const pgs) $ case ctorRtn of
-                            -- allow a class procedure to explicitly return other
-                            -- value than newly constructed `this` object
-                            -- it can still `return this to early stop the ctor proc
-                            -- this is magically an advanced feature
-                                 EdhReturn rtnVal ->
-                                   exitEdhProc exit (that'', scope'', rtnVal)
-                                 EdhContinue ->
-                                   throwEdh EvalError "Unexpected continue"
-                            -- allow the use of `break` to early stop a constructor 
-                            -- procedure with nil result
-                                 EdhBreak ->
-                                   exitEdhProc exit (that'', scope'', nil)
-                            -- no explicit return from class procedure, return the
-                            -- newly constructed this object, throw away the last
-                            -- value from the procedure execution
-                                 _ -> exitEdhProc
-                                   exit
-                                   (this, scope, EdhObject newThis)
-                  _ -> error "bug"
-              _ -> error "bug"
+          let !calleeCtx = ctx { callStack = cls'lexi'stack }
+          local (const pgs { edh'in'tx = True })
+            $ packEdhArgs that argsSndr
+            $ \(_, _, pkv) -> case pkv of
+                EdhArgsPack pk ->
+                  recvEdhArgs calleeCtx proc'args pk $ \(_, _, scopeObj) ->
+                    case scopeObj of
+                      EdhObject (Object rcvd'ent rcvd'cls _)
+                        | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
+                        $ do
+                            newThis <- viewAsEdhObject rcvd'ent cls []
+                            runEdhProg pgs
+                             -- use new this as the scope entity of instance ctor execution
+                                { edh'context =
+                                  ctx
+                                    { callStack =
+                                      (  Scope rcvd'ent
+                                               newThis
+                                               (NE.toList cls'lexi'stack)
+                                               clsProc
+                                      <| call'stack
+                                      )
+                                    }
+                                 -- restore original tx state after args received
+                                , edh'in'tx   = edh'in'tx pgs
+                                }
+                              $ evalStmt that' proc'body
+                              $ \(that'', scope'', ctorRtn) ->
+                               -- restore previous context after ctor returned 
+                                  local (const pgs) $ case ctorRtn of
+                               -- allow a class procedure to explicitly return other
+                               -- value than newly constructed `this` object
+                               -- it can still `return this to early stop the ctor proc
+                               -- this is magically an advanced feature
+                                    EdhReturn rtnVal -> exitEdhProc
+                                      exit
+                                      (that'', scope'', rtnVal)
+                                    EdhContinue ->
+                                      throwEdh EvalError "Unexpected continue"
+                               -- allow the use of `break` to early stop a constructor 
+                               -- procedure with nil result
+                                    EdhBreak ->
+                                      exitEdhProc exit (that'', scope'', nil)
+                               -- no explicit return from class procedure, return the
+                               -- newly constructed this object, throw away the last
+                               -- value from the procedure execution
+                                    _ -> exitEdhProc
+                                      exit
+                                      (this, scope, EdhObject newThis)
+                      _ -> error "bug"
+                _ -> error "bug"
 
 
       -- calling a method procedure
       (that', (Scope _ mth'this _ _), EdhMethod (Method mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
-        ->
+        -> do
           -- ensure args sending and receiving happens within a same tx
           -- for atomicity of the call making
-           local (const pgs { edh'in'tx = True })
-          $ packEdhArgs that argsSndr
-          $ \(_, _, pkv) -> case pkv of
-              EdhArgsPack pk -> recvEdhArgs mth'args pk $ \(_, _, scopeObj) ->
-                case scopeObj of
-                  EdhObject (Object rcvd'ent rcvd'cls _)
-                    | rcvd'cls == (objClass $ scopeSuper world)
-                    ->
-                      -- use direct containing object of the method as `this` in its
-                      -- procedure execution
-                       local
-                        (const pgs
-                          -- set method's scope
-                          { edh'context =
-                            (edh'context pgs)
-                              { callStack =
-                                (  Scope rcvd'ent
-                                         mth'this
-                                         (NE.toList mth'lexi'stack)
-                                         mthProc
-                                <| call'stack
-                                )
+          let !calleeCtx = ctx { callStack = mth'lexi'stack }
+          local (const pgs { edh'in'tx = True })
+            $ packEdhArgs that argsSndr
+            $ \(_, _, pkv) -> case pkv of
+                EdhArgsPack pk ->
+                  recvEdhArgs calleeCtx mth'args pk $ \(_, _, scopeObj) ->
+                    case scopeObj of
+                      EdhObject (Object rcvd'ent rcvd'cls _)
+                        | rcvd'cls == (objClass $ scopeSuper world)
+                        ->
+                          -- use direct containing object of the method as `this` in its
+                          -- procedure execution
+                           local
+                            (const pgs
+                              -- set method's scope
+                              { edh'context =
+                                ctx
+                                  { callStack =
+                                    (  Scope rcvd'ent
+                                             mth'this
+                                             (NE.toList mth'lexi'stack)
+                                             mthProc
+                                    <| call'stack
+                                    )
+                                  }
+                                -- restore original tx state after args received
+                              , edh'in'tx   = edh'in'tx pgs
                               }
-                            -- restore original tx state after args received
-                          , edh'in'tx   = edh'in'tx pgs
-                          }
-                        )
-                        -- use the resolution target object as `that` in execution of 
-                        -- the method procedure
-                      $ evalStmt that' mth'body
-                      $ \(that'', scope'', mthRtn) ->
-                          -- restore previous context after method returned
-                          local (const pgs) $ case mthRtn of
-                            EdhContinue ->
-                              throwEdh EvalError "Unexpected continue"
-                            -- allow the use of `break` to early stop a method 
-                            -- procedure with nil result
-                            EdhBreak -> exitEdhProc exit (that', scope, nil)
-                            -- explicit return
-                            EdhReturn rtnVal ->
-                              exitEdhProc exit (that'', scope'', rtnVal)
-                            -- no explicit return, assuming it returns the last
-                            -- value from procedure execution
-                            _ -> exitEdhProc exit (that'', scope'', mthRtn)
-                  _ -> error "bug"
-              _ -> error "bug"
+                            )
+                            -- use the resolution target object as `that` in execution of 
+                            -- the method procedure
+                          $ evalStmt that' mth'body
+                          $ \(that'', scope'', mthRtn) ->
+                              -- restore previous context after method returned
+                              local (const pgs) $ case mthRtn of
+                                EdhContinue ->
+                                  throwEdh EvalError "Unexpected continue"
+                                -- allow the use of `break` to early stop a method 
+                                -- procedure with nil result
+                                EdhBreak ->
+                                  exitEdhProc exit (that', scope, nil)
+                                -- explicit return
+                                EdhReturn rtnVal ->
+                                  exitEdhProc exit (that'', scope'', rtnVal)
+                                -- no explicit return, assuming it returns the last
+                                -- value from procedure execution
+                                _ -> exitEdhProc exit (that'', scope'', mthRtn)
+                      _ -> error "bug"
+                _ -> error "bug"
 
       (_, _, EdhGenrDef _) ->
         throwEdh EvalError "Can only call a generator method by for-from-do"
@@ -963,6 +964,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
         EdhBreak    -> throwEdh EvalError "Unexpected break from generator"
         _ ->
           recvEdhArgs
+              ctx
               argsRcvr
               (case yielded'val of
                 EdhArgsPack pk' -> pk'
@@ -1005,59 +1007,61 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
           $ \result -> local (const pgs) $ exitEdhProc exit result
 
       (that', (Scope _ gnr'this _ _), EdhGenrDef (GenrDef gnr'lexi'stack gnrProc@(ProcDecl _ gnr'args gnr'body)))
-        ->
+        -> do
          -- ensure args sending and receiving happens within a same tx
          -- for atomicity of the call making
-           local (const pgs { edh'in'tx = True })
-          $ packEdhArgs that argsSndr
-          $ \(_, _, pkv) -> case pkv of
-              EdhArgsPack pk -> recvEdhArgs gnr'args pk $ \(_, _, scopeObj) ->
-                case scopeObj of
-                  EdhObject (Object rcvd'ent rcvd'cls _)
-                    | rcvd'cls == (objClass $ scopeSuper world) -> do
-                    -- use direct containing object of the method as `this` in its
-                    -- procedure execution
-                      local
-                          (const pgs
-                        -- set method's scope
-                            { edh'context =
-                              (edh'context pgs)
-                                { callStack       =
-                                  (  Scope rcvd'ent
-                                           gnr'this
-                                           (NE.toList gnr'lexi'stack)
-                                           gnrProc
-                                  <| call'stack
-                                  )
-                                  -- receive yield as the generator caller
-                                , generatorCaller = Just (pgs, recvYield)
+          let !calleeCtx = ctx { callStack = gnr'lexi'stack }
+          local (const pgs { edh'in'tx = True })
+            $ packEdhArgs that argsSndr
+            $ \(_, _, pkv) -> case pkv of
+                EdhArgsPack pk ->
+                  recvEdhArgs calleeCtx gnr'args pk $ \(_, _, scopeObj) ->
+                    case scopeObj of
+                      EdhObject (Object rcvd'ent rcvd'cls _)
+                        | rcvd'cls == (objClass $ scopeSuper world) -> do
+                        -- use direct containing object of the method as `this` in its
+                        -- procedure execution
+                          local
+                              (const pgs
+                                -- set method's scope
+                                { edh'context =
+                                  ctx
+                                    { callStack       =
+                                      (  Scope rcvd'ent
+                                               gnr'this
+                                               (NE.toList gnr'lexi'stack)
+                                               gnrProc
+                                      <| call'stack
+                                      )
+                                      -- receive yield as the generator caller
+                                    , generatorCaller = Just (pgs, recvYield)
+                                    }
+                                -- restore original tx state after args received
+                                , edh'in'tx   = edh'in'tx pgs
                                 }
-                          -- restore original tx state after args received
-                            , edh'in'tx   = edh'in'tx pgs
-                            }
-                          )
-                      -- use the resolution target object as `that` in execution of 
-                      -- the method procedure
-                        $ evalStmt that' gnr'body
-                        $ \(that'', scope'', gnrRtn) ->
-                            -- restore previous context after method returned
-                            local (const pgs) $ case gnrRtn of
-                              EdhReturn rtnVal ->
-                              -- explicit return
-                                exitEdhProc exit (that'', scope'', rtnVal)
-                              EdhContinue ->
-                                throwEdh EvalError "Unexpected continue"
-                              EdhBreak ->
-                                -- allows use of `break` to early stop the generator
-                                -- procedure with nil result
-                                exitEdhProc exit (that', scope, nil)
-                              _ ->
-                              -- no explicit return, assuming it returns the last
-                              -- value from procedure execution
-                                exitEdhProc exit (that'', scope'', gnrRtn)
+                              )
+                          -- use the resolution target object as `that` in execution of 
+                          -- the method procedure
+                            $ evalStmt that' gnr'body
+                            $ \(that'', scope'', gnrRtn) ->
+                                -- restore previous context after method returned
+                                local (const pgs) $ case gnrRtn of
+                                  EdhReturn rtnVal ->
+                                  -- explicit return
+                                    exitEdhProc exit (that'', scope'', rtnVal)
+                                  EdhContinue ->
+                                    throwEdh EvalError "Unexpected continue"
+                                  EdhBreak ->
+                                    -- allows use of `break` to early stop the generator
+                                    -- procedure with nil result
+                                    exitEdhProc exit (that', scope, nil)
+                                  _ ->
+                                  -- no explicit return, assuming it returns the last
+                                  -- value from procedure execution
+                                    exitEdhProc exit (that'', scope'', gnrRtn)
 
-                  _ -> error "bug"
-              _ -> error "bug"
+                      _ -> error "bug"
+                _ -> error "bug"
       (_, _, val) ->
         throwEdh EvalError
           $  "Can only call a generator method from for-from-do, not "
@@ -1067,24 +1071,25 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
     _ -> do
       let do1 :: ArgsPack -> STM () -> STM ()
           do1 !pk !next =
-            runEdhProg pgs $ recvEdhArgs argsRcvr pk $ \(_, _, scopeObj') ->
-              case scopeObj' of
-                EdhObject (Object rcvd'ent' rcvd'cls' _)
-                  | rcvd'cls' == (objClass $ scopeSuper world) -> contEdhSTM
-                  $  do
-                       rcvd'em <- readTVar rcvd'ent'
-                       modifyTVar' ent $ Map.union rcvd'em
-                       runEdhProg pgs $ evalExpr that doExpr $ \case
-                         (_, _, EdhBreak) ->
-                        -- break for loop
-                           exitEdhProc exit (that, scope, nil)
-                        -- early return during for loop
-                         rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
-                        -- continue for loop
-                         doResult                -> contEdhSTM $ do
-                           iterCollector doResult
-                           next
-                _ -> error "bug"
+            runEdhProg pgs
+              $ recvEdhArgs ctx argsRcvr pk
+              $ \(_, _, scopeObj') -> case scopeObj' of
+                  EdhObject (Object rcvd'ent' rcvd'cls' _)
+                    | rcvd'cls' == (objClass $ scopeSuper world) -> contEdhSTM
+                    $  do
+                         rcvd'em <- readTVar rcvd'ent'
+                         modifyTVar' ent $ Map.union rcvd'em
+                         runEdhProg pgs $ evalExpr that doExpr $ \case
+                           (_, _, EdhBreak) ->
+                          -- break for loop
+                             exitEdhProc exit (that, scope, nil)
+                          -- early return during for loop
+                           rtn@(_, _, EdhReturn _) -> exitEdhProc exit rtn
+                          -- continue for loop
+                           doResult                -> contEdhSTM $ do
+                             iterCollector doResult
+                             next
+                  _ -> error "bug"
           iterThem :: [ArgsPack] -> STM ()
           iterThem []         = exitEdhSTM pgs exit (that, scope, nil)
           iterThem (pk : pks) = do1 pk $ iterThem pks
@@ -1228,13 +1233,14 @@ assignEdhTarget pgsAfter that lhExpr exit (_, _, rhVal) = do
 ---     ***pkargs
 
 
-recvEdhArgs :: ArgsReceiver -> ArgsPack -> EdhProcExit -> EdhProg (STM ())
-recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
-  !pgs <- ask
-  let
-    !callerCtx = edh'context pgs
-    !callerScope@(Scope !_callerEnt !callerThis _ _) = contextScope callerCtx
-    !world     = contextWorld callerCtx
+recvEdhArgs
+  :: Context -> ArgsReceiver -> ArgsPack -> EdhProcExit -> EdhProg (STM ())
+recvEdhArgs !calleeCtx !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
+  !pgsCaller <- ask
+  let -- args receive always done in callee's context with tx on
+    !pgsRecv = pgsCaller { edh'in'tx = True, edh'context = calleeCtx }
+    !calleeScope@(Scope _ !calleeThis _ _) = contextScope calleeCtx
+    !world   = contextWorld calleeCtx
     recvFromPack
       :: (ArgsPack, EntityStore) -> ArgReceiver -> STM (ArgsPack, EntityStore)
     recvFromPack (pk@(ArgsPack posArgs' kwArgs'), em) argRcvr = case argRcvr of
@@ -1286,20 +1292,21 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
                 , Map.insert (AttrByName attrName) argVal em
                 )
             SymbolicAttr symName -> -- todo support this ?
-              throwEdhSTM pgs EvalError
+              throwEdhSTM pgsRecv EvalError
                 $  "Do you mean `this.@"
                 <> symName
                 <> "` instead ?"
           Just addr@(IndirectRef _ _) -> do
-            runEdhProg (pgs { edh'in'tx = True }) $ assignEdhTarget
-              pgs
-              callerThis
+            -- do assignment in callee's context, and return to caller's afterwards
+            runEdhProg pgsRecv $ assignEdhTarget
+              pgsCaller
+              calleeThis
               (AttrExpr addr)
               edhNop
-              (callerThis, callerScope, argVal)
+              (calleeThis, calleeScope, argVal)
             return (ArgsPack posArgs'' kwArgs'', em)
           tgt ->
-            throwEdhSTM pgs EvalError
+            throwEdhSTM pgsRecv EvalError
               $  "Invalid argument retarget: "
               <> T.pack (show tgt)
      where
@@ -1317,24 +1324,26 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
               Just defaultExpr -> do
                 defaultVar <- newEmptyTMVar
 -- always eval the default value atomically
-                runEdhProg (pgs { edh'in'tx = True }) $ evalExpr
+                runEdhProg (pgsCaller { edh'in'tx = True }) $ evalExpr
 -- don't respect `that` in context, during resolution of arg default values
-                  callerThis
+                  calleeThis
                   defaultExpr
                   (\(_, _, val) -> return (putTMVar defaultVar val))
                 defaultVal <- readTMVar defaultVar
                 return (defaultVal, posArgs', kwArgs'')
               _ ->
-                throwEdhSTM pgs EvalError $ "Missing argument: " <> argName
+                throwEdhSTM pgsCaller EvalError
+                  $  "Missing argument: "
+                  <> argName
     woResidual :: ArgsPack -> EntityStore -> STM Entity
     woResidual (ArgsPack !posResidual !kwResidual) em
       | not (null posResidual)
-      = throwEdhSTM pgs EvalError
+      = throwEdhSTM pgsCaller EvalError
         $  "Extraneous "
         <> T.pack (show $ length posResidual)
         <> " positional argument(s)"
       | not (Map.null kwResidual)
-      = throwEdhSTM pgs EvalError
+      = throwEdhSTM pgsCaller EvalError
         $  "Extraneous keyword arguments: "
         <> T.unwords (Map.keys kwResidual)
       | otherwise
@@ -1343,10 +1352,11 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
     doReturn ent = do
       scopeObj <- viewAsEdhObject ent (objClass $ scopeSuper world) []
       -- execute outer code wrt what tx state originally is
-      exitEdhSTM pgs exit (callerThis, callerScope, EdhObject scopeObj)
+      exitEdhSTM pgsCaller exit (calleeThis, calleeScope, EdhObject scopeObj)
 
-  -- execution of the args receiving always in a tx for atomicity
-  local (\pgs' -> pgs' { edh'in'tx = True }) $ case argsRcvr of
+  -- execution of the args receiving always in a tx for atomicity, and
+  -- in callee's context
+  local (const pgsRecv) $ case argsRcvr of
     PackReceiver argRcvrs -> contEdhSTM $ do
       (pck', em) <- foldM recvFromPack (pck, Map.empty) argRcvrs
       ent        <- woResidual pck' em
@@ -1360,7 +1370,7 @@ recvEdhArgs !argsRcvr pck@(ArgsPack !posArgs !kwArgs) !exit = do
         ent <- newTVar $ Map.mapKeys AttrByName kwArgs
         doReturn ent
       else
-        throwEdhSTM pgs EvalError
+        throwEdhSTM pgsRecv EvalError
         $  "Unexpected "
         <> T.pack (show $ length posArgs)
         <> " positional argument(s) to wild receiver"
