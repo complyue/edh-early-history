@@ -55,7 +55,7 @@ driveEdhProgram !ctx !prog = do
                       pgs { edh'task'queue = descQueue, edh'in'tx = False }
                     !descTaskSource =
                       (Nothing <$ readTChan descHaltSig)
-                        `orElse` (Just <$> readTQueue descQueue)
+                        `orElse` (tryReadTQueue descQueue)
                 -- bootstrap on the descendant thread
                 atomically
                   $ writeTQueue descQueue ((pgsDescendant, input), task)
