@@ -955,6 +955,11 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
   !pgs <- ask
   let !ctx@(  Context !world !call'stack _ _ _) = edh'context pgs
       !scope@(Scope !ent _ _ _                ) = contextScope ctx
+
+      -- receive one yielded value from the generator, the 'exit' here is to
+      -- continue the generator execution, result passed to the 'exit' here is
+      -- the eval'ed value of the `yield` expression from the generator's 
+      -- perspective
       recvYield
         :: (Object, Scope, EdhValue)
         -> ((Object, Scope, EdhValue) -> STM ())
@@ -996,6 +1001,8 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
   case deParen iterExpr of
     -- calling a generator procedure
     CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
+
+      -- a generator written in Haskell
       (that', scope', EdhHostGenr (HostProcedure _ hp)) ->
         local
             (\pgs' -> pgs'
@@ -1006,6 +1013,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
           $ hp argsSndr that' scope'
           $ \result -> local (const pgs) $ exitEdhProc exit result
 
+      -- a generator written in Edh
       (that', (Scope _ gnr'this _ _), EdhGenrDef (GenrDef gnr'lexi'stack gnrProc@(ProcDecl _ gnr'args gnr'body)))
         -> do
          -- ensure args sending and receiving happens within a same tx
@@ -1069,7 +1077,8 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
           <> ": "
           <> T.pack (show val)
     _ -> do
-      let do1 :: ArgsPack -> STM () -> STM ()
+      let -- do one iteration
+          do1 :: ArgsPack -> STM () -> STM ()
           do1 !pk !next =
             runEdhProg pgs
               $ recvEdhArgs ctx argsRcvr pk
@@ -1090,26 +1099,49 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                              iterCollector doResult
                              next
                   _ -> error "bug"
+
+          -- iterate over a series of args packs
           iterThem :: [ArgsPack] -> STM ()
           iterThem []         = exitEdhSTM pgs exit (that, scope, nil)
           iterThem (pk : pks) = do1 pk $ iterThem pks
+
+          -- iterate over a read channel of an event sink
           iterEvt :: TChan EdhValue -> STM ()
           iterEvt !subChan = waitEdhSTM pgs (readTChan subChan) $ \case
             EdhArgsPack pk -> do1 pk $ iterEvt subChan
             val            -> do1 (ArgsPack [val] Map.empty) $ iterEvt subChan
       evalExpr that iterExpr $ \case
 
+        -- loop from an event sink
         (_, _, EdhSink (EventSink _ chan)) -> contEdhSTM $ do
           -- duplicate a subscriber's channel from the broadcast channel
           subChan <- dupTChan chan
           iterEvt subChan -- iterate over the reader channel
 
+        -- loop from a positonal-only args pack
+        (_, _, EdhArgsPack (ArgsPack !args !kwargs)) | Map.null kwargs ->
+          contEdhSTM $ iterThem
+            [ case val of
+                EdhArgsPack pk' -> pk'
+                _               -> ArgsPack [val] Map.empty
+            | val <- args
+            ]
+        -- loop from a keyword-only args pack
+        (_, _, EdhArgsPack (ArgsPack !args !kwargs)) | null args ->
+          contEdhSTM
+            $ iterThem
+                [ ArgsPack [EdhString k, v] $ Map.empty
+                | (k, v) <- Map.toList kwargs
+                ]
+
+        -- loop from a tuple
         (_, _, EdhTuple vs) -> contEdhSTM $ iterThem
           [ case val of
               EdhArgsPack pk' -> pk'
               _               -> ArgsPack [val] Map.empty
           | val <- vs
           ]
+        -- loop from a list
         (_, _, EdhList (List l)) -> contEdhSTM $ do
           ll <- readTVar l
           iterThem
@@ -1118,6 +1150,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                 _               -> ArgsPack [val] Map.empty
             | val <- ll
             ]
+        -- loop from a dict
         (_, _, EdhDict (Dict d)) -> contEdhSTM $ do
           ds <- readTVar d
           iterThem -- don't be tempted to yield pairs from a dict here,
@@ -1126,7 +1159,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
 
         (_, _, val) ->
           throwEdh EvalError
-            $  "Can not iterate over "
+            $  "Can not do a for loop from "
             <> T.pack (show $ edhTypeOf val)
             <> ": "
             <> T.pack (show val)
