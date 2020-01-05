@@ -364,9 +364,7 @@ data EdhTxTask = EdhTxTask {
 -- action, i.e. let stm retry it automatically (e.g. to blocking read a 'TChan')
 waitEdhSTM :: EdhProgState -> STM EdhValue -> (EdhValue -> STM ()) -> STM ()
 waitEdhSTM !pgs !act !exit = if edh'in'tx pgs
-  then throwEdhSTM pgs
-                       EvalError
-                       "You don't wait stm from within a transaction"
+  then throwEdhSTM pgs EvalError "You don't wait stm from within a transaction"
   else do
     let !scope = contextScope $ edh'context pgs
         !this  = thisObject scope
@@ -426,8 +424,7 @@ throwEdh !excCtor !msg = do
 -- | Throw from the stm operation of an Edh program.
 throwEdhSTM
   :: Exception e => EdhProgState -> (EdhErrorContext -> e) -> Text -> STM a
-throwEdhSTM pgs !excCtor !msg =
-  throwSTM (excCtor $ getEdhErrorContext pgs msg)
+throwEdhSTM pgs !excCtor !msg = throwSTM (excCtor $ getEdhErrorContext pgs msg)
 
 
 -- | A pack of evaluated argument values with positional/keyword origin,
