@@ -67,23 +67,26 @@ driveEdhProgram !ctx !prog = do
                 -- loop another iteration
                 forkDescendants haltSig
   -- start forker thread
-  void $ mask_ $ forkIOWithUnmask $ \unmask -> catch
-    (unmask $ atomically (dupTChan progHaltSig) >>= forkDescendants)
-    onDescendantExc
-
-  -- prepare program state for main thread
-  !mainQueue <- newTQueueIO
-  let !scope = contextScope ctx
-      !this  = thisObject scope
-      !pgs   = EdhProgState { edh'fork'queue = forkQueue
-                            , edh'task'queue = mainQueue
-                            , edh'in'tx      = False
-                            , edh'context    = ctx
-                            }
+  forkerHaltSig <- -- forker's sig reader chan must be dup'ed from the broadcast
+    -- chan by the main thread, if by the forker thread, it can omit the signal
+    -- thus block indefinitely, bcoz racing with main thread's finish
+                   atomically $ dupTChan progHaltSig
+  void $ mask_ $ forkIOWithUnmask $ \unmask ->
+    catch (unmask $ forkDescendants forkerHaltSig) onDescendantExc
   -- broadcast the halt signal after the main thread done anyway
   flip finally (atomically $ writeTChan progHaltSig ()) $ do
+    -- prepare program state for main thread
+    !mainQueue <- newTQueueIO
+    let !scope = contextScope ctx
+        !this  = thisObject scope
+        !pgs   = EdhProgState { edh'fork'queue = forkQueue
+                              , edh'task'queue = mainQueue
+                              , edh'in'tx      = False
+                              , edh'context    = ctx
+                              }
     -- bootstrap the program on main thread
     atomically $ writeTQueue mainQueue ((pgs, (this, scope, nil)), const prog)
+    -- drive the program from main thread
     driveEdhThread $ tryReadTQueue mainQueue
  where
   driveEdhThread :: STM (Maybe EdhTxTask) -> IO ()
