@@ -1,0 +1,27 @@
+
+{
+  method countdown(n) case type(n) of {
+
+    DecimalType -> {
+      
+      n < 1 -> runtime.info <| '  🎉 instantly !!'
+
+      // (:-) will be parsed as another operator, sep need here
+      for i from range(n : 0 : -1) do runtime.info <| '  ⏲️  ' ++ i
+      runtime.info <| '  🎉 !!'
+
+    }
+
+    _ -> {
+      runtime.error <| "I don't know what you want from a " ++ type(n) ++ ': ' ++ n
+    }
+
+  }
+}
+
+countdown(10)
+
+countdown(0)
+
+countdown('the hell')
+

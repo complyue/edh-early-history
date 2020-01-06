@@ -1,7 +1,6 @@
 
 method join(fst, *rest, sep=', ') {
-  s = fst
+  s = '' ++ fst // do coerce to string now, in case only one arg passed
   for one from rest do s = s ++ sep ++ one
   s
 }
-
