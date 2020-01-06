@@ -4,7 +4,7 @@
 but it's vastly neither new, major ideas all come from successful languages
 like **Python**, **GoLang**, **JavaScript**, and especially **Haskell**,
 verified in the field. There're a few creative attempts though, but in mind
-is kept that not to be overly smart about.
+is kept that overly smart not to be about.
 
 **Edh** code runs embedded in Haskell (GHC), interpreted. The killer feature
 may be the very
