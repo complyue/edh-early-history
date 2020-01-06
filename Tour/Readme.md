@@ -1,7 +1,8 @@
 # A Tour of Edh
 
+- [Philosophy](#philosophy)
+- [Zen](#zen)
 - [Concepts](#concepts)
-  - [Everything in Edh](#everything-in-edh)
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Procedure](#procedure)
   - [Entity](#entity)
@@ -20,11 +21,9 @@
 - [Indexing](#indexing)
 - [Reflection](#reflection)
 
-## Concepts
+## Philosophy
 
-### Everything in Edh
-
-In **Edh**, where:
+In **Edh**:
 
 > Everything is a **value**,
 > an **object** is a **value**
@@ -33,6 +32,13 @@ To be contrasted with **Python**, where:
 
 > Everything is an **object**,
 > a **value** is an **object**
+
+## Zen
+
+> The _zen_ of **Edh** is to be _Edhic_, that to be _Edhic_,
+> is to be more _Pythonic_ than _Pythonic_
+
+## Concepts
 
 ### Function (or lack thereof)
 
