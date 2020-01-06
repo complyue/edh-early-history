@@ -89,7 +89,7 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                  EdhArgsPack (ArgsPack (h : rest) !kwargs) | Map.null kwargs ->
                    doMatched h (EdhArgsPack (ArgsPack rest kwargs))
                  EdhTuple (h : rest) -> doMatched h (EdhTuple rest)
-                 EdhList  (List l  ) -> readTVar l >>= \ll -> case ll of
+                 EdhList  (List l  ) -> readTVar l >>= \case
                    (h : rest) -> newTVar rest >>= doMatched h . EdhList . List
                    _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
                  _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)

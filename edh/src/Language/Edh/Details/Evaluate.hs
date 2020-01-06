@@ -173,7 +173,19 @@ evalStmt' that stmt exit = do
           doWhile :: EdhProg (STM ())
           doWhile = do
             evalExpr that cndExpr $ \case
-              (_, _, EdhBool True ) -> evalBlock that stmts $ \_ -> doWhile
+              (_, _, EdhBool True) ->
+                evalBlock that stmts $ \doneResult@(_, _, doneVal) ->
+                  case doneVal of
+                    -- | early stop of procedure
+                    EdhReturn _    -> exitEdhProc exit doneResult
+                    -- | break while loop
+                    EdhBreak       -> exitEdhProc exit (that, scope, nil)
+                    -- | treat as break here, TODO judge this decision
+                    EdhFallthrough -> exitEdhProc exit (that, scope, nil)
+                    -- | treat as continue here, TODO judge this decision
+                    EdhCaseClose _ -> exitEdhProc exit doneResult
+                    -- continue while loop
+                    _              -> doWhile
               (_, _, EdhBool False) -> exitEdhProc exit (that, scope, nil)
               (_, _, EdhNil       ) -> exitEdhProc exit (that, scope, nil)
               (_, _, cndVal) ->
@@ -586,8 +598,8 @@ evalExpr that expr exit = do
               }
             )
           $ evalBlock that (deBlock branchesStmt)
-          $ \blkResult -> -- restore program state after block done
-                          local (const pgs) $ exitEdhProc exit blkResult
+            -- restore program state after block done
+          $ \blkResult -> local (const pgs) $ exitEdhProc exit blkResult
 
 
     -- yield stmt evals to the value of caller's `do` expression
