@@ -1,6 +1,9 @@
 # A Tour of Edh
 
 - [Philosophy](#philosophy)
+  - [About Everything](#about-everything)
+  - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
+  - [Performance Goals](#performance-goals)
 - [Zen of Edh](#zen-of-edh)
 - [Concepts](#concepts)
   - [Function (or lack thereof)](#function-or-lack-thereof)
@@ -8,31 +11,56 @@
   - [Entity](#entity)
   - [Scope](#scope)
   - [Object](#object)
+- [Code Structure](#code-structure)
+  - [Operators](#operators)
+  - [Branches](#branches)
+  - [Case-Of](#case-of)
+  - [Pattern Matching](#pattern-matching)
 - [Procedures](#procedures)
   - [Host Procedures](#host-procedures)
   - [Method Procedure](#method-procedure)
   - [Generator Procedure](#generator-procedure)
   - [Class (Constructor) Procedure](#class-constructor-procedure)
+  - [Multiple &quot;Inheritance&quot;](#multiple-quotinheritancequot)
   - [Interpreter Procedure](#interpreter-procedure)
-- [Operators](#operators)
-- [Branches](#branches)
-- [Pattern Matching](#pattern-matching)
-- [Case-Of](#case-of)
 - [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
-- [Indexing](#indexing)
+- [Indexing and Magic Methods](#indexing-and-magic-methods)
 - [Reflection](#reflection)
 
 ## Philosophy
 
+### About Everything
+
 In **Edh**:
 
 > Everything is a **value**,
-> an **object** is a **value**
+> the **object** is a type of **value** amount other types
 
 To be contrasted with **Python**, where:
 
 > Everything is an **object**,
-> a **value** is an **object**
+> a **value** is an **object** of some type amount other types
+
+### Object? - Yes, Oriented? - No
+
+Many don't consider **Go** ([GoLang](https://golang.org)) an
+_Object Oriented_ programming language, **Edh** is not so in similar
+respect. **Edh** does pointer-wise
+[Type Embedding](https://go101.org/article/type-embedding.html)
+in **Go** spirit, while it does a small step further to offer you
+`that` reference, which refers to a descendant record from an ancestor
+method, in addition to `this` reference which refers to the lexical
+self record. (There's potential to implement parameterized modules
+from this ground up)
+
+### Performance Goals
+
+**Edh** struggles to offer performance advantages majorly out of the
+_human_ aspect from the _human:machine_ pair, though the overall
+performance should be even better when the gluing is done right.
+Raw machine performance squeezing is offloaded to
+[GHC](https://wiki.haskell.org/GHC) who has been undescribable good
+at it since inception.
 
 ## Zen of Edh
 
@@ -61,6 +89,16 @@ To be contrasted with **Python**, where:
 
 ### Object
 
+## Code Structure
+
+### Operators
+
+### Branches
+
+### Case-Of
+
+### Pattern Matching
+
 ## Procedures
 
 ### Host Procedures
@@ -71,13 +109,11 @@ To be contrasted with **Python**, where:
 
 ### Class (Constructor) Procedure
 
+### Multiple "Inheritance"
+
+`this` and `that`
+
 ### Interpreter Procedure
-
-## Operators
-
-## Branches
-
-## Pattern Matching
 
 The [Indexing](#indexing) section demonstrates more sophiscated usage
 of pattern matching, a simpler example resides in the `range()`
@@ -98,10 +134,8 @@ implementation from default batteries:
 ...
 ```
 
-## Case-Of
-
 ## Go-Routine and (Event) Sink
 
-## Indexing
+## Indexing and Magic Methods
 
 ## Reflection
