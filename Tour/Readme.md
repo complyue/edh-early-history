@@ -1,6 +1,12 @@
 # A Tour of Edh
 
 - [Concepts](#concepts)
+  - [Everything in Edh](#everything-in-edh)
+  - [Function (or lack thereof)](#function-or-lack-thereof)
+  - [Procedure](#procedure)
+  - [Entity](#entity)
+  - [Scope](#scope)
+  - [Object](#object)
 - [Procedures](#procedures)
   - [Method Procedure](#method-procedure)
   - [Generator Procedure](#generator-procedure)
@@ -15,6 +21,28 @@
 - [Reflection](#reflection)
 
 ## Concepts
+
+### Everything in Edh
+
+In **Edh**, where:
+
+> Everything is a **value**,
+> an **object** is a **value**
+
+To be contrasted with **Python**, where:
+
+> Everything is an **object**,
+> a **value** is an **object**
+
+### Function (or lack thereof)
+
+### Procedure
+
+### Entity
+
+### Scope
+
+### Object
 
 ## Procedures
 
