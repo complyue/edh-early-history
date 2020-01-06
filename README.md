@@ -3,7 +3,8 @@
 **Edh** as a programming language, has started getting elder just recently,
 but it's vastly neither new, major ideas all come from successful languages
 like **Python**, **GoLang**, **JavaScript**, and especially **Haskell**,
-verified in the field.
+verified in the field. There're a few creative attempts though, but in mind
+is kept that not to be overly smart about.
 
 **Edh** code runs embedded in Haskell (GHC), interpreted. The killer feature
 may be the very
