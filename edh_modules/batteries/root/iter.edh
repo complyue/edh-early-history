@@ -71,25 +71,30 @@
     }
   }
 
-  // args repacking is rather inefficient compared to snoc, we can
-  // expose snoc as a host proc and leverage that here, but we are
-  // still limited to zip tuple/list only, can not handle events from
-  // sinks. I doubt the overall usefulness of zips in Edh, given we
-  // are focused on event hosting
-
+  /**
+   * resembles `zip` in Haskell
+   */
   generator zip(xs, ys) {
-    while not null(xs) && not null(ys) {
-      let (x, *xs) = (*xs)
-      let (y, *ys) = (*ys)
-      yield (x, y)
+    while true case xs of {
+      {x => xs} -> case ys of {
+        {y => ys} -> {
+          yield pkargs(x, y)
+        } return nil
+      } return nil
     }
   }
 
+  /**
+   * resembles `zip3` in Haskell
+   */
   generator zip3(xs, ys, zs) {
-    while not null(xs) && not null(ys) && not null(zs) {
-      let (x, *xs) = (*xs)
-      let (y, *ys) = (*ys)
-      let (z, *zs) = (*zs)
-      yield (x, y, z)
+    while true case xs of {
+      {x => xs} -> case ys of {
+        {y => ys} -> case zs of {
+          {z => zs} -> {
+            yield pkargs(x, y, z)
+          } return nil
+        } return nil
+      } return nil
     }
   }
