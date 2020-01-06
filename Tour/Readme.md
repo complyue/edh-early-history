@@ -37,7 +37,8 @@ In **Edh**:
 > the **object** is a type of **value** among other (mostly immutable)
 > types
 
-To be contrasted with **Python**, where:
+This is part of the reason why **Edh** is not an _Object Oriented_
+language (see next section), to be contrasted with **Python**, where:
 
 > Everything is an **object**,
 > a **value** is an **object** of some type among other types
