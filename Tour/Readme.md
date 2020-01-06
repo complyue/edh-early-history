@@ -1,7 +1,7 @@
 # A Tour of Edh
 
 - [Philosophy](#philosophy)
-- [Zen](#zen)
+- [Zen of Edh](#zen-of-edh)
 - [Concepts](#concepts)
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Procedure](#procedure)
@@ -33,9 +33,9 @@ To be contrasted with **Python**, where:
 > Everything is an **object**,
 > a **value** is an **object**
 
-## Zen
+## Zen of Edh
 
-> The _zen_ of **Edh** is to be _Edhic_, that to be _Edhic_,
+> The _Zen of Edh_ is to be _Edhic_, that to be _Edhic_,
 > is to be more _Pythonic_ than being
 > [_Pythonic_](https://www.python.org/dev/peps/pep-0020/);
 >
