@@ -34,13 +34,13 @@
 In **Edh**:
 
 > Everything is a **value**,
-> the **object** is a type of **value** amount other (mostly immutable)
+> the **object** is a type of **value** among other (mostly immutable)
 > types
 
 To be contrasted with **Python**, where:
 
 > Everything is an **object**,
-> a **value** is an **object** of some type amount other types
+> a **value** is an **object** of some type among other types
 
 ### Object? - Yes, Oriented? - No
 
