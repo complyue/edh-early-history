@@ -108,7 +108,7 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                 )
 
       -- {{ class:obj }} -- instance pattern
-      [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr className))) (AttrExpr (DirectRef (NamedAttr objAttr)))]))]
+      [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr _className))) (AttrExpr (DirectRef (NamedAttr _objAttr)))]))]
         -> -- brittany insists on putting together the long line above, any workaround?
           -- TODO impl. this 
            throwEdh EvalError "Class pattern not impl. yet"

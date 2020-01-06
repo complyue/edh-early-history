@@ -35,62 +35,66 @@ instance Show StmtSrc where
 
 
 data Stmt =
-      -- literal `pass` to fill a place where a statement needed,
+      -- | literal `pass` to fill a place where a statement needed,
       -- same as in Python
       VoidStmt
-      -- atomically isolated, mark a code section for transaction bounds
+      -- | atomically isolated, mark a code section for transaction bounds
     | AtoIsoStmt !Expr
-      -- similar to `go` in Go, starts goroutine
+      -- | similar to `go` in Go, starts goroutine
     | GoStmt !Expr
-      -- not similar to `defer` in Go (in Go `defer` snapshots arg values
+      -- | not similar to `defer` in Go (in Go `defer` snapshots arg values
       -- and schedules execution on func return), but in Edh `defer`
       -- schedules execution on thread termination
     | DeferStmt !Expr
-      -- import with args (re)pack receiving syntax
+      -- | import with args (re)pack receiving syntax
     | ImportStmt !ArgsReceiver !Expr
-      -- assignment with args (un/re)pack sending/receiving syntax
+      -- | assignment with args (un/re)pack sending/receiving syntax
     | LetStmt !ArgsReceiver !ArgsSender
-      -- super object declaration for a descendant object
+      -- | super object declaration for a descendant object
     | ExtendsStmt !Expr
-      -- class (constructor) procedure definition
+      -- | class (constructor) procedure definition
     | ClassStmt !ProcDecl
-      -- method procedure definition
+      -- | method procedure definition
     | MethodStmt !ProcDecl
-      -- generator procedure definition
+      -- | generator procedure definition
     | GeneratorStmt !ProcDecl
-      -- reactor declaration, a reactor procedure is not bound to a name,
+      -- | reactor declaration, a reactor procedure is not bound to a name,
       -- it's bound to an (event) `sink` with the calling thread as context,
       -- when an event fires from that (event) `sink`, the bound reactor
       -- is scheduled to run by the context thread, after its currernt
-      -- transaction finishes, a reactor procedure can call `goexit()` to
-      -- terminate the thread
+      -- transaction finishes, a reactor procedure can `break` to terminate
+      -- the thread, or the thread will continue to process next reactor, or
+      -- next transactional task normally
       -- the reactor mechanism is somewhat similar to traditional signal
       -- handling mechanism in OS process management
     | ReactorStmt !Expr !ArgsReceiver !StmtSrc
-      -- interpreter declaration, an interpreter procedure is not otherwise
+      -- | interpreter declaration, an interpreter procedure is not otherwise
       -- different from a method procedure, except it receives arguments
       -- in expression form rather than values, in addition to the reflective
       -- `callerScope` as first argument
     | InterpreterStmt !ProcDecl
-      -- while loop
+      -- | while loop
     | WhileStmt !Expr !StmtSrc
-      -- control flows
-    | BreakStmt | ContinueStmt
-      -- similar to fallthrough in Go
+      -- | break from a while/for loop, or terminate the Edh thread if given
+      -- from a reactor
+    | BreakStmt
+      -- | continue a while/for loop
+    | ContinueStmt
+      -- | similar to fallthrough in Go
     | FallthroughStmt
-      -- operator declaration
+      -- | operator declaration
     | OpDeclStmt !OpSymbol !Precedence !ProcDecl
-      -- operator override
+      -- | operator override
     | OpOvrdStmt !OpSymbol !ProcDecl !Precedence
-      -- similar to exception mechanism in JavaScript
+      -- | similar to exception mechanism in JavaScript
     | ThrowStmt !Expr | TryStmt {
         try'trunk :: !StmtSrc
         , try'catches :: ![(Expr, Maybe AttrName, StmtSrc)]
         , try'finally :: !(Maybe StmtSrc)
         }
-      -- early stop from a procedure
+      -- | early stop from a procedure
     | ReturnStmt !Expr
-      -- expression with precedence
+      -- | expression with precedence
     | ExprStmt !Expr
   deriving (Eq, Show)
 

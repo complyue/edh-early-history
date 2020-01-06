@@ -148,12 +148,21 @@ evalStmt' that stmt exit = do
 
     GoStmt expr -> forkEdh exit $ evalExpr that expr edhNop
 
-    -- TODO impl. this
     ReactorStmt sinkExpr argsRcvr reactionStmt ->
-      throwEdh EvalError "reactor not impl. yet"
+      evalExpr that sinkExpr $ \case
+        (_, _, EdhSink sink) -> contEdhSTM $ do
+          reactorChan <- dupTChan $ evs'chan sink
+          modifyTVar' (edh'reactors pgs)
+                      ((reactorChan, ctx, argsRcvr, reactionStmt) :)
+        (_, _, val) ->
+          throwEdh EvalError
+            $  "Can only reacting to an (event) sink, not a "
+            <> T.pack (show $ edhTypeOf val)
+            <> ": "
+            <> T.pack (show val)
 
-    -- TODO impl. this
-    DeferStmt expr -> throwEdh EvalError "defer scheduler not impl. yet"
+    DeferStmt expr -> contEdhSTM $ modifyTVar' (edh'defers pgs) ((ctx, expr) :)
+
 
     -- TODO impl. this
     -- TryStmt trunkStmt catchesList finallyStmt -> undefined
