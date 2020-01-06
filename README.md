@@ -1,17 +1,18 @@
 # Đ - (WIP) a modern, transactional Object layer spliced with Haskell
 
-Missing **Python**/**JavaScript** or even **Go** in shifting to
-**Haskell**? Now you can have **Edh**, with many goodies from
-those languages but running embedded in Haskell.
+**Edh** as a programming language, has started getting elder just recently,
+but it's vastly neither new, major ideas all come from successful languages
+like **Python**, **GoLang**, **JavaScript**, and especially **Haskell**,
+verified in the field.
 
-Having hard time for data consistency in programming concurrency?
-The very
+**Edh** code runs embedded in Haskell (GHC), interpreted. The killer feature
+may be the very
 [Haskell implementation](http://hackage.haskell.org/package/stm)
 of
 [Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
-is an excellent relief, giving you lock-free (a.k.a optimistic locking)
-transactions. **Edh** brings major advantages of **STM** to the object
-layer, with eaiser and intuitive paradigm to program data consistency.
+brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
+transactions, with intuitive while pragmatic constructs to program data
+consistency under heavy concurrency.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
