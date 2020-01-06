@@ -9,6 +9,7 @@
   - [Scope](#scope)
   - [Object](#object)
 - [Procedures](#procedures)
+  - [Host Procedures](#host-procedures)
   - [Method Procedure](#method-procedure)
   - [Generator Procedure](#generator-procedure)
   - [Class (Constructor) Procedure](#class-constructor-procedure)
@@ -35,12 +36,18 @@ To be contrasted with **Python**, where:
 
 ## Zen of Edh
 
-> The _Zen of Edh_ is to be _Edhic_, that to be _Edhic_,
-> is to be more _Pythonic_ than being
-> [_Pythonic_](https://www.python.org/dev/peps/pep-0020/);
+> Program in [Haskell](https://www.haskell.org), (i.e. be a
+> _Haskeller_), for anyone who you must work with but hasn't feel
+> comfortable with _Haskell_ code, ask him/her to use **Edh**, and
+> write [host procedures](#host-procedures) to help get his/her
+> job done
+>
+> When programming in **Edh**, be _Edhic_, that to be _Edhic_, is
+> to be more _Pythonic_ than being
+> [_Pythonic_](https://www.python.org/dev/peps/pep-0020)
 >
 > And whenever you're not sure how do get a job done, think
-> about how a [Gopher](https://blog.golang.org/gopher) would do it.
+> about how a [Gopher](https://blog.golang.org/gopher) would do it
 
 ## Concepts
 
@@ -55,6 +62,8 @@ To be contrasted with **Python**, where:
 ### Object
 
 ## Procedures
+
+### Host Procedures
 
 ### Method Procedure
 
