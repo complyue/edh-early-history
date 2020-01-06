@@ -1,0 +1,7 @@
+
+method join(fst, *rest, sep=', ') {
+  s = fst
+  for one from rest do s = s ++ sep ++ one
+  s
+}
+
