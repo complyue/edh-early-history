@@ -36,7 +36,7 @@ To be contrasted with **Python**, where:
 ## Zen
 
 > The _zen_ of **Edh** is to be _Edhic_, that to be _Edhic_,
-> is to be more _Pythonic_ than _Pythonic_
+> is to be more _Pythonic_ than being _Pythonic_
 
 ## Concepts
 
