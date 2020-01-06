@@ -2,3 +2,4 @@
 import * './ops'
 import * './iter'
 import * './str'
+import * './concur'

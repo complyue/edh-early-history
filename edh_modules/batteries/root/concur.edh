@@ -1,0 +1,39 @@
+
+interpreter concur(callerScope, *tasks, c=6) {
+  null(tasks) -> return nil
+
+  c = case type(c) of {
+    DecimalType -> c
+    ExprType -> callerScope.eval(c)
+    _ -> error('Unexpected concurrency ' ++ type(c) ++ ': ' ++ c)
+  }
+  c < 1 -> error("Invalid concurrency: " ++ c)
+
+  doneSig = sink
+
+  // use a class to manage running state (count of running tasks)
+  // as instance attributes
+  class Scheduler(tasks) {
+    n = 0
+    method scheduleMore() {
+      null(this.tasks) -> doneSig <- this.n
+
+      let (t, *this.tasks) = *this.tasks
+      go {
+        defer {
+          this.n -= 1 // this is atomic in Edh
+          if this.n < c then this.scheduleMore()
+          doneSig <- this.n
+        }
+        callerScope.eval(t)
+      }
+      this.n += 1 // this is atomic in Edh
+    }
+  }
+
+  schd = Scheduler(tasks)
+  while not null(schd.tasks) && schd.n < c
+    schd.scheduleMore()
+  
+  for n from doneSig do if n < 1 then return nil
+}
