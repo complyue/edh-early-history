@@ -6,7 +6,7 @@
   - [Performance Goals](#performance-goals)
 - [Zen of Edh](#zen-of-edh)
 - [Concepts](#concepts)
-  - [Function (or lack thereof)](#function-or-lack-thereof)
+  - [Functions (or lack thereof)](#functions-or-lack-thereof)
   - [Procedure](#procedure)
   - [Entity](#entity)
   - [Scope](#scope)
@@ -21,7 +21,7 @@
   - [Method Procedure](#method-procedure)
   - [Generator Procedure](#generator-procedure)
   - [Class (Constructor) Procedure](#class-constructor-procedure)
-  - [Multiple &quot;Inheritance&quot;](#multiple-quotinheritancequot)
+  - [Multiple Inheritance](#multiple-inheritance)
   - [Interpreter Procedure](#interpreter-procedure)
 - [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
 - [Indexing and Magic Methods](#indexing-and-magic-methods)
@@ -34,7 +34,8 @@
 In **Edh**:
 
 > Everything is a **value**,
-> the **object** is a type of **value** amount other types
+> the **object** is a type of **value** amount other (mostly immutable)
+> types
 
 To be contrasted with **Python**, where:
 
@@ -64,8 +65,8 @@ at it since inception.
 
 ## Zen of Edh
 
-> Do program in [Haskell](https://www.haskell.org), (i.e. be a
-> _Haskeller_), for anyone who you must work with but hasn't feel
+> Do program and think in [Haskell](https://www.haskell.org), (i.e. be
+> a _Haskeller_), for anyone who you must work with but hasn't feel
 > comfortable with **Haskell** code, ask him/her to use **Edh**, and
 > write [host procedures](#host-procedures) to help get his/her
 > job done
@@ -79,7 +80,7 @@ at it since inception.
 
 ## Concepts
 
-### Function (or lack thereof)
+### Functions (or lack thereof)
 
 ### Procedure
 
@@ -109,15 +110,15 @@ at it since inception.
 
 ### Class (Constructor) Procedure
 
-### Multiple "Inheritance"
+### Multiple Inheritance
 
 `this` and `that`
 
 ### Interpreter Procedure
 
-The [Indexing](#indexing) section demonstrates more sophiscated usage
-of pattern matching, a simpler example resides in the `range()`
-implementation from default batteries:
+The [Indexing](#indexing-and-magic-methods) section demonstrates
+more sophiscated usage of pattern matching, a simpler example
+resides in the `range()` implementation from default batteries:
 
 ```javascript
   /**
