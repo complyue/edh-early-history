@@ -36,7 +36,11 @@ To be contrasted with **Python**, where:
 ## Zen
 
 > The _zen_ of **Edh** is to be _Edhic_, that to be _Edhic_,
-> is to be more _Pythonic_ than being _Pythonic_
+> is to be more _Pythonic_ than being
+> [_Pythonic_](https://www.python.org/dev/peps/pep-0020/);
+>
+> And whenever you're not sure how do get a job done, think
+> about how a [Gopher](https://blog.golang.org/gopher) would do it.
 
 ## Concepts
 
