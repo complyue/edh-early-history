@@ -36,9 +36,9 @@ To be contrasted with **Python**, where:
 
 ## Zen of Edh
 
-> Program in [Haskell](https://www.haskell.org), (i.e. be a
+> Do program in [Haskell](https://www.haskell.org), (i.e. be a
 > _Haskeller_), for anyone who you must work with but hasn't feel
-> comfortable with _Haskell_ code, ask him/her to use **Edh**, and
+> comfortable with **Haskell** code, ask him/her to use **Edh**, and
 > write [host procedures](#host-procedures) to help get his/her
 > job done
 >
@@ -46,7 +46,7 @@ To be contrasted with **Python**, where:
 > to be more _Pythonic_ than being
 > [_Pythonic_](https://www.python.org/dev/peps/pep-0020)
 >
-> And whenever you're not sure how do get a job done, think
+> And whenever you're not sure how to get a job done, think
 > about how a [Gopher](https://blog.golang.org/gopher) would do it
 
 ## Concepts
