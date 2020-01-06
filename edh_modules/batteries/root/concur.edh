@@ -15,19 +15,22 @@ interpreter concur(callerScope, *tasks, c=6) {
   // as instance attributes
   class Scheduler(tasks) {
     n = 0
-    method scheduleMore() {
-      null(this.tasks) -> doneSig <- this.n
-
-      let (t, *this.tasks) = *this.tasks
-      go {
-        defer {
-          this.n -= 1 // this is atomic in Edh
-          if this.n < c then this.scheduleMore()
-          doneSig <- this.n
+    method scheduleMore() case this.tasks of {
+      {()} -> // matches any empty sequence
+        doneSig <- this.n
+      { t => rest } -> { // matches non-empty sequence
+        this.tasks = rest
+        go {
+          defer {
+            this.n -= 1 // this is atomic in Edh
+            if this.n < c then this.scheduleMore()
+            doneSig <- this.n
+          }
+          callerScope.eval(t)
         }
-        callerScope.eval(t)
+        this.n += 1 // this is atomic in Edh
       }
-      this.n += 1 // this is atomic in Edh
+      runtime.fatal <| 'the impossible happened'
     }
   }
 
