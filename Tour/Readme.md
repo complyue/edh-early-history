@@ -50,7 +50,7 @@ Many don't consider **Go** ([GoLang](https://golang.org)) an
 _Object Oriented_ programming language, **Edh** is not so in similar
 respect. **Edh** does pointer-wise
 [Type Embedding](https://go101.org/article/type-embedding.html)
-in **Go** spirit, while it does a small step further to offer you
+in **Go** spirit, while it takes a small step further to offer you
 `that` reference, which refers to a descendant record from an ancestor
 method, in addition to `this` reference which refers to the lexical
 self record. (There's potential to implement parameterized modules
@@ -96,14 +96,14 @@ at it since inception.
 
 Very similar to deep-nested
 [`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
-with [NodeJS](https://nodejs.org), mapp the following folder/file names:
+with [NodeJS](https://nodejs.org), map the following folder/file names:
 
 - `node_modules` -> `edh_modules`
 - `index.js` -> `__init__.edh`
 - `*.js` -> `*.edh`
 
 _Just_ find&replace all occurences according to above rules, then
-_Maybe_ https://github.com/npm/cli is right ported to managed **Edh**
+_Maybe_ https://github.com/npm/cli is right ported to manage **Edh**
 projects already (kidding).
 
 ## Code Structure
