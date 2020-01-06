@@ -63,9 +63,8 @@ driveEdhProgram !progCtx !prog = do
                     -- the forker should have checked not in tx, enforce here
                                              , edh'in'tx      = False
                                              }
-                    !descTaskSource =
-                      (Nothing <$ readTChan descHaltSig)
-                        `orElse` (tryReadTQueue descQueue)
+                    !descTaskSource = (Nothing <$ readTChan descHaltSig)
+                      `orElse` tryReadTQueue descQueue
                 -- bootstrap on the descendant thread
                 atomically $ writeTQueue
                   descQueue
@@ -73,8 +72,9 @@ driveEdhProgram !progCtx !prog = do
                 void
                   $ mask_
                   $ forkIOWithUnmask
-                  $ \unmask -> catch (unmask $ driveEdhThread descTaskSource)
-                                     onDescendantExc
+                  $ \unmask -> catch
+                      (unmask $ driveEdhThread defers descTaskSource)
+                      onDescendantExc
                 -- loop another iteration
                 forkDescendants haltSig
   -- start forker thread
@@ -104,16 +104,33 @@ driveEdhProgram !progCtx !prog = do
       mainQueue
       (EdhTxTask pgsAtBoot False (thisAtBoot, scopeAtBoot, nil) (const prog))
     -- drive the program from main thread
-    driveEdhThread $ tryReadTQueue mainQueue
+    driveEdhThread defers $ tryReadTQueue mainQueue
  where
-  driveEdhThread :: STM (Maybe EdhTxTask) -> IO ()
-  driveEdhThread !taskSource = atomically taskSource >>= \case
-    Nothing      -> return ()
-    Just !txTask -> do
-      -- run this task
+  driveEdhThread :: TVar [(Context, Expr)] -> STM (Maybe EdhTxTask) -> IO ()
+  driveEdhThread !defers !taskSource = atomically taskSource >>= \case
+    Nothing -> do -- run defers and this thread is done
+      !deferedTasks                           <- readTVarIO defers
+      !(cleanupForkQueue :: TQueue EdhTxTask) <- newTQueueIO
+      !(cleanupTaskQueue :: TQueue EdhTxTask) <- newTQueueIO
+      !cleanupReactors                        <- newTVarIO []
+      !cleanupDefers                          <- newTVarIO []
+      let !pgsCleanup = EdhProgState { edh'fork'queue = cleanupForkQueue
+                                     , edh'task'queue = cleanupTaskQueue
+                                     , edh'reactors   = cleanupReactors
+                                     , edh'defers     = cleanupDefers
+                                     , edh'in'tx      = False
+                                     , edh'context    = progCtx
+                                     }
+      forM_ deferedTasks $ \(cleanupCtx, deferedExpr) -> atomically $ do
+        let !cleanupScope = contextScope cleanupCtx
+            !this         = thisObject cleanupScope
+        runEdhProg pgsCleanup { edh'context = cleanupCtx }
+          $ evalExpr this deferedExpr edhNop
+
+    Just !txTask -> do -- run this task
       goSTM 0 txTask
       -- loop another iteration
-      driveEdhThread taskSource
+      driveEdhThread defers taskSource
   goSTM :: Int -> EdhTxTask -> IO ()
   goSTM !rtc txTask@(EdhTxTask !pgsThread !wait !input !task) = if wait
     then -- let stm do the retry, for blocking read of a 'TChan' etc.
