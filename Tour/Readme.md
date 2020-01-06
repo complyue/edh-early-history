@@ -11,6 +11,7 @@
   - [Entity](#entity)
   - [Scope](#scope)
   - [Object](#object)
+- [Module Structures](#module-structures)
 - [Code Structure](#code-structure)
   - [Operators](#operators)
   - [Branches](#branches)
@@ -90,6 +91,20 @@ at it since inception.
 ### Scope
 
 ### Object
+
+## Module Structures
+
+Very similar to deep-nested
+[`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
+with [NodeJS](https://nodejs.org), mapp the following folder/file names:
+
+- `node_modules` -> `edh_modules`
+- `index.js` -> `__init__.edh`
+- `*.js` -> `*.edh`
+
+_Just_ find&replace all occurences according to above rules, then
+_Maybe_ https://github.com/npm/cli is right ported to managed **Edh**
+projects already (kidding).
 
 ## Code Structure
 
