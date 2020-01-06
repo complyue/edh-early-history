@@ -89,10 +89,12 @@ parseDeferStmt = do
   errRptPos <- getOffset
   expr      <- parseExpr
   case expr of
-    CallExpr{} -> return ()
-    _          -> do
+    BlockExpr{} -> return ()
+    CaseExpr{}  -> return ()
+    CallExpr{}  -> return ()
+    _           -> do
       setOffset errRptPos
-      fail "A call required here"
+      fail "A block, case or call required here"
   return $ DeferStmt expr
 
 parseImportStmt :: Parser Stmt
