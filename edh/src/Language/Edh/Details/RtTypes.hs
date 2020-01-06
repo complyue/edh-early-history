@@ -317,6 +317,8 @@ type EdhProg = ReaderT EdhProgState STM
 data EdhProgState = EdhProgState {
     edh'fork'queue :: !(TQueue EdhTxTask)
     , edh'task'queue :: !(TQueue EdhTxTask)
+    , edh'reactors :: !(TVar [(TChan EdhValue, Context, ArgsReceiver , StmtSrc)])
+    , edh'defers :: !(TVar [(Context, Expr)])
     , edh'in'tx :: !Bool
     , edh'context :: !Context
   }

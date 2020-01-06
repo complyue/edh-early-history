@@ -59,18 +59,17 @@ data Stmt =
       -- generator procedure definition
     | GeneratorStmt !ProcDecl
       -- reactor declaration, a reactor procedure is not bound to a name,
-      -- its bound to an (event) `sink` with the calling thread as context,
+      -- it's bound to an (event) `sink` with the calling thread as context,
       -- when an event fires from that (event) `sink`, the bound reactor
       -- is scheduled to run by the context thread, after its currernt
-      -- transaction finishes, a reactor procedure can declare to receive
-      -- a resume exit, it can continue execution of the thread with the
-      -- resume exit, or simply return to terminate the thread
+      -- transaction finishes, a reactor procedure can call `goexit()` to
+      -- terminate the thread
       -- the reactor mechanism is somewhat similar to traditional signal
-      -- handler mechanism in OS process management
+      -- handling mechanism in OS process management
     | ReactorStmt !Expr !ArgsReceiver !StmtSrc
       -- interpreter declaration, an interpreter procedure is not otherwise
       -- different from a method procedure, except it receives arguments
-      -- in expression form other than values, in addition to the reflective
+      -- in expression form rather than values, in addition to the reflective
       -- `callerScope` as first argument
     | InterpreterStmt !ProcDecl
       -- while loop

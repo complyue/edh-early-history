@@ -49,10 +49,15 @@ driveEdhProgram !ctx !prog = do
               Just (EdhTxTask !pgs _ !input !task) -> do
                 -- got one to fork, prepare state for the descendant thread
                 !(descQueue :: TQueue EdhTxTask) <- newTQueueIO
-                (descHaltSig :: TChan ()) <- atomically $ dupTChan progHaltSig
-                let !pgsDescendant =
-                      -- the forker should have checked not in tx, enforce here
-                      pgs { edh'task'queue = descQueue, edh'in'tx = False }
+                !(descHaltSig :: TChan ()) <- atomically $ dupTChan progHaltSig
+                !reactors                        <- newTVarIO []
+                !defers                          <- newTVarIO []
+                let !pgsDescendant = pgs { edh'task'queue = descQueue
+                                         , edh'reactors   = reactors
+                                         , edh'defers     = defers
+                    -- the forker should have checked not in tx, enforce here
+                                         , edh'in'tx      = False
+                                         }
                     !descTaskSource =
                       (Nothing <$ readTChan descHaltSig)
                         `orElse` (tryReadTQueue descQueue)
@@ -78,10 +83,14 @@ driveEdhProgram !ctx !prog = do
   flip finally (atomically $ writeTChan progHaltSig ()) $ do
     -- prepare program state for main thread
     !(mainQueue :: TQueue EdhTxTask) <- newTQueueIO
+    !reactors                        <- newTVarIO []
+    !defers                          <- newTVarIO []
     let !scope = contextScope ctx
         !this  = thisObject scope
         !pgs   = EdhProgState { edh'fork'queue = forkQueue
                               , edh'task'queue = mainQueue
+                              , edh'reactors   = reactors
+                              , edh'defers     = defers
                               , edh'in'tx      = False
                               , edh'context    = ctx
                               }
