@@ -1,0 +1,7 @@
+
+[] =< for n from range(5) do n
+
+{} =< for n from range(5) do 'square of '++n : n*n
+
+() =< for n from range(5) do n
+

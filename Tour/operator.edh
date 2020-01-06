@@ -30,16 +30,13 @@ a 🆚 b
     // overide the (++) operator within this procedure only, avoid
     // polluting the module scope
 
-    scopeHere = scope() // use the reflective `scope` utility
-    testExpr = makeExpr( 'You' ++ ' and ' ++ 'me' )
-
-    before = scopeHere.eval(testExpr)
+    before = 'You' ++ ' and ' ++ 'me'
     operator ++ (lhv, rhv) {
       // inside the overriding operator definition, the overridden,
       // original operator is available as was before the overide
       lhv ++ ' ⭕ ' ++ rhv
     }
-    after = scopeHere.eval(testExpr)
+    after = 'You' ++ ' and ' ++ 'me'
 
     before 🆚 after
   }
