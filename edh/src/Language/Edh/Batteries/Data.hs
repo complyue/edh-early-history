@@ -183,6 +183,18 @@ val2DictEntry _ (EdhPair (EdhDecimal n) v) = return (ItemByNum n, v)
 val2DictEntry _ (EdhPair (EdhBool    b) v) = return (ItemByBool b, v)
 val2DictEntry pgs (EdhPair k _v) =
   throwEdhSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
+val2DictEntry _ (EdhArgsPack (ArgsPack [EdhType t, v] !kwargs))
+  | Map.null kwargs = return (ItemByType t, v)
+val2DictEntry _ (EdhArgsPack (ArgsPack [EdhString s, v] !kwargs))
+  | Map.null kwargs = return (ItemByStr s, v)
+val2DictEntry _ (EdhArgsPack (ArgsPack [EdhSymbol s, v] !kwargs))
+  | Map.null kwargs = return (ItemBySym s, v)
+val2DictEntry _ (EdhArgsPack (ArgsPack [EdhDecimal n, v] !kwargs))
+  | Map.null kwargs = return (ItemByNum n, v)
+val2DictEntry _ (EdhArgsPack (ArgsPack [EdhBool b, v] !kwargs))
+  | Map.null kwargs = return (ItemByBool b, v)
+val2DictEntry pgs (EdhArgsPack (ArgsPack [k, _v] !kwargs)) | Map.null kwargs =
+  throwEdhSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
 val2DictEntry _ (EdhTuple [EdhType    t, v]) = return (ItemByType t, v)
 val2DictEntry _ (EdhTuple [EdhString  s, v]) = return (ItemByStr s, v)
 val2DictEntry _ (EdhTuple [EdhSymbol  s, v]) = return (ItemBySym s, v)
@@ -191,8 +203,7 @@ val2DictEntry _ (EdhTuple [EdhBool    b, v]) = return (ItemByBool b, v)
 val2DictEntry pgs (EdhTuple [k, _v]) =
   throwEdhSTM pgs EvalError $ "Invalid key for dict: " <> T.pack (show k)
 val2DictEntry pgs val =
-  throwEdhSTM pgs EvalError $ "Invalid entry for dict: " <> T.pack
-    (show val)
+  throwEdhSTM pgs EvalError $ "Invalid entry for dict: " <> T.pack (show val)
 
 -- | operator (=>) - prepender
 prpdProc :: EdhProcedure
@@ -240,7 +251,7 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
       !callerScope = contextScope callerCtx
       pvlToDict :: [EdhValue] -> STM DictStore
       pvlToDict ps = Map.fromList <$> sequence (val2DictEntry pgs <$> ps)
-      insertToDict :: EdhValue -> (TVar DictStore) -> STM ()
+      insertToDict :: EdhValue -> TVar DictStore -> STM ()
       insertToDict p d = do
         (k, v) <- val2DictEntry pgs p
         modifyTVar' d $ Map.insert k v
@@ -282,6 +293,8 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
     _ -> evalExpr that lhExpr $ \lhResult@(_, _, lhVal) ->
       evalExpr that rhExpr $ \(_, _, rhVal) -> case lhVal of
         EdhTuple vs -> case rhVal of
+          EdhArgsPack (ArgsPack !args !kwargs) | Map.null kwargs ->
+            exitEdhProc exit (that, callerScope, EdhTuple $ vs ++ args)
           EdhTuple vs' ->
             exitEdhProc exit (that, callerScope, EdhTuple $ vs ++ vs')
           EdhList (List l) -> contEdhSTM $ do
@@ -299,6 +312,10 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
               <> ": "
               <> T.pack (show rhVal)
         EdhList (List l) -> case rhVal of
+          EdhArgsPack (ArgsPack !args !kwargs) | Map.null kwargs ->
+            contEdhSTM $ do
+              modifyTVar' l (++ args)
+              exitEdhSTM pgs exit lhResult
           EdhTuple vs -> contEdhSTM $ do
             modifyTVar' l (++ vs)
             exitEdhSTM pgs exit lhResult
@@ -317,6 +334,11 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
               <> ": "
               <> T.pack (show rhVal)
         EdhDict (Dict d) -> case rhVal of
+          EdhArgsPack (ArgsPack !args !kwargs) | Map.null kwargs ->
+            contEdhSTM $ do
+              d' <- pvlToDict args
+              modifyTVar d $ Map.union d'
+              exitEdhSTM pgs exit lhResult
           EdhTuple vs -> contEdhSTM $ do
             d' <- pvlToDict vs
             modifyTVar d $ Map.union d'
