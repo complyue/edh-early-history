@@ -133,16 +133,77 @@ driveEdhProgram !progCtx !prog = do
     driveEdhThread deferDefers (tryReadTQueue deferTaskQueue)
     driveDefers restDefers
 
+  driveReactors
+    :: [(TChan EdhValue, EdhProgState, ArgsReceiver, StmtSrc)] -> IO Bool
+  driveReactors [] = return False
+  driveReactors ((!chan, pgsReactor, argsRcvr, stmt) : restReactors) =
+    atomically (tryReadTChan chan) >>= \case
+      Nothing -> driveReactors restReactors
+      Just ev -> do
+        !breakThread <- newEmptyTMVarIO
+        let
+          !ctxReactor = edh'context pgsReactor
+          !pk         = case ev of
+            EdhArgsPack pk_ -> pk_
+            _               -> ArgsPack [ev] Map.empty
+          !scopeAtReactor = contextScope ctxReactor
+          !thisAtReactor  = thisObject scopeAtReactor
+          !reactorProg =
+            recvEdhArgs ctxReactor argsRcvr pk $ \(_, _, scopeObj) ->
+              case scopeObj of
+                EdhObject (Object rcvd'ent _ _) ->
+                  local
+                      (\pgs' -> pgs'
+                        { edh'context =
+                          ctxReactor
+                            { callStack =
+                              scopeAtReactor { scopeEntity = rcvd'ent }
+                                <| callStack ctxReactor
+                            }
+                        }
+                      )
+                    $ evalStmt thisAtReactor stmt
+                    $ \(_, _, reactorRtn) ->
+                        let doBreak = case reactorRtn of
+                              EdhBreak -> True -- terminate this thread
+                              _        -> False
+                        in  contEdhSTM $ putTMVar breakThread doBreak
+                _ -> error "bug"
+        !reactReactors                        <- newTVarIO []
+        !reactDefers                          <- newTVarIO []
+        !(reactTaskQueue :: TQueue EdhTxTask) <- newTQueueIO
+        atomically $ writeTQueue
+          reactTaskQueue
+          (EdhTxTask
+            pgsReactor { edh'task'queue = reactTaskQueue
+                       , edh'reactors   = reactReactors
+                       , edh'defers     = reactDefers
+                       , edh'in'tx      = False
+                       }
+            False
+            (thisAtReactor, scopeAtReactor, nil)
+            (const reactorProg)
+          )
+        driveEdhThread reactDefers (tryReadTQueue reactTaskQueue)
+        !doBreak <- atomically $ readTMVar breakThread
+        if doBreak then return True else driveReactors restReactors
+
   driveEdhThread
     :: TVar [(EdhProgState, Expr)] -> STM (Maybe EdhTxTask) -> IO ()
   driveEdhThread !defers !taskSource = atomically taskSource >>= \case
     Nothing -> readTVarIO defers >>= \deferedTasks ->
       -- this thread is done, run defers
       if null deferedTasks then return () else driveDefers deferedTasks
-    Just !txTask -> do -- run this task
-      goSTM 0 txTask
-      -- loop another iteration
-      driveEdhThread defers taskSource
+    Just txTask@(EdhTxTask !pgsThread _ _ _) ->
+      -- drive reactors and terminate the thread if any of the reactors
+      -- issued `break`, otherwise continue execute the tx task
+      readTVarIO (edh'reactors pgsThread) >>= driveReactors >>= \case
+        True  -> return () -- terminate this thread
+        False -> do
+          -- run this task
+          goSTM 0 txTask
+          -- loop another iteration
+          driveEdhThread defers taskSource
 
   goSTM :: Int -> EdhTxTask -> IO ()
   goSTM !rtc txTask@(EdhTxTask !pgsThread !wait !input !task) = if wait
@@ -156,48 +217,8 @@ driveEdhProgram !progCtx !prog = do
         trace (" 🌀 " <> show tid <> " stm retry #" <> show rtc) $ return ()
 
       atomically ((Just <$> stmJob) `orElse` return Nothing) >>= \case
-              -- stm failed, do a tracked retry
-        Nothing -> goSTM (rtc + 1) txTask
-        -- stm done
-        Just () -> return ()
+        Nothing -> goSTM (rtc + 1) txTask -- ^ stm failed, do a tracked retry
+        Just () -> return () -- ^ stm done
    where
     stmJob :: STM ()
-    stmJob = readTVar (edh'reactors pgsThread) >>= doReactors
-
-    doReactors
-      :: [(TChan EdhValue, EdhProgState, ArgsReceiver, StmtSrc)] -> STM ()
-    doReactors [] = join (runReaderT (task input) pgsThread)
-    doReactors ((!chan, pgsReactor, argsRcvr, stmt) : restReactors) =
-      tryReadTChan chan >>= \case
-        Nothing -> doReactors restReactors
-        Just ev -> do
-          let !reactorCtx = edh'context pgsReactor
-              !pk         = case ev of
-                EdhArgsPack pk_ -> pk_
-                _               -> ArgsPack [ev] Map.empty
-              !reactorScope = contextScope reactorCtx
-              !reactorThis  = thisObject reactorScope
-            -- the reactor code must run in a transaction, or if it comprises
-            -- of more cycles, it'll mess up with normal transaction tasks
-          runEdhProg pgsReactor { edh'context = reactorCtx, edh'in'tx = True }
-            $ recvEdhArgs reactorCtx argsRcvr pk
-            $ \(_, _, scopeObj) -> case scopeObj of
-                EdhObject (Object rcvd'ent _ _) ->
-                  local
-                      (const pgsReactor
-                        { edh'context =
-                          reactorCtx
-                            { callStack =
-                              reactorScope { scopeEntity = rcvd'ent }
-                                <| callStack reactorCtx
-                            }
-                        }
-                      )
-                    $ evalStmt reactorThis stmt
-                    $ \(_, _, reactorRtn) -> case reactorRtn of
-                        EdhBreak -> -- terminate this thread
-                          return $ return ()
-                        _ -> -- continue stm job
-                          contEdhSTM $ doReactors restReactors
-                _ -> error "bug"
-
+    stmJob = join (runReaderT (task input) pgsThread)

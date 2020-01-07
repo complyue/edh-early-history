@@ -151,9 +151,10 @@ evalStmt' that stmt exit = do
     ReactorStmt sinkExpr argsRcvr reactionStmt ->
       evalExpr that sinkExpr $ \case
         (_, _, EdhSink sink) -> contEdhSTM $ do
-          reactorChan <- dupTChan $ evs'chan sink
+          (reactorChan, _) <- subscribeEvents sink
           modifyTVar' (edh'reactors pgs)
                       ((reactorChan, pgs, argsRcvr, reactionStmt) :)
+          exitEdhSTM pgs exit (that, scope, nil)
         (_, _, val) ->
           throwEdh EvalError
             $  "Can only reacting to an (event) sink, not a "
