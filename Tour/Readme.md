@@ -47,7 +47,7 @@ language (see next section), to be contrasted with **Python**, where:
 ### Object? - Yes, Oriented? - No
 
 Many don't consider **Go** ([GoLang](https://golang.org)) an
-_Object Oriented_ programming language, **Edh** is neither in similar
+_Object Oriented_ programming language, neither **Edh** is in similar
 respect. **Edh** does pointer-wise
 [Type Embedding](https://go101.org/article/type-embedding.html)
 in **Go** spirit, while it takes a small step further to offer you

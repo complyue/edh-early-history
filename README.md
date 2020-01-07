@@ -2,7 +2,7 @@
 
 **Edh** as a programming language, has started getting elder just recently,
 but it's vastly neither new, major ideas all come from successful languages
-like **Python**, **GoLang**, **JavaScript**, and especially **Haskell**,
+like **Python**, **Go**, **JavaScript**, and especially **Haskell**,
 verified in the field. There're a few creative attempts though, but in mind
 is kept that overly smart not to be about.
 
