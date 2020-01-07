@@ -58,9 +58,11 @@ from this ground up)
 
 ### Performance Goals
 
-**Edh** struggles to offer performance advantages majorly out of the
-_human_ aspect from the _human:machine_ pair, though the overall
-performance should be even better when the gluing is done right.
+**Edh** struggles to dig performance improvements majorly out of the
+_human_ aspect from the _human:machine_ pair, offer wider tolerance,
+thus better leverage, over diversified skill sets/levels among all
+crew members onboard.
+
 Raw machine performance squeezing is offloaded to
 [GHC](https://wiki.haskell.org/GHC) who has been undescribable good
 at it since inception.
