@@ -28,12 +28,12 @@ resolveAddr !pgs (SymbolicAttr !symName) =
             Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
             Just v ->
               throwEdhSTM pgs EvalError
-                $  "Not a symbol: "
-                <> T.pack (show v)
-                <> " as "
+                $  "Not a symbol as "
                 <> symName
-                <> " from "
-                <> T.pack (show $ thisObject scope') -- TODO this correct ?
+                <> ", it is a "
+                <> T.pack (show $ edhTypeOf v)
+                <> ": "
+                <> T.pack (show v)
             Nothing -> error "bug in ctx attr resolving"
         Nothing ->
           throwEdhSTM pgs EvalError
