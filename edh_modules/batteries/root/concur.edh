@@ -19,39 +19,60 @@ method concur(*tasks, c=6, dbgLogger=0) {
   // c, i.e. started to finish up
   doneSig = sink
 
-  // use a class to manage running state (count of running tasks)
-  // as instance attributes
-  class Scheduler(tasks) {
-    n = 0 // this somewhat emulates a WaitGroup in Go
+  // use a class to manage 'tasks' and 'cntRunning' as instance
+  // attributes, an attribute belonging to a method proc (`concur()`
+  // in this case) is not possible to be assigned from another
+  // procedure (the later `scheduleMore()` method in this case)
+  class Scheduler(
+    // arguments to a class (constructor) procedure automatically
+    tasks // become instance attributes
+  ){
+
+    // this somewhat emulates a WaitGroup in Go
+    cntRunning = 0 // 'this.' at ctor proc scope is optional
+
     method scheduleMore() {
-      {()} -> // no more tasks in backlog, this is a branch, 
-              // so rest code in the method will be skipped
-        doneSig <- this.n
-      // snoc this.tasks within an atomic transaction
-      ai case this.tasks of { t => rest } -> {
-        this.tasks = rest // one task taken out of backlog
-        fallthrough // leave the atoiso block and continue
+
+      // snoc this.tasks within an *atoiso* tx block
+      ai case this.tasks of {
+
+        {()} -> task2do = nil // no more tasks in backlog
+
+        { task2do => rest } -> // one task taken out of backlog
+          this.tasks = rest // update this.task within tx
+
       }
+
+      if nil == task2do then {
+        doneSig <- cntRunning // notify about overall finishing up
+        return nil // skip all following code
+      }
+
+      // start a new thread (goroutine) to run 'task2do'
       go {
         // use `defer` to always run upon thread termination,
-        // this is necessary as code after `t()` may not get to
-        // run in case this thread is broken by an event reactor
-        // registered during `t()`
+        // this is necessary as code after `task2do()` may not
+        // get actually executed in case this thread is broken by
+        // an event reactor registered during `task2do()`
         defer {
-          this.n -= 1 // this is atomic in Edh
-          if this.n < c then this.scheduleMore()
+          this.cntRunning -= 1 // this is atomic in Edh
+          if this.cntRunning < c then this.scheduleMore()
         }
-        t()
+        task2do()
       }
       // similar to WaitGroup.Add() in Go
-      this.n += 1 // this is atomic in Edh
+      this.cntRunning += 1 // this is atomic in Edh
+
     }
   }
 
   schd = Scheduler(tasks)
-  while not null(schd.tasks) && schd.n < c
+  while not null(schd.tasks) && schd.cntRunning < c
     schd.scheduleMore()
   
-  for n from doneSig do if n < 1 then return nil else
-    dbgLogger <| 'finishing up concur tasks, ' ++ n ++ ' left running.'
+  for n from doneSig do if n < 1 then {
+    dbgLogger <| '  🎉  all concur tasks done.'
+    return nil // don't forget to break out the 'doneSig' event loop
+  } else
+    dbgLogger <| '  ⏲️  finishing up concur tasks, ' ++ n ++ ' left running.'
 }
