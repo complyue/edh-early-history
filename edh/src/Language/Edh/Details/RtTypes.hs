@@ -506,9 +506,11 @@ instance Show EventSink where
 -- database for storage, will tend to define a generated UUID 
 -- attribute or the like.
 
--- | the type for a value
-data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
-  -- * immutable values
+-- | everything in Edh is a value
+data EdhValue =
+  -- | type itself is a kind of (immutable) value
+      EdhType !EdhTypeValue
+  -- * end values (immutable)
     | EdhNil
     | EdhDecimal !Decimal
     | EdhBool !Bool
@@ -528,12 +530,12 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     | EdhTuple ![EdhValue]
     | EdhArgsPack ArgsPack
 
-  -- * host procedure callable from Edh world
+  -- * host procedures callable from Edh world
     | EdhHostProc !HostProcedure
     | EdhHostOper !Precedence !HostProcedure
     | EdhHostGenr !HostProcedure
 
-  -- * precedure definitions
+  -- * precedures defined by Edh code
     | EdhClass !Class
     | EdhMethod !Method
     | EdhOperator !Operator
@@ -541,8 +543,10 @@ data EdhValue = EdhType !EdhTypeValue -- ^ type itself is a kind of value
     | EdhInterpreter !Interpreter
 
   -- * flow control
-    | EdhBreak | EdhContinue
-    | EdhCaseClose !EdhValue | EdhFallthrough
+    | EdhBreak
+    | EdhContinue
+    | EdhCaseClose !EdhValue
+    | EdhFallthrough
     | EdhYield !EdhValue
     | EdhReturn !EdhValue
 

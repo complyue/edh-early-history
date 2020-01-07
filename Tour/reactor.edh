@@ -12,7 +12,7 @@
 
     reactor stopSig ev {
       runtime.info <| '  🎬  stopping because: ' ++ ev
-      break
+      break // break from a reactor does break the thread (goroutine)
     }
 
     for ev from evs do {
