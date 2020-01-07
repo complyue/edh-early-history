@@ -692,7 +692,7 @@ evalExpr that expr exit = do
                   $ \(that'', scope'', mthRtn) ->
                       -- restore previous context after method returned
                       local (const pgs) $ case mthRtn of
-                        EdhContinue -> throwEdh EvalError "Unexpected continue"
+                        EdhContinue -> throwEdh EvalError "Unexpected continue from ([])"
                         -- allow the use of `break` to early stop a method 
                         -- procedure with nil result
                         EdhBreak    -> exitEdhProc exit (that, scope, nil)
@@ -777,7 +777,7 @@ evalExpr that expr exit = do
                                       exit
                                       (that'', scope'', rtnVal)
                                     EdhContinue ->
-                                      throwEdh EvalError "Unexpected continue"
+                                      throwEdh EvalError "Unexpected continue from constructor"
                                -- allow the use of `break` to early stop a constructor 
                                -- procedure with nil result
                                     EdhBreak ->
@@ -832,8 +832,10 @@ evalExpr that expr exit = do
                           $ \(that'', scope'', mthRtn) ->
                               -- restore previous context after method returned
                               local (const pgs) $ case mthRtn of
+                                -- allow continue to be return from a method proc,
+                                -- like `NotImplemented` in Python
                                 EdhContinue ->
-                                  throwEdh EvalError "Unexpected continue"
+                                  exitEdhProc exit (that', scope, EdhContinue)
                                 -- allow the use of `break` to early stop a method 
                                 -- procedure with nil result
                                 EdhBreak ->
@@ -1132,7 +1134,7 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                                   -- explicit return
                                     exitEdhProc exit (that'', scope'', rtnVal)
                                   EdhContinue ->
-                                    throwEdh EvalError "Unexpected continue"
+                                    throwEdh EvalError "Unexpected continue from generator"
                                   EdhBreak ->
                                     -- allows use of `break` to early stop the generator
                                     -- procedure with nil result

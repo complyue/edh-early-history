@@ -1,0 +1,22 @@
+
+import * 'batteries/magic'
+
+{
+
+  class tensor (name) {
+    method (+) (other) case other'name = other?name of {
+      nil -> { continue }
+      tensor(name= this.name ++ '+' ++ other'name) 
+    }
+  }
+
+}
+
+let (x, y) = (tensor('x'), tensor('y'))
+
+result = x + y
+
+(result, result?name)
+
+x + 'z'
+

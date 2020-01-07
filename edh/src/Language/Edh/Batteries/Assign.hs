@@ -82,7 +82,7 @@ assignProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                   $ \(that'', scope'', mthRtn) ->
                       -- restore previous context after method returned
                       local (const pgs) $ case mthRtn of
-                        EdhContinue -> throwEdh EvalError "Unexpected continue"
+                        EdhContinue -> throwEdh EvalError "Unexpected continue from ([=])"
                         -- allow the use of `break` to early stop a method 
                         -- procedure with nil result
                         EdhBreak    -> exitEdhProc exit (that, scope, nil)
