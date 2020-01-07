@@ -44,7 +44,7 @@ method concur(*tasks, c=6, dbgLogger=0) {
       }
 
       if nil == task2do then {
-        doneSig <- cntRunning // notify about overall finishing up
+        doneSig <- this.cntRunning // notify about overall finishing up
         return nil // skip all following code
       }
 
@@ -58,7 +58,7 @@ method concur(*tasks, c=6, dbgLogger=0) {
           this.cntRunning -= 1 // this is atomic in Edh
           if this.cntRunning < c then this.scheduleMore()
         }
-        task2do()
+        task2do() // do the real work
       }
       // similar to WaitGroup.Add() in Go
       this.cntRunning += 1 // this is atomic in Edh

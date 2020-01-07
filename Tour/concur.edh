@@ -15,6 +15,7 @@
             runtime.info <| '  🏁  #' ++ job'num ++ ' done'
             break
           } else {
+            // uncomment line below to see even more verbose log
             // runtime.info <| '  📝  #' ++ job'num ++ ' tick ' // ++ nanos
           }
       }
