@@ -10,13 +10,13 @@
       method _ () {
         runtime.info <| '  🏎️  #' ++ job'num ++ ' started'
         n = 0
-        for nanos from runtime.everySeconds(1) do if (n +=1 ) >= seconds2take
+        for nanos from runtime.everySeconds(1) do if (n+=1) >= seconds2take
           then {
             runtime.info <| '  🏁  #' ++ job'num ++ ' done'
             break
           } else {
             // uncomment line below to see even more verbose log
-            // runtime.info <| '  📝  #' ++ job'num ++ ' tick ' // ++ nanos
+            runtime.info <| '  📝  #' ++ job'num ++ ' tick ' ++ nanos
           }
       }
     }
@@ -27,8 +27,27 @@
 }
 
 {
+/*
+  * `concur()` is the sorta primitive for concurrency scheduling,
+  * it's a plain Edh method procedure defined in `batteries/root`
+  * module so automically available in a Edh runtime, its signature
+  * looks like following:
+
+  method concur(*tasks, c=6, dbgLogger=0) {
+    ...
+  }
+
+*/
+
   concur(
-    *()=< for work from allWorksToDo(10, 3) do work,
+
+    * (,) =< for work from allWorksToDo(10, 3) do work,
+//  ^--^--^------positional arguments unpacking
+//     |--+------tuple comprehension target/tag
+//        |------comprehension operator in Edh
+
     c=5, dbgLogger=runtime.info,
+//   ^------------^---------------keyword arguments
+
   )
 }
