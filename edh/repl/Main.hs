@@ -21,14 +21,19 @@ inputSettings = Settings { complete       = \(_left, _right) -> return ("", [])
 
 
 main :: IO ()
-main = runInputT inputSettings $ do
+main = do
 
-  outputStrLn "(EDHi)"
+  -- todo create a logger coop'ing with haskeline specifically ?
+  logger <- defaultEdhLogger
 
-  world <- createEdhWorld
-  installEdhBatteries world
+  runInputT inputSettings $ do
 
-  runEdhModule world "<interactive>" "pass" >>= \case
-    Left  err  -> error $ show err
-    Right modu -> doLoop world modu
+    outputStrLn "(EDHi)"
+
+    world <- createEdhWorld logger
+    installEdhBatteries world
+
+    runEdhModule world "<interactive>" "pass" >>= \case
+      Left  err  -> error $ show err
+      Right modu -> doLoop world modu
 

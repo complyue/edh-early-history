@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Edh Host Interface
 --
@@ -12,7 +11,7 @@
 module Language.Edh.EHI
   (
     -- * Monadic API
-    EdhEnv
+    EdhProgram
   , EdhSession
     -- ** Interpreter entry point    
   , runEdh
@@ -27,6 +26,7 @@ module Language.Edh.EHI
 
     -- * IO API
   , createEdhWorld
+  , defaultEdhLogger
   , installEdhBatteries
   , runEdhModule
   , evalEdhSource
@@ -81,7 +81,7 @@ evalEdh code = do
     Right v   -> return v
 
 runEdhSession
-  :: ModuleId -> Text -> EdhSession a -> EdhEnv (Either InterpretError a)
+  :: ModuleId -> Text -> EdhSession a -> EdhProgram (Either InterpretError a)
 runEdhSession moduId moduSource (ReaderT f) = do
   world <- ask
   runEdhModule world moduId moduSource >>= \case
@@ -89,17 +89,18 @@ runEdhSession moduId moduSource (ReaderT f) = do
     Right modu -> liftIO $ tryJust Just $ f (world, modu)
 
 
-runEdh :: MonadIO m => EdhEnv a -> m a
-runEdh (ReaderT f) = liftIO $ do
-  world <- createEdhWorld
+runEdh :: MonadIO m => EdhLogger -> EdhProgram a -> m a
+runEdh !logger (ReaderT f) = liftIO $ do
+  world <- createEdhWorld logger
   installEdhBatteries world
   f world
 
-runEdhWithoutBatteries :: MonadIO m => EdhEnv a -> m a
-runEdhWithoutBatteries (ReaderT f) = liftIO $ createEdhWorld >>= f
+runEdhWithoutBatteries :: MonadIO m => EdhLogger -> EdhProgram a -> m a
+runEdhWithoutBatteries !logger (ReaderT f) =
+  liftIO $ createEdhWorld logger >>= f
 
 
 type EdhSession a = ReaderT (EdhWorld, Object) IO a
 
-type EdhEnv a = ReaderT EdhWorld IO a
+type EdhProgram a = ReaderT EdhWorld IO a
 

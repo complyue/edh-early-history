@@ -1,6 +1,7 @@
 
 module Language.Edh.Runtime
   ( createEdhWorld
+  , defaultEdhLogger
   , declareEdhOperators
   , installEdhAttrs
   , installEdhAttr
@@ -24,6 +25,7 @@ import           GHC.Conc                       ( unsafeIOToSTM )
 import           Control.Exception
 import           Control.Monad.Except
 
+import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import           Foreign.C.String
@@ -60,8 +62,39 @@ runEdhProgram' :: MonadIO m => Context -> EdhProg (STM ()) -> m ()
 runEdhProgram' !ctx !prog = liftIO $ driveEdhProgram ctx prog
 
 
-createEdhWorld :: MonadIO m => m EdhWorld
-createEdhWorld = liftIO $ do
+defaultEdhLogger :: IO EdhLogger
+defaultEdhLogger = do
+  logQueue <- newTQueueIO
+  let logPrinter :: IO ()
+      logPrinter = do
+        msg <- atomically $ readTQueue logQueue
+        hPutStrLn stderr msg
+        logPrinter
+      logger :: EdhLogger
+      logger !level !srcLoc !pkargs = case pkargs of
+        ArgsPack [!argVal] !kwargs | Map.null kwargs ->
+          writeTQueue logQueue $ logPrefix ++ T.unpack (edhValueStr argVal)
+        _ -> writeTQueue logQueue $ logPrefix ++ show pkargs
+       where
+        logPrefix :: String
+        logPrefix =
+          (case srcLoc of
+              Nothing -> id
+              Just sl -> (++ sl ++ "\n")
+            )
+            $ case level of
+                _ | level >= 50 -> "🔥 "
+                _ | level >= 40 -> "❗ "
+                _ | level >= 30 -> "⚠️ "
+                _ | level >= 20 -> "ℹ️ "
+                _ | level >= 10 -> "🐞 "
+                _               -> "😥 "
+  void $ forkIO logPrinter
+  return logger
+
+
+createEdhWorld :: MonadIO m => EdhLogger -> m EdhWorld
+createEdhWorld !logger = liftIO $ do
   -- ultimate default methods/operators/values go into this
   rootEntity <- newTVarIO $ Map.fromList
     [ (AttrByName "__name__", EdhString "<root>")
@@ -92,7 +125,7 @@ createEdhWorld = liftIO $ do
                         }
   opPD    <- newTMVarIO Map.empty
   modus   <- newTMVarIO Map.empty
-  runtime <- newTMVarIO EdhRuntime { runtimeLogger   = defaultLogger
+  runtime <- newTMVarIO EdhRuntime { runtimeLogger   = logger
                                    , runtimeLogLevel = 20
                                    }
   return $ EdhWorld
@@ -106,26 +139,7 @@ createEdhWorld = liftIO $ do
     , worldModules   = modus
     , worldRuntime   = runtime
     }
- where
-  defaultLogger :: LogLevel -> Maybe String -> ArgsPack -> STM ()
-  defaultLogger !level !srcLoc !pkargs = unsafeIOToSTM $ case pkargs of
-    ArgsPack [!argVal] !kwargs | Map.null kwargs ->
-      hPutStrLn stderr $ logPrefix ++ T.unpack (edhValueStr argVal)
-    _ -> hPutStrLn stderr $ logPrefix ++ show pkargs
-   where
-    logPrefix :: String
-    logPrefix =
-      (case srcLoc of
-          Nothing -> id
-          Just sl -> (++ sl ++ "\n")
-        )
-        $ case level of
-            _ | level >= 50 -> "🔥 "
-            _ | level >= 40 -> "❗ "
-            _ | level >= 30 -> "⚠️ "
-            _ | level >= 20 -> "ℹ️ "
-            _ | level >= 10 -> "🐞 "
-            _               -> "😥 "
+
 
 declareEdhOperators :: EdhWorld -> Text -> [(OpSymbol, Precedence)] -> STM ()
 declareEdhOperators world declLoc opps = do

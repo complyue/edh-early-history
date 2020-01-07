@@ -304,9 +304,10 @@ instance Eq EdhWorld where
   EdhWorld x'root _ _ _ _ _ == EdhWorld y'root _ _ _ _ _ = x'root == y'root
 
 data EdhRuntime = EdhRuntime {
-  runtimeLogger :: !(LogLevel -> Maybe String -> ArgsPack -> STM ())
+  runtimeLogger :: !EdhLogger
   , runtimeLogLevel :: !LogLevel
   }
+type EdhLogger = LogLevel -> Maybe String -> ArgsPack -> STM ()
 type LogLevel = Int
 
 
