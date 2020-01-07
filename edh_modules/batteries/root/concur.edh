@@ -3,41 +3,48 @@
  * schedule a number of tasks to run concurrently, but with
  * concurrency limit specified by 'c'
  *
+ * each task must be a nullary procedure (i.e. a niladic 
+ * computation)
+ *
  * pass 'runtime.debug' or even 'runtime.info' as 'dbgLogger'
- * for verbose log of the running
+ * to see verbose log of the finishing up
  */
-interpreter concur(callerScope, *tasks, c=6, dbgLogger=0) {
+method concur(*tasks, c=6, dbgLogger=0) {
   null(tasks) -> return nil
-
-  if ExprType == type(c) then
-    c = callerScope.eval(c)
   c < 1 -> error("Invalid concurrency: " ++ c)
-  if ExprType == type(dbgLogger) then
-    dbgLogger = callerScope.eval(dbgLogger)
 
-  // event sink for decreased number of running tasks, will read
-  // zero after all done, 
+  // event sink for decreased number of running tasks, this will
+  // read zero after all done. only start to fire after all tasks 
+  // have been put to running, and the running count drops below
+  // c, i.e. started to finish up
   doneSig = sink
 
   // use a class to manage running state (count of running tasks)
   // as instance attributes
   class Scheduler(tasks) {
     n = 0 // this somewhat emulates a WaitGroup in Go
-    method scheduleMore() case this.tasks of {
-      {()} -> // no more tasks in backlog
+    method scheduleMore() {
+      {()} -> // no more tasks in backlog, this is a branch, 
+              // so rest code in the method will be skipped
         doneSig <- this.n
-      { t => rest } -> { // one task taken out of backlog
-        this.tasks = rest
-        go {
-          defer { // will run upon thread termination, i.e. `t` done
-            this.n -= 1 // this is atomic in Edh
-            if this.n < c then this.scheduleMore()
-          }
-          callerScope.eval(t)
-        }
-        this.n += 1 // this is atomic in Edh
+      // snoc this.tasks within an atomic transaction
+      ai case this.tasks of { t => rest } -> {
+        this.tasks = rest // one task taken out of backlog
+        fallthrough // leave the atoiso block and continue
       }
-      runtime.fatal <| 'bug if reach here'
+      go {
+        // use `defer` to always run upon thread termination,
+        // this is necessary as code after `t()` may not get to
+        // run in case this thread is broken by an event reactor
+        // registered during `t()`
+        defer {
+          this.n -= 1 // this is atomic in Edh
+          if this.n < c then this.scheduleMore()
+        }
+        t()
+      }
+      // similar to WaitGroup.Add() in Go
+      this.n += 1 // this is atomic in Edh
     }
   }
 

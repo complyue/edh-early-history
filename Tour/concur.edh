@@ -1,0 +1,28 @@
+
+{
+
+  // fake some time costing works to do
+  generator allWorksToDo(nJobs=10, eachTakes=5) {
+
+    // use this proc to capture a local copy of the arguments for the task
+    method longthyWork(job'num, seconds2take) {
+      // this anonymous nullary proc defines the task in form of niladic computation
+      method _ () {
+        n = 0
+        for nanos from runtime.everySeconds(1) do if (n +=1 ) >= seconds2take
+          then break
+          else runtime.info <| '  📝  #' ++ job'num ++ ' tick @ ' ++ nanos
+      }
+    }
+
+    for n from range(nJobs) do yield longthyWork(n, eachTakes)
+  }
+
+}
+
+{
+  concur(
+    *()=< for work from allWorksToDo(10, 5) do work,
+    c=3, dbgLogger=runtime.info,
+  )
+}

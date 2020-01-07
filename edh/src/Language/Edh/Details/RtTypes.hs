@@ -318,8 +318,8 @@ type EdhProg = ReaderT EdhProgState STM
 data EdhProgState = EdhProgState {
     edh'fork'queue :: !(TQueue EdhTxTask)
     , edh'task'queue :: !(TQueue EdhTxTask)
-    , edh'reactors :: !(TVar [(TChan EdhValue, Context, ArgsReceiver , StmtSrc)])
-    , edh'defers :: !(TVar [(Context, Expr)])
+    , edh'reactors :: !(TVar [(TChan EdhValue, EdhProgState, ArgsReceiver , StmtSrc)])
+    , edh'defers :: !(TVar [(EdhProgState, Expr)])
     , edh'in'tx :: !Bool
     , edh'context :: !Context
   }
@@ -330,7 +330,7 @@ runEdhProg !pgs !prog = join $ runReaderT prog pgs
 {-# INLINE runEdhProg #-}
 
 forkEdh :: EdhProcExit -> EdhProg (STM ()) -> EdhProg (STM ())
-forkEdh exit prog = ask >>= \pgs -> if edh'in'tx pgs
+forkEdh !exit !prog = ask >>= \pgs -> if edh'in'tx pgs
   then throwEdh EvalError "You don't fork within a transaction"
   else do
     let !scope = contextScope $ edh'context pgs

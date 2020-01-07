@@ -141,7 +141,7 @@ evalStmt' that stmt exit = do
       exitEdhProc exit (this', scope', EdhReturn val)
 
     AtoIsoStmt expr ->
-      local (\pgs' -> pgs' { edh'in'tx = True })
+      local (const pgs { edh'in'tx = True })
         $ evalExpr that expr
         -- restore tx state after target expr evaluated
         $ \result -> local (const pgs) $ exitEdhProc exit result
@@ -153,7 +153,7 @@ evalStmt' that stmt exit = do
         (_, _, EdhSink sink) -> contEdhSTM $ do
           reactorChan <- dupTChan $ evs'chan sink
           modifyTVar' (edh'reactors pgs)
-                      ((reactorChan, ctx, argsRcvr, reactionStmt) :)
+                      ((reactorChan, pgs, argsRcvr, reactionStmt) :)
         (_, _, val) ->
           throwEdh EvalError
             $  "Can only reacting to an (event) sink, not a "
@@ -162,7 +162,7 @@ evalStmt' that stmt exit = do
             <> T.pack (show val)
 
     DeferStmt expr -> contEdhSTM $ do
-      modifyTVar' (edh'defers pgs) ((ctx, expr) :)
+      modifyTVar' (edh'defers pgs) ((pgs, expr) :)
       exitEdhSTM pgs exit (that, scope, nil)
 
 
