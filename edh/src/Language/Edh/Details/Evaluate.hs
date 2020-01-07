@@ -161,7 +161,9 @@ evalStmt' that stmt exit = do
             <> ": "
             <> T.pack (show val)
 
-    DeferStmt expr -> contEdhSTM $ modifyTVar' (edh'defers pgs) ((ctx, expr) :)
+    DeferStmt expr -> contEdhSTM $ do 
+      modifyTVar' (edh'defers pgs) ((ctx, expr) :)
+      exitEdhSTM pgs exit (that, scope, nil)
 
 
     -- TODO impl. this
