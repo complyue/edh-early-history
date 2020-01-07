@@ -12,8 +12,8 @@ may be the very
 of
 [Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
 brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
-transactions, with intuitive while pragmatic constructs to program data
-consistency under heavy concurrency.
+transactions, with intuitive as well as pragmatic constructs to
+program data consistency under heavy concurrency.
 
 - [Why a new programming language](#why-a-new-programming-language)
   - [conceptual clearance](#conceptual-clearance)
