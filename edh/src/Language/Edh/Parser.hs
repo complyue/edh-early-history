@@ -36,7 +36,7 @@ lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
 keyword :: Text -> Parser Text
-keyword kw = lexeme (string kw <* notFollowedBy alphaNumChar)
+keyword kw = try $ lexeme (string kw <* notFollowedBy alphaNumChar)
 
 trailingComma :: Parser ()
 trailingComma = void $ optional $ symbol ","
@@ -110,10 +110,9 @@ parseLetStmt = do
   LetStmt receiver <$> parseArgsSender
 
 parseArgsReceiver :: Parser ArgsReceiver
-parseArgsReceiver =
-  (symbol "*" *> return WildReceiver) <|> parsePackReceiver <|> do
-    singleArg <- parseKwRecv False
-    return $ SingleReceiver singleArg
+parseArgsReceiver = (symbol "*" $> WildReceiver) <|> parsePackReceiver <|> do
+  singleArg <- parseKwRecv False
+  return $ SingleReceiver singleArg
 
 parsePackReceiver :: Parser ArgsReceiver
 parsePackReceiver = between
