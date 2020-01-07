@@ -60,8 +60,8 @@ from this ground up)
 
 **Edh** struggles to dig performance improvements majorly out of the
 _human_ aspect from the _human:machine_ pair, offer wider tolerance,
-thus better leverage, over diversified skill sets/levels among all
-crew members onboard.
+therefore better leverage, over diversified skill sets/levels among
+all crew members onboard.
 
 Raw machine performance squeezing is offloaded to
 [GHC](https://wiki.haskell.org/GHC) who has been undescribable good
