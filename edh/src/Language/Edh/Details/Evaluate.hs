@@ -207,42 +207,34 @@ evalStmt' that stmt exit = do
           <> ": "
           <> T.pack (show superVal)
 
-    ClassStmt pd@(ProcDecl name _ _) -> if name == "_"
-      then throwEdh EvalError "`_` can not be used as class name"
-      else contEdhSTM $ do
-        let
-          !cls = EdhClass
-            $ Class { classLexiStack = call'stack, classProcedure = pd }
-        modifyTVar' ent $ \em -> Map.insert (AttrByName name) cls em
-        exitEdhSTM pgs exit (this, scope, cls)
+    ClassStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
+      let
+        !cls =
+          EdhClass $ Class { classLexiStack = call'stack, classProcedure = pd }
+      when (name /= "_") $ modifyTVar' ent $ Map.insert (AttrByName name) cls
+      exitEdhSTM pgs exit (this, scope, cls)
 
-    MethodStmt pd@(ProcDecl name _ _) -> if name == "_"
-      then throwEdh EvalError "`_` can not be used as method name"
-      else contEdhSTM $ do
-        let
-          mth = EdhMethod
-            $ Method { methodLexiStack = call'stack, methodProcedure = pd }
-        modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
-        exitEdhSTM pgs exit (this, scope, mth)
+    MethodStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
+      let
+        mth = EdhMethod
+          $ Method { methodLexiStack = call'stack, methodProcedure = pd }
+      when (name /= "_") $ modifyTVar' ent $ Map.insert (AttrByName name) mth
+      exitEdhSTM pgs exit (this, scope, mth)
 
-    GeneratorStmt pd@(ProcDecl name _ _) -> if name == "_"
-      then throwEdh EvalError "`_` can not be used as generator name"
-      else contEdhSTM $ do
-        let gdf = EdhGenrDef $ GenrDef { generatorLexiStack = call'stack
-                                       , generatorProcedure = pd
-                                       }
-        modifyTVar' ent $ \em -> Map.insert (AttrByName name) gdf em
-        exitEdhSTM pgs exit (this, scope, gdf)
+    GeneratorStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
+      let gdf = EdhGenrDef $ GenrDef { generatorLexiStack = call'stack
+                                     , generatorProcedure = pd
+                                     }
+      when (name /= "_") $ modifyTVar' ent $ Map.insert (AttrByName name) gdf
+      exitEdhSTM pgs exit (this, scope, gdf)
 
-    InterpreterStmt pd@(ProcDecl name _ _) -> if name == "_"
-      then throwEdh EvalError "`_` can not be used as interpreter name"
-      else contEdhSTM $ do
-        let mth = EdhInterpreter $ Interpreter
-              { interpreterLexiStack = call'stack
-              , interpreterProcedure = pd
-              }
-        modifyTVar' ent $ \em -> Map.insert (AttrByName name) mth em
-        exitEdhSTM pgs exit (this, scope, mth)
+    InterpreterStmt pd@(ProcDecl name _ _) -> contEdhSTM $ do
+      let mth = EdhInterpreter $ Interpreter
+            { interpreterLexiStack = call'stack
+            , interpreterProcedure = pd
+            }
+      when (name /= "_") $ modifyTVar' ent $ Map.insert (AttrByName name) mth
+      exitEdhSTM pgs exit (this, scope, mth)
 
     OpDeclStmt opSym opPrec opProc -> contEdhSTM $ do
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
