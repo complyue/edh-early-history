@@ -31,6 +31,9 @@ loggingProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !that _ !exit = do
   let !callerCtx@(Context !world _ _ _ (StmtSrc (srcPos, _))) = edh'context pgs
       !callerScope = contextScope callerCtx
   evalExpr that lhExpr $ \(_, _, lhVal) -> case lhVal of
+    -- TODO interpret a pair of decimals at left-hand to be
+    --        logging-level : stack-rewind-count
+    --      and use source position at the stack frame after specified rewinding
     EdhDecimal (Decimal d e n) | d == 1 -> contEdhSTM $ do
       let logLevel = (fromIntegral n :: LogLevel) * 10 ^ e
       (EdhRuntime logger rtLogLevel) <- readTMVar $ worldRuntime world
@@ -59,7 +62,7 @@ loggingProc !argsSender _ _ _ =
 
 
 timelyNotify :: Int -> EdhGenrCaller -> STM ()
-timelyNotify !delayMicros !genr'caller@(!pgs', !iter'cb) = do
+timelyNotify !delayMicros genr'caller@(!pgs', !iter'cb) = do
   nanos <- (toNanoSecs <$>) $ unsafeIOToSTM $ do
     threadDelay delayMicros
     getTime Realtime
@@ -74,7 +77,7 @@ timelyNotify !delayMicros !genr'caller@(!pgs', !iter'cb) = do
 
 -- | host generator runtime.everyMicros(n) - with fixed interval
 rtEveryMicrosProc :: EdhProcedure
-rtEveryMicrosProc !argsSender !that _ _ = ask >>= \pgs -> do
+rtEveryMicrosProc !argsSender !that _ _ = ask >>= \pgs ->
   case generatorCaller $ edh'context pgs of
     Nothing          -> throwEdh EvalError "Can only be called as generator"
     Just genr'caller -> case argsSender of
@@ -88,7 +91,7 @@ rtEveryMicrosProc !argsSender !that _ _ = ask >>= \pgs -> do
 
 -- | host generator runtime.everyMillis(n) - with fixed interval
 rtEveryMillisProc :: EdhProcedure
-rtEveryMillisProc !argsSender !that _ _ = ask >>= \pgs -> do
+rtEveryMillisProc !argsSender !that _ _ = ask >>= \pgs ->
   case generatorCaller $ edh'context pgs of
     Nothing          -> throwEdh EvalError "Can only be called as generator"
     Just genr'caller -> case argsSender of
@@ -102,7 +105,7 @@ rtEveryMillisProc !argsSender !that _ _ = ask >>= \pgs -> do
 
 -- | host generator runtime.everySeconds(n) - with fixed interval
 rtEverySecondsProc :: EdhProcedure
-rtEverySecondsProc !argsSender !that _ _ = ask >>= \pgs -> do
+rtEverySecondsProc !argsSender !that _ _ = ask >>= \pgs ->
   case generatorCaller $ edh'context pgs of
     Nothing          -> throwEdh EvalError "Can only be called as generator"
     Just genr'caller -> case argsSender of
