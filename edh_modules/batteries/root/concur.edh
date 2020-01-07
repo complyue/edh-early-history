@@ -82,5 +82,6 @@ method concur(*tasks, c=6, dbgLogger=0) {
     dbgLogger <| '  🎉  all concur tasks done.'
     return nil // don't forget to break out the 'doneSig' event loop
   } else
-    dbgLogger <| '  ⏲️  finishing up concur tasks, ' ++ nTasksRunning ++ ' left running.'
+    dbgLogger <| '  ⏲️  finishing up concur tasks, ' ++ nTasksRunning
+      ++ ' still running.'
 }
