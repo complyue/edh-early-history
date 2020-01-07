@@ -191,18 +191,18 @@ driveEdhProgram !progCtx !prog = do
   driveEdhThread
     :: TVar [(EdhProgState, Expr)] -> STM (Maybe EdhTxTask) -> IO ()
   driveEdhThread !defers !taskSource = atomically taskSource >>= \case
-    Nothing -> readTVarIO defers >>= \deferedTasks ->
-      -- this thread is done, run defers
-      if null deferedTasks then return () else driveDefers deferedTasks
+    Nothing -> -- this thread is done, run defers lastly
+      readTVarIO defers >>= driveDefers
     Just txTask@(EdhTxTask !pgsThread _ _ _) ->
       -- drive reactors and terminate the thread if any of the reactors
-      -- issued `break`, otherwise continue execute the tx task
+      -- issued `break`, otherwise continue executing the tx task
       readTVarIO (edh'reactors pgsThread) >>= driveReactors >>= \case
-        True  -> return () -- terminate this thread
-        False -> do
+        True -> -- terminate this thread, after running defers lastly
+          readTVarIO defers >>= driveDefers
+        False -> do -- continue running this thread
           -- run this task
           goSTM 0 txTask
-          -- loop another iteration
+          -- loop another iteration for the thread
           driveEdhThread defers taskSource
 
   goSTM :: Int -> EdhTxTask -> IO ()
