@@ -1179,23 +1179,27 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                              next
                   _ -> error "bug"
 
-          -- iterate over a series of args packs
+          -- loop over a series of args packs
           iterThem :: [ArgsPack] -> STM ()
           iterThem []         = exitEdhSTM pgs exit (that, scope, nil)
           iterThem (pk : pks) = do1 pk $ iterThem pks
 
-          -- iterate over a read channel of an event sink
+          -- loop over a subscriber's channel of an event sink
           iterEvt :: TChan EdhValue -> STM ()
           iterEvt !subChan = waitEdhSTM pgs (readTChan subChan) $ \case
             EdhArgsPack pk -> do1 pk $ iterEvt subChan
-            val            -> do1 (ArgsPack [val] Map.empty) $ iterEvt subChan
+            ev             -> do1 (ArgsPack [ev] Map.empty) $ iterEvt subChan
       evalExpr that iterExpr $ \case
 
         -- loop from an event sink
-        (_, _, EdhSink (EventSink _ chan)) -> contEdhSTM $ do
-          -- duplicate a subscriber's channel from the broadcast channel
-          subChan <- dupTChan chan
-          iterEvt subChan -- iterate over the reader channel
+        (_, _, EdhSink sink) ->
+          contEdhSTM $ subscribeEvents sink >>= \(subChan, mrv) -> case mrv of
+            Nothing -> iterEvt subChan
+            Just ev ->
+              let pk = case ev of
+                    EdhArgsPack pk_ -> pk_
+                    _               -> ArgsPack [ev] Map.empty
+              in  do1 pk $ iterEvt subChan
 
         -- loop from a positonal-only args pack
         (_, _, EdhArgsPack (ArgsPack !args !kwargs)) | Map.null kwargs ->

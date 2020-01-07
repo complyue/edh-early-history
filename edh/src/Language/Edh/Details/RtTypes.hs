@@ -474,13 +474,19 @@ instance Show HostProcedure where
 -- | An event sink is similar to a Go channel, but is broadcast
 -- in nature, in contrast to the unicast nature of channels in Go.
 data EventSink = EventSink {
-    -- | most recent value, initially nil
-    evs'mrv :: !(TVar EdhValue)
+    -- | sequence number, increased on every new event posting.
+    -- must read zero when no event has ever been posted to this sink,
+    -- non-zero otherwise. monotonicly increasing most of the time,
+    -- but allowed to wrap back to 1 when exceeded 'maxBound::Int'
+    -- negative values can be used to indicate abnormal conditions.
+    evs'seqn :: !(TVar Int)
+    -- | most recent value, not valid until evs'seqn turns non-zero
+    , evs'mrv :: !(TVar EdhValue)
     -- | the broadcast channel
     , evs'chan :: !(TChan EdhValue)
   } deriving Eq
 instance Show EventSink where
-  show (EventSink _ _) = "<sink>"
+  show (EventSink _ _ _) = "<sink>"
 
 
 -- Atop Haskell, most types in Edh the surface language, are for

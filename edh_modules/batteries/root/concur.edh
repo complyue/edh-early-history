@@ -1,36 +1,43 @@
 
-interpreter concur(callerScope, *tasks, c=6) {
+/**
+ * schedule a number of tasks to run concurrently, but with
+ * concurrency limit specified by 'c'
+ *
+ * pass 'runtime.debug' or even 'runtime.info' as 'dbgLogger'
+ * for verbose log of the running
+ */
+interpreter concur(callerScope, *tasks, c=6, dbgLogger=0) {
   null(tasks) -> return nil
 
-  c = case type(c) of {
-    DecimalType -> c
-    ExprType -> callerScope.eval(c)
-    _ -> error('Unexpected concurrency ' ++ type(c) ++ ': ' ++ c)
-  }
+  if ExprType == type(c) then
+    c = callerScope.eval(c)
   c < 1 -> error("Invalid concurrency: " ++ c)
+  if ExprType == type(dbgLogger) then
+    dbgLogger = callerScope.eval(dbgLogger)
 
+  // event sink for decreased number of running tasks, will read
+  // zero after all done, 
   doneSig = sink
 
   // use a class to manage running state (count of running tasks)
   // as instance attributes
   class Scheduler(tasks) {
-    n = 0
+    n = 0 // this somewhat emulates a WaitGroup in Go
     method scheduleMore() case this.tasks of {
-      {()} -> // matches any empty sequence
+      {()} -> // no more tasks in backlog
         doneSig <- this.n
-      { t => rest } -> { // matches non-empty sequence
+      { t => rest } -> { // one task taken out of backlog
         this.tasks = rest
         go {
-          defer {
+          defer { // will run upon thread termination, i.e. `t` done
             this.n -= 1 // this is atomic in Edh
             if this.n < c then this.scheduleMore()
-            doneSig <- this.n
           }
           callerScope.eval(t)
         }
         this.n += 1 // this is atomic in Edh
       }
-      runtime.fatal <| 'the impossible happened'
+      runtime.fatal <| 'bug if reach here'
     }
   }
 
@@ -38,5 +45,6 @@ interpreter concur(callerScope, *tasks, c=6) {
   while not null(schd.tasks) && schd.n < c
     schd.scheduleMore()
   
-  for n from doneSig do if n < 1 then return nil
+  for n from doneSig do if n < 1 then return nil else
+    dbgLogger <| 'finishing up concur tasks, ' ++ n ++ ' left running.'
 }
