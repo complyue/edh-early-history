@@ -451,8 +451,6 @@ parseLitExpr = choice
   , DecLiteral D.nan <$ litKw "nan"
   , DecLiteral D.inf <$ litKw "inf"
   , DecLiteral <$> parseDecLit
-
-    -- todo use template-haskell here to avoid manual sync with 'EdhTypeValue'
   , TypeLiteral DecimalType <$ litKw "DecimalType"
   , TypeLiteral BoolType <$ litKw "BoolType"
   , TypeLiteral StringType <$ litKw "StringType"
@@ -471,7 +469,12 @@ parseLitExpr = choice
   , TypeLiteral OperatorType <$ litKw "OperatorType"
   , TypeLiteral GeneratorType <$ litKw "GeneratorType"
   , TypeLiteral InterpreterType <$ litKw "InterpreterType"
-  , TypeLiteral FlowCtrlType <$ litKw "FlowCtrlType"
+  , TypeLiteral BreakType <$ litKw "BreakType"
+  , TypeLiteral ContinueType <$ litKw "ContinueType"
+  , TypeLiteral CaseCloseType <$ litKw "CaseCloseType"
+  , TypeLiteral FallthroughType <$ litKw "FallthroughType"
+  , TypeLiteral YieldType <$ litKw "YieldType"
+  , TypeLiteral ReturnType <$ litKw "ReturnType"
   , TypeLiteral SinkType <$ litKw "SinkType"
   , TypeLiteral ExprType <$ litKw "ExprType"
   , TypeLiteral TypeType <$ litKw "TypeType"

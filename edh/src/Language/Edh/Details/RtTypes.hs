@@ -686,6 +686,7 @@ false = EdhBool False
 
 
 edhTypeOf :: EdhValue -> EdhValue
+edhTypeOf (EdhType _)        = EdhType TypeType
 
 edhTypeOf EdhNil             = nil
 edhTypeOf (EdhDecimal _    ) = EdhType DecimalType
@@ -706,16 +707,13 @@ edhTypeOf (EdhMethod      _) = EdhType MethodType
 edhTypeOf (EdhOperator    _) = EdhType OperatorType
 edhTypeOf (EdhGenrDef     _) = EdhType GeneratorType
 edhTypeOf (EdhInterpreter _) = EdhType InterpreterType
-
-edhTypeOf EdhBreak           = EdhType FlowCtrlType
-edhTypeOf EdhContinue        = EdhType FlowCtrlType
-edhTypeOf (EdhCaseClose _)   = EdhType FlowCtrlType
-edhTypeOf EdhFallthrough     = EdhType FlowCtrlType
-edhTypeOf (EdhYield  _)      = EdhType FlowCtrlType
-edhTypeOf (EdhReturn _)      = EdhType FlowCtrlType
-
+edhTypeOf EdhBreak           = EdhType BreakType
+edhTypeOf EdhContinue        = EdhType ContinueType
+edhTypeOf (EdhCaseClose _)   = EdhType CaseCloseType
+edhTypeOf EdhFallthrough     = EdhType FallthroughType
+edhTypeOf (EdhYield  _)      = EdhType YieldType
+edhTypeOf (EdhReturn _)      = EdhType ReturnType
 edhTypeOf (EdhSink   _)      = EdhType SinkType
 edhTypeOf (EdhExpr   _)      = EdhType ExprType
 
-edhTypeOf (EdhType   _)      = EdhType TypeType
 

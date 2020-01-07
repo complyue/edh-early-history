@@ -217,7 +217,12 @@ data EdhTypeValue = TypeType
     | OperatorType
     | GeneratorType
     | InterpreterType
-    | FlowCtrlType -- for break/continue/fallthrough/yield/return
+    | BreakType
+    | ContinueType
+    | CaseCloseType
+    | FallthroughType
+    | YieldType
+    | ReturnType
     | SinkType
     | ExprType
   deriving (Eq, Ord, Show)
