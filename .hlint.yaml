@@ -5,3 +5,5 @@
     - -XLambdaCase
     - -XBlockArguments
     - -XBangPatterns
+    - -XTupleSections
+    - -XScopedTypeVariables
