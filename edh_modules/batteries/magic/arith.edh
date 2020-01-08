@@ -16,7 +16,73 @@ operator + (lhv, rhv) case type(lhv, rhv) of {
     }
   }
 
-  error("(+) neither supported by " ++ type(lhv) ++ ': ' ++ lhv 
-        ++ " nor " ++ type(rhv) ++ ': ' ++ rhv)
+  error("Not possible to do (+) with " ++ type(lhv) ++ ': ' ++ lhv 
+        ++ " and " ++ type(rhv) ++ ': ' ++ rhv)
+}
+
+
+operator * (lhv, rhv) case type(lhv, rhv) of {
+  (DecimalType, DecimalType) -> lhv * rhv
+
+  case type(lhv?(*)) of MethodType -> {
+    case type((rtn=lhv.(*)(rhv))) of {
+      ContinueType -> nil
+      return rtn
+    }
+  }
+
+  case type(rhv?(*)) of MethodType -> {
+    case type((rtn=rhv.(*)(lhv))) of {
+      ContinueType -> nil
+      return rtn
+    }
+  }
+
+  error("Not possible to do (+) with " ++ type(lhv) ++ ': ' ++ lhv 
+        ++ " and " ++ type(rhv) ++ ': ' ++ rhv)
+}
+
+
+operator - (lhv, rhv) case type(lhv, rhv) of {
+  (DecimalType, DecimalType) -> lhv - rhv
+
+  case type(lhv?(-)) of MethodType -> {
+    case type((rtn=lhv.(-)(rhv))) of {
+      ContinueType -> nil
+      return rtn
+    }
+  }
+
+  case type(rhv?(-@)) of MethodType -> {
+    case type((rtn=rhv.(-@)(lhv))) of {
+      ContinueType -> nil
+      return rtn
+    }
+  }
+
+  error("Not possible to do (-) with " ++ type(lhv) ++ ': ' ++ lhv 
+        ++ " and " ++ type(rhv) ++ ': ' ++ rhv)
+}
+
+
+operator / (lhv, rhv) case type(lhv, rhv) of {
+  (DecimalType, DecimalType) -> lhv / rhv
+
+  case type(lhv?(/)) of MethodType -> {
+    case type((rtn=lhv.(/)(rhv))) of {
+      ContinueType -> nil
+      return rtn
+    }
+  }
+
+  case type(rhv?(/@)) of MethodType -> {
+    case type((rtn=rhv.(/@)(lhv))) of {
+      ContinueType -> nil
+      return rtn
+    }
+  }
+
+  error("Not possible to do (/) with " ++ type(lhv) ++ ': ' ++ lhv 
+        ++ " and " ++ type(rhv) ++ ': ' ++ rhv)
 }
 
