@@ -3,16 +3,16 @@ operator + (lhv, rhv) case type(lhv, rhv) of {
   (DecimalType, DecimalType) -> lhv + rhv
 
   case type(lhv?(+)) of MethodType -> {
-    case type((rtn=lhv.(+)(rhv))) of {
-      ContinueType -> nil
-      return rtn
+    case lhv.(+)(rhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
   case type(rhv?(+)) of MethodType -> {
-    case type((rtn=rhv.(+)(lhv))) of {
-      ContinueType -> nil
-      return rtn
+    case rhv.(+)(lhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
@@ -25,16 +25,16 @@ operator * (lhv, rhv) case type(lhv, rhv) of {
   (DecimalType, DecimalType) -> lhv * rhv
 
   case type(lhv?(*)) of MethodType -> {
-    case type((rtn=lhv.(*)(rhv))) of {
-      ContinueType -> nil
-      return rtn
+    case lhv.(*)(rhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
   case type(rhv?(*)) of MethodType -> {
-    case type((rtn=rhv.(*)(lhv))) of {
-      ContinueType -> nil
-      return rtn
+    case rhv.(*)(lhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
@@ -47,16 +47,16 @@ operator - (lhv, rhv) case type(lhv, rhv) of {
   (DecimalType, DecimalType) -> lhv - rhv
 
   case type(lhv?(-)) of MethodType -> {
-    case type((rtn=lhv.(-)(rhv))) of {
-      ContinueType -> nil
-      return rtn
+    case lhv.(-)(rhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
   case type(rhv?(-@)) of MethodType -> {
-    case type((rtn=rhv.(-@)(lhv))) of {
-      ContinueType -> nil
-      return rtn
+    case rhv.(-@)(lhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
@@ -69,16 +69,16 @@ operator / (lhv, rhv) case type(lhv, rhv) of {
   (DecimalType, DecimalType) -> lhv / rhv
 
   case type(lhv?(/)) of MethodType -> {
-    case type((rtn=lhv.(/)(rhv))) of {
-      ContinueType -> nil
-      return rtn
+    case lhv.(/)(rhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 
   case type(rhv?(/@)) of MethodType -> {
-    case type((rtn=rhv.(/@)(lhv))) of {
-      ContinueType -> nil
-      return rtn
+    case rhv.(/@)(lhv) of {
+      { continue } -> nil // NotImplemented, try next method
+      { r } -> { return r }
     }
   }
 

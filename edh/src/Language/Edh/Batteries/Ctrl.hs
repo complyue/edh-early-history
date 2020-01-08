@@ -65,6 +65,37 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
     BlockExpr patternExpr -> case patternExpr of
       -- ^ a block expr left to (->) triggers pattern matching
 
+      -- { continue } -- match with continue
+      [StmtSrc (_, ContinueStmt)] -> case ctxMatch of
+        EdhContinue -> contEdhSTM $ do
+          runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
+            exitEdhProc
+              exit
+              ( that'
+              , scope'
+              , case rhVal of
+                EdhFallthrough -> EdhFallthrough
+                _              -> EdhCaseClose rhVal
+              )
+        _ -> exitEdhProc exit (that, callerScope, EdhFallthrough)
+
+      -- { val } -- wild capture pattern, useful when what in case-of is an
+      -- expression, then this is used to capture the result as an attribute
+      [StmtSrc (_, ExprStmt (AttrExpr (DirectRef (NamedAttr attrName))))] ->
+        contEdhSTM $ do
+          when (attrName /= "_") $ modifyTVar' ent $ Map.insert
+            (AttrByName attrName)
+            ctxMatch
+          runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
+            exitEdhProc
+              exit
+              ( that'
+              , scope'
+              , case rhVal of
+                EdhFallthrough -> EdhFallthrough
+                _              -> EdhCaseClose rhVal
+              )
+
       -- { head => tail } -- snoc pattern
       [StmtSrc (_, ExprStmt (InfixExpr "=>" (AttrExpr (DirectRef (NamedAttr headName))) (AttrExpr (DirectRef (NamedAttr tailName)))))]
         -> let
