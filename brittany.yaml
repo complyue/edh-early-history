@@ -5,3 +5,5 @@ conf_forward:
     - -XLambdaCase
     - -XBlockArguments
     - -XBangPatterns
+    - -XTupleSections
+    - -XScopedTypeVariables
