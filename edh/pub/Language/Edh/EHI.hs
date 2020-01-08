@@ -7,36 +7,42 @@
 -- side-effects free, i.e. pure, and fast-in-machine-speed)
 -- functions, wrapped as host procedures, with procedures written
 -- in Edh, those do arbitrary manipulations on arbitrary objects
--- in the world, well, less speedy as being interpreted.
+-- in the world, but, less speedy as with interpreted execution.
 module Language.Edh.EHI
   (
-    -- * Language infrastructure
-    -- ** Exceptions
+    -- * Exceptions
     InterpretError(..)
+
+    -- * STM/IO API for Edh/RT to be used as a spliced interpreter
+
     -- ** Logging interface
   , EdhLogger(..)
   , LogLevel
   , defaultEdhLogger
-    -- ** Host arts making tools
-  , mkSymbol
-  , mkHostProc
-  , mkHostOper
+
+    -- ** Bootstrapping
+  , EdhWorld(..)
+  , EdhRuntime(..)
+  , createEdhWorld
+  , installEdhBatteries
   , declareEdhOperators
   , installEdhAttrs
   , installEdhAttr
-    -- ** Value system
-  , edhTypeOf
-  , edhValueStr
-  , edhValueNull
-    -- ** Object system
-  , lookupEdhCtxAttr
-  , lookupEdhObjAttr
-  , resolveEdhCtxAttr
-  , resolveEdhObjAttr
-  , resolveEdhInstance
-    -- ** Runtime system
-  , EdhWorld(..)
-  , EdhRuntime(..)
+
+    -- ** Calling Edh from Haskell
+  , runEdhModule
+  , moduleContext
+  , evalEdhSource
+  , runEdhProgram
+  , runEdhProgram'
+  , evalStmt
+  , evalStmt'
+  , evalBlock
+  , evalExpr
+  , evalExprs
+  , recvEdhArgs
+  , packEdhExprs
+  , packEdhArgs
   , EdhProg(..)
   , EdhProgState(..)
   , EdhTxTask(..)
@@ -44,11 +50,7 @@ module Language.Edh.EHI
   , Scope(..)
   , runEdhProg
   , forkEdh
-    -- ** Event processing
-  , newEventSink
-  , subscribeEvents
-  , publishEvent
-    -- ** Runtime error
+    -- ** Edh Runtime error
   , getEdhErrorContext
   , throwEdh
   , throwEdhSTM
@@ -58,33 +60,23 @@ module Language.Edh.EHI
   , exitEdhProc
   , waitEdhSTM
   , edhNop
+    -- ** AST manipulation
+  , module AST
+  , deParen
+  , deBlock
 
-    -- * Monadic API
-  , EdhProgram
-  , EdhSession
-  , runEdh
-  , runEdhWithoutBatteries
-  , runEdhSession
-  , evalEdh
+    -- ** Object system
+  , lookupEdhCtxAttr
+  , lookupEdhObjAttr
+  , resolveEdhCtxAttr
+  , resolveEdhObjAttr
+  , resolveEdhInstance
+  , mkScopeWrapper
 
-    -- * IO API
-  , createEdhWorld
-  , installEdhBatteries
-  , runEdhModule
-  , evalEdhSource
-
-    -- * Data types
-    -- ** Host artifacts for the splice
-  , HostProcedure(..)
-  , EdhGenrCaller(..)
-  , Class(..)
-  , Method(..)
-  , Operator(..)
-  , GenrDef(..)
-  , Interpreter(..)
-    -- ** Event infrastructure
-  , EventSink(..)
-    -- ** End values
+    -- ** Value system
+  , edhTypeOf
+  , edhValueStr
+  , edhValueNull
   , EdhValue(..)
   , nil
   , true
@@ -92,7 +84,6 @@ module Language.Edh.EHI
   , nan
   , inf
   , D.Decimal(..)
-    -- ** Structured values
   , Symbol(..)
   , Entity(..)
   , AttrKey(..)
@@ -101,8 +92,30 @@ module Language.Edh.EHI
   , List(..)
   , ArgsPack(..)
   , Object(..)
-    -- ** Reflectives
-  , module AST
+  , HostProcedure(..)
+  , EdhGenrCaller(..)
+  , Class(..)
+  , Method(..)
+  , Operator(..)
+  , GenrDef(..)
+  , Interpreter(..)
+  , mkSymbol
+  , mkHostProc
+  , mkHostOper
+
+    -- * Event processing
+  , EventSink(..)
+  , newEventSink
+  , subscribeEvents
+  , publishEvent
+
+    -- * Monadic API for Edh/RT to be used as a textual interpreter
+  , runEdh
+  , runEdhWithoutBatteries
+  , runEdhShell
+  , evalEdh
+  , EdhShell(..)
+  , EdhBootstrap(..)
   )
 where
 
@@ -123,34 +136,38 @@ import           Language.Edh.Event
 import           Language.Edh.AST              as AST
 
 
-evalEdh :: Text -> EdhSession EdhValue
+evalEdh
+  :: Text -- ^ Edh code
+  -> EdhShell (Either InterpretError EdhValue) -- ^ eval result
 evalEdh code = do
   (world, modu) <- ask
-  liftIO $ evalEdhSource world modu code >>= \case
-    Left  err -> throwIO err
-    Right v   -> return v
+  liftIO $ evalEdhSource world modu code
 
-runEdhSession
-  :: ModuleId -> Text -> EdhSession a -> EdhProgram (Either InterpretError a)
-runEdhSession moduId moduSource (ReaderT f) = do
+
+runEdhShell
+  :: ModuleId -- ^ shell module id
+  -> Text -- ^ shell run ctrl code
+  -> EdhShell a -- ^ computation in an Edh shell
+  -> EdhBootstrap (Either InterpretError a) -- ^ overall result
+runEdhShell shellModuId shellRunCtrl (ReaderT f) = do
   world <- ask
-  runEdhModule world moduId moduSource >>= \case
+  runEdhModule world shellModuId shellRunCtrl >>= \case
     Left  err  -> return $ Left err
     Right modu -> liftIO $ tryJust Just $ f (world, modu)
 
 
-runEdh :: MonadIO m => EdhLogger -> EdhProgram a -> m a
-runEdh !logger (ReaderT f) = liftIO $ do
+runEdh :: MonadIO m => EdhBootstrap a -> EdhLogger -> m a
+runEdh (ReaderT !f) !logger = liftIO $ do
   world <- createEdhWorld logger
   installEdhBatteries world
   f world
 
-runEdhWithoutBatteries :: MonadIO m => EdhLogger -> EdhProgram a -> m a
+runEdhWithoutBatteries :: MonadIO m => EdhLogger -> EdhBootstrap a -> m a
 runEdhWithoutBatteries !logger (ReaderT f) =
   liftIO $ createEdhWorld logger >>= f
 
 
-type EdhSession a = ReaderT (EdhWorld, Object) IO a
+type EdhShell a = ReaderT (EdhWorld, Object) IO a
 
-type EdhProgram a = ReaderT EdhWorld IO a
+type EdhBootstrap a = ReaderT EdhWorld IO a
 
