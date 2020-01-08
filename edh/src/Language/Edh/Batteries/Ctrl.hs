@@ -63,7 +63,7 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
         )
 
     BlockExpr patternExpr -> case patternExpr of
-      -- ^ a block expr left to (->) triggers pattern matching
+      -- ^ a block expr left to (->) invokes pattern matching
 
       -- { continue } -- match with continue
       [StmtSrc (_, ContinueStmt)] -> case ctxMatch of
@@ -79,7 +79,7 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
               )
         _ -> exitEdhProc exit (that, callerScope, EdhFallthrough)
 
-      -- { val } -- wild capture pattern, useful when what in case-of is an
+      -- { val } -- wild capture pattern, useful when what in case-of is a complex
       -- expression, then this is used to capture the result as an attribute
       [StmtSrc (_, ExprStmt (AttrExpr (DirectRef (NamedAttr attrName))))] ->
         contEdhSTM $ do
