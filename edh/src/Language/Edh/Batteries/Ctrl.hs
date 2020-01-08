@@ -126,7 +126,11 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                 <> T.pack (show vPattern)
           case ctxMatch of
             EdhTuple vs | length vs == length vExprs -> do
-              modifyTVar' ent $ Map.union $ Map.fromList $ zip attrNames vs
+              modifyTVar' ent $ Map.union $ Map.fromList
+                [ (an, av)
+                | (an@(AttrByName nm), av) <- zip attrNames vs
+                , nm /= "_"
+                ]
               runEdhProg pgs
                 $ evalExpr that rhExpr
                 $ \(that', scope', rhVal) -> exitEdhProc
@@ -159,11 +163,47 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                   _              -> EdhCaseClose rhVal
                 )
 
-      -- {{ class:obj }} -- instance pattern
-      [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr _className))) (AttrExpr (DirectRef (NamedAttr _objAttr)))]))]
+      -- {{ class:inst }} -- instance resolving pattern
+      [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr classAttr))) (AttrExpr (DirectRef (NamedAttr instAttr)))]))]
         -> -- brittany insists on putting together the long line above, any workaround?
-          -- TODO impl. this 
-           throwEdh EvalError "Class pattern not impl. yet"
+           case ctxMatch of
+          EdhObject ctxObj ->
+            contEdhSTM
+              $   lookupEdhCtxAttr callerScope (AttrByName classAttr)
+              >>= \case
+                    Just val -> case val of
+                      EdhClass class_ ->
+                        resolveEdhInstance class_ ctxObj >>= \case
+                          Just instObj -> do
+                            when (instAttr /= "_")
+                              $ modifyTVar' ent
+                              $ Map.insert (AttrByName instAttr)
+                                           (EdhObject instObj)
+                            runEdhProg pgs
+                              $ evalExpr that rhExpr
+                              $ \(that', scope', rhVal) -> exitEdhProc
+                                  exit
+                                  ( that'
+                                  , scope'
+                                  , case rhVal of
+                                    EdhFallthrough -> EdhFallthrough
+                                    _              -> EdhCaseClose rhVal
+                                  )
+                          Nothing -> exitEdhSTM
+                            pgs
+                            exit
+                            (that, callerScope, EdhFallthrough)
+                      _ ->
+                        throwEdhSTM pgs EvalError
+                          $  "Invalid class "
+                          <> classAttr
+                          <> ", it is a "
+                          <> T.pack (show $ edhTypeOf val)
+                          <> ": "
+                          <> T.pack (show val)
+                    Nothing ->
+                      exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
+          _ -> exitEdhProc exit (that, callerScope, EdhFallthrough)
 
       -- TODO more kinds of match patterns to support ?
       --      e.g. list pattern, with rest-items repacking etc.
@@ -207,11 +247,15 @@ matchPairPattern
 matchPairPattern p v matches = case p of
   InfixExpr ":" leftExpr (AttrExpr (DirectRef (NamedAttr vAttr))) -> case v of
     EdhPair leftVal val ->
-      let matches' = ((AttrByName vAttr, val) : matches)
+      let matches' = case vAttr of
+            "_" -> matches
+            _   -> ((AttrByName vAttr, val) : matches)
       in  case leftExpr of
             (AttrExpr (DirectRef (NamedAttr leftAttr))) -> case leftVal of
               EdhPair _ _ -> Just []
-              _           -> Just ((AttrByName leftAttr, leftVal) : matches')
+              _           -> Just $ case leftAttr of
+                "_" -> matches'
+                _   -> ((AttrByName leftAttr, leftVal) : matches')
             InfixExpr ":" _ _ -> matchPairPattern leftExpr leftVal matches'
             _                 -> Nothing
     _ -> Just []

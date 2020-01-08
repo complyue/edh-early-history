@@ -5,6 +5,8 @@ module Language.Edh.Details.CoreLang where
 import           Prelude
 -- import           Debug.Trace
 
+import           Control.Monad
+
 import           Control.Concurrent.STM
 
 import qualified Data.Text                     as T
@@ -109,3 +111,8 @@ resolveEdhSuperAttr !addr (super : restSupers) =
     Just scope -> return $ Just scope
     Nothing    -> resolveEdhSuperAttr addr restSupers
 
+
+resolveEdhInstance :: Class -> Object -> STM (Maybe Object)
+resolveEdhInstance class_ this = if objClass this == class_
+  then return (Just this)
+  else readTVar (objSupers this) >>= msum . (resolveEdhInstance class_ <$>)
