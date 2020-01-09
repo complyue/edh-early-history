@@ -101,6 +101,9 @@ at it since inception.
 
 ### World
 
+You create a world in **Haskell**, for some **Edh** programs to change,
+the world is a niche, sandbox or similar concepts you can call it.
+
 ### Functions (or lack thereof)
 
 ### Procedure
