@@ -18,15 +18,16 @@ program data consistency under heavy concurrency.
 
 **Edh** competes with [Python](https://python.org) to help **Haskell**
 instead of **C**/**C++** to be the breeding ground for next phenomenal
-piece of softwares, after [TensorFlow](https://tensorflow.org),
+pieces of software, after [TensorFlow](https://tensorflow.org),
 [Pandas](https://pandas.pydata.org/), [Numpy](https://numpy.org/) etc.
-by providing similar constructs. Take the [Tour](./Tour/) to see what
-**Edh** has to offer.
+by providing similar constructs to rivals in **Python**.
+
+Take the [Tour](./Tour/) to see what **Edh** has to offer.
 
 [**Julia**](https://julialang.org) is an alternative all-in-one solution
 for the **next-big-thing**, but has a learning curve not too less
 steep than **Haskell**, **Edh** is faithful to get people with just
-**Python**/**JavaScript**/**Go** knowledge and skills to started with
+**Python**/**JavaScript**/**Go** knowledge and skills started with
 a [world](./Tour/#world) in **Haskell**.
 
 - [Đ - (WIP) a modern, transactional Object layer spliced with Haskell](#%c4%90---wip-a-modern-transactional-object-layer-spliced-with-haskell)
