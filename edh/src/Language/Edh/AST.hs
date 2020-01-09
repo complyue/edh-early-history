@@ -142,7 +142,9 @@ instance Eq ProcDecl where
 
 
 data Prefix = PrefixPlus | PrefixMinus | Not
-    | Guard -- similar to guard in Haskell
+    -- | to disregard the match target in context,
+    -- for a branch condition
+    | Guard
   deriving (Eq, Show)
 
 data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
@@ -157,19 +159,26 @@ data Expr = LitExpr !Literal | PrefixExpr !Prefix !Expr
     | TupleExpr ![Expr]
     | ParenExpr !Expr
 
-    -- a block is an expression in Edh, instead of a statement as in
-    -- a C family language. it evaluates to the value of last expr
+    -- | the block is made an expression in Edh, instead of a statement
+    -- as in a C family language. it evaluates to the value of last expr
     -- within it, in case no `EdhCaseClose` encountered, or can stop
     -- early with the value from a `EdhCaseClose`, typically returned
     -- from the branch `(->)` operator.
     --
-    -- this is used to implement the case-of construct, as well as
-    -- to allow multiple statements grouped as a single
-    -- expression fitting into subclauses of if-then-else,
-    -- while, for-from-do, and try-catch-finally etc.
+    -- this allows multiple statements grouped as a single expression
+    -- fitting into subclauses of if-then-else, while, for-from-do,
+    -- and try-catch-finally etc. where an expression is expected.
+    -- 
+    -- this also made possible for a method procedure to explicitly
+    -- `return { continue }` to carry a semantic to the magic method
+    -- caller that it should try next method, similar to what
+    -- `NotImplemented` does in Python.
     | BlockExpr ![StmtSrc]
 
     | YieldExpr !Expr
+
+    -- | a for-from-do loop is made an expression in Edh, so it can
+    -- appear as the right-hand expr of the comprehension (=<) operator.
     | ForExpr !ArgsReceiver !Expr !Expr
 
     | AttrExpr !AttrAddr
