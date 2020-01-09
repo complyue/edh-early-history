@@ -286,9 +286,9 @@ evalStmt' that stmt exit = do
         -- import from specified path
         importEdhModule argsRcvr importSpec exit
       _ -> evalExpr that srcExpr $ \(_, _, srcVal) -> case srcVal of
-        EdhObject (Object !fromEnt _ _) ->
+        EdhObject fromObj ->
           -- import from an object
-          importFromEntity argsRcvr fromEnt exit
+          importFromObject argsRcvr fromObj exit
         _ ->
           -- todo support more sources of import ?
           throwEdh EvalError
@@ -302,13 +302,13 @@ evalStmt' that stmt exit = do
     _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show stmt)
 
 
-importFromEntity :: ArgsReceiver -> Entity -> EdhProcExit -> EdhProg (STM ())
-importFromEntity !argsRcvr !fromEnt !exit = do
+importFromObject :: ArgsReceiver -> Object -> EdhProcExit -> EdhProg (STM ())
+importFromObject !argsRcvr !fromObj !exit = do
   pgs <- ask
   let !ctx@(  Context !world _ _ _ _) = edh'context pgs
       !scope@(Scope !ent !this _ _  ) = contextScope ctx
   contEdhSTM $ do
-    emImp <- readTVar fromEnt
+    emImp <- readTVar $ objEntity fromObj
     let !artsPk = ArgsPack [] $ Map.fromAscList $ catMaybes
           [ (case k of
 -- only attributes with a name not started with `_` are importable,
@@ -328,7 +328,7 @@ importFromEntity !argsRcvr !fromEnt !exit = do
           | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM $ do
             rcvd'em <- readTVar rcvd'ent
             modifyTVar' ent $ Map.union rcvd'em
-            exitEdhSTM pgs exit (this, scope, nil)
+            exitEdhSTM pgs exit (this, scope, EdhObject fromObj)
         _ -> error "bug"
 
 importEdhModule :: ArgsReceiver -> Text -> EdhProcExit -> EdhProg (STM ())
@@ -356,7 +356,7 @@ importEdhModule !argsRcvr !impSpec !exit = do
               -- TODO GHC should be able to detect cyclic imports as 
               --      deadlock, find ways to report that more friendly
               EdhObject modu ->
-                runEdhProg pgs $ importFromEntity argsRcvr (objEntity modu) exit
+                runEdhProg pgs $ importFromObject argsRcvr modu exit
               importError -> -- the first importer failed loading it,
                 -- replicate the error in this thread
                 throwEdhSTM pgs EvalError $ edhValueStr importError
@@ -370,7 +370,7 @@ importEdhModule !argsRcvr !impSpec !exit = do
                   case result of
                     (_, _, EdhObject modu) ->
                       -- do the import after module successfully loaded
-                      importFromEntity argsRcvr (objEntity modu) exit
+                      importFromObject argsRcvr modu exit
                     _ -> error "bug"
                 )
               $ \(e :: SomeException) -> do
@@ -692,10 +692,11 @@ evalExpr that expr exit = do
                   $ \(that'', scope'', mthRtn) ->
                       -- restore previous context after method returned
                       local (const pgs) $ case mthRtn of
-                        EdhContinue -> throwEdh EvalError "Unexpected continue from ([])"
+                        EdhContinue ->
+                          throwEdh EvalError "Unexpected continue from ([])"
                         -- allow the use of `break` to early stop a method 
                         -- procedure with nil result
-                        EdhBreak    -> exitEdhProc exit (that, scope, nil)
+                        EdhBreak -> exitEdhProc exit (that, scope, nil)
                         -- explicit return
                         EdhReturn rtnVal ->
                           exitEdhProc exit (that'', scope'', rtnVal)
@@ -776,8 +777,9 @@ evalExpr that expr exit = do
                                     EdhReturn rtnVal -> exitEdhProc
                                       exit
                                       (that'', scope'', rtnVal)
-                                    EdhContinue ->
-                                      throwEdh EvalError "Unexpected continue from constructor"
+                                    EdhContinue -> throwEdh
+                                      EvalError
+                                      "Unexpected continue from constructor"
                                -- allow the use of `break` to early stop a constructor 
                                -- procedure with nil result
                                     EdhBreak ->
@@ -1133,8 +1135,9 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
                                   EdhReturn rtnVal ->
                                   -- explicit return
                                     exitEdhProc exit (that'', scope'', rtnVal)
-                                  EdhContinue ->
-                                    throwEdh EvalError "Unexpected continue from generator"
+                                  EdhContinue -> throwEdh
+                                    EvalError
+                                    "Unexpected continue from generator"
                                   EdhBreak ->
                                     -- allows use of `break` to early stop the generator
                                     -- procedure with nil result

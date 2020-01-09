@@ -5,6 +5,7 @@ module Language.Edh.Runtime
   , declareEdhOperators
   , installEdhAttrs
   , installEdhAttr
+  , bootEdhModule
   , runEdhProgram
   , runEdhProgram'
   , mkHostProc
@@ -43,6 +44,21 @@ import           Language.Edh.Details.CoreLang as CL
 import           Language.Edh.Details.RtTypes  as RT
 import           Language.Edh.Details.Tx       as TX
 import           Language.Edh.Details.Evaluate as EV
+
+
+bootEdhModule
+  :: MonadIO m => EdhWorld -> Text -> m (Either InterpretError Object)
+bootEdhModule !world impSpec = liftIO $ tryJust edhKnownError $ do
+  !final <- newEmptyTMVarIO
+  runEdhProgram' ctx
+    $ importEdhModule (SingleReceiver (RecvRestPkArgs "_")) impSpec
+    $ \(_, _, !val) -> case val of
+        EdhObject modu -> contEdhSTM $ putTMVar final modu
+        _              -> error "bug: importEdhModule returns non-object?"
+  atomically $ readTMVar final
+ where
+  !root = worldRoot world
+  !ctx  = moduleContext world root
 
 
 runEdhProgram

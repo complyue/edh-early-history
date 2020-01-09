@@ -30,7 +30,8 @@ module Language.Edh.EHI
   , installEdhAttr
 
     -- ** Calling Edh from Haskell
-  , runEdhModule
+  , bootEdhModule
+  , createEdhModule
   , moduleContext
   , evalEdhSource
   , runEdhProgram

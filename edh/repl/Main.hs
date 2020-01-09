@@ -33,7 +33,6 @@ main = do
     world <- createEdhWorld logger
     installEdhBatteries world
 
-    runEdhModule world "<interactive>" "pass" >>= \case
-      Left  err  -> error $ show err
-      Right modu -> doLoop world modu
+    modu <- createEdhModule world "<interactive>"
+    doLoop world modu
 
