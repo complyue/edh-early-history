@@ -734,169 +734,19 @@ evalExpr that expr exit = do
       (_, _, EdhHostGenr _) ->
         throwEdh EvalError "Can only call a host generator by for-from-do"
 
-
       -- calling a class (constructor) procedure
-      (that', _, EdhClass cls@(Class cls'lexi'stack clsProc@(ProcDecl _ proc'args proc'body)))
-        -> do
-          -- ensure args sending and receiving happens within a same tx for atomicity of
-          -- the call making
-          let !calleeCtx = ctx { callStack = cls'lexi'stack }
-          local (const pgs { edh'in'tx = True })
-            $ packEdhArgs that argsSndr
-            $ \(_, _, pkv) -> case pkv of
-                EdhArgsPack pk ->
-                  recvEdhArgs calleeCtx proc'args pk $ \(_, _, scopeObj) ->
-                    case scopeObj of
-                      EdhObject (Object rcvd'ent rcvd'cls _)
-                        | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
-                        $ do
-                            newThis <- viewAsEdhObject rcvd'ent cls []
-                            runEdhProg pgs
-                             -- use new this as the scope entity of instance ctor execution
-                                { edh'context =
-                                  ctx
-                                    { callStack =
-                                      (  Scope rcvd'ent
-                                               newThis
-                                               (NE.toList cls'lexi'stack)
-                                               clsProc
-                                      <| call'stack
-                                      )
-                                    }
-                                 -- restore original tx state after args received
-                                , edh'in'tx   = edh'in'tx pgs
-                                }
-                              $ evalStmt that' proc'body
-                              $ \(that'', scope'', ctorRtn) ->
-                               -- restore previous context after ctor returned 
-                                  local (const pgs) $ case ctorRtn of
-                               -- allow a class procedure to explicitly return other
-                               -- value than newly constructed `this` object
-                               -- it can still `return this to early stop the ctor proc
-                               -- this is magically an advanced feature
-                                    EdhReturn rtnVal -> exitEdhProc
-                                      exit
-                                      (that'', scope'', rtnVal)
-                                    EdhContinue -> throwEdh
-                                      EvalError
-                                      "Unexpected continue from constructor"
-                               -- allow the use of `break` to early stop a constructor 
-                               -- procedure with nil result
-                                    EdhBreak ->
-                                      exitEdhProc exit (that'', scope'', nil)
-                               -- no explicit return from class procedure, return the
-                               -- newly constructed this object, throw away the last
-                               -- value from the procedure execution
-                                    _ -> exitEdhProc
-                                      exit
-                                      (this, scope, EdhObject newThis)
-                      _ -> error "bug"
-                _ -> error "bug"
-
+      (_, _, EdhClass cls) -> edhMakeCtorCall that cls argsSndr exit
 
       -- calling a method procedure
-      (that', (Scope _ mth'this _ _), EdhMethod (Method mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
-        -> do
-          -- ensure args sending and receiving happens within a same tx
-          -- for atomicity of the call making
-          let !calleeCtx = ctx { callStack = mth'lexi'stack }
-          local (const pgs { edh'in'tx = True })
-            $ packEdhArgs that argsSndr
-            $ \(_, _, pkv) -> case pkv of
-                EdhArgsPack pk ->
-                  recvEdhArgs calleeCtx mth'args pk $ \(_, _, scopeObj) ->
-                    case scopeObj of
-                      EdhObject (Object rcvd'ent rcvd'cls _)
-                        | rcvd'cls == (objClass $ scopeSuper world)
-                        ->
-                          -- use direct containing object of the method as `this` in its
-                          -- procedure execution
-                           local
-                            (const pgs
-                              -- set method's scope
-                              { edh'context =
-                                ctx
-                                  { callStack =
-                                    (  Scope rcvd'ent
-                                             mth'this
-                                             (NE.toList mth'lexi'stack)
-                                             mthProc
-                                    <| call'stack
-                                    )
-                                  }
-                                -- restore original tx state after args received
-                              , edh'in'tx   = edh'in'tx pgs
-                              }
-                            )
-                            -- use the resolution target object as `that` in execution of 
-                            -- the method procedure
-                          $ evalStmt that' mth'body
-                          $ \(that'', scope'', mthRtn) ->
-                              -- restore previous context after method returned
-                              local (const pgs) $ case mthRtn of
-                                -- allow continue to be return from a method proc,
-                                -- like `NotImplemented` in Python
-                                EdhContinue ->
-                                  exitEdhProc exit (that', scope, EdhContinue)
-                                -- allow the use of `break` to early stop a method 
-                                -- procedure with nil result
-                                EdhBreak ->
-                                  exitEdhProc exit (that', scope, nil)
-                                -- explicit return
-                                EdhReturn rtnVal ->
-                                  exitEdhProc exit (that'', scope'', rtnVal)
-                                -- no explicit return, assuming it returns the last
-                                -- value from procedure execution
-                                _ -> exitEdhProc exit (that'', scope'', mthRtn)
-                      _ -> error "bug"
-                _ -> error "bug"
+      (mth'that, _, EdhMethod mth) ->
+        edhMakeMethodCall that mth'that mth argsSndr exit
 
       (_, _, EdhGenrDef _) ->
         throwEdh EvalError "Can only call a generator method by for-from-do"
 
       -- calling an interpreter procedure
-      (that', (Scope _ mth'this _ _), EdhInterpreter (Interpreter mth'lexi'stack mthProc@(ProcDecl _ mth'args mth'body)))
-        -> do
-          let !calleeCtx = ctx { callStack = mth'lexi'stack }
-          packEdhExprs that' argsSndr $ \(_, _, pk) -> case pk of
-            EdhArgsPack (ArgsPack args kwargs) -> contEdhSTM $ do
-              scopeWrapper <- mkScopeWrapper world scope
-              runEdhProg pgs
-                $ recvEdhArgs
-                    calleeCtx
-                    mth'args
-                    (ArgsPack (EdhObject scopeWrapper : args) kwargs)
-                $ \(_, _, scopeObj) -> case scopeObj of
-                    EdhObject (Object rcvd'ent rcvd'cls _)
-                      | rcvd'cls == (objClass $ scopeSuper world)
-                      -> local
-                          (const pgs
-                            { edh'context =
-                              ctx
-                                { callStack = Scope rcvd'ent
-                                                    mth'this
-                                                    (NE.toList mth'lexi'stack)
-                                                    mthProc
-                                                <| call'stack
-                                }
-                            }
-                          )
-                        $ evalStmt that mth'body
-                          -- pop call stack after interpreter proc returned
-                        $ \(that'', scope'', mthRtn) ->
-                            local (const pgs) $ exitEdhProc
-                              exit
-                              ( that''
-                              , scope''
-                              , case mthRtn of
-                                -- explicit return
-                                EdhReturn rtnVal -> rtnVal
-                                -- no explicit return, assuming it returns the last
-                                -- value from procedure execution
-                                _                -> mthRtn
-                              )
-                    _ -> error "bug"
-            _ -> error "bug"
+      (mth'that, _, EdhInterpreter mth) ->
+        edhMakeInterpCall that mth'that mth argsSndr exit
 
       (_, _, val) ->
         throwEdh EvalError
@@ -1019,6 +869,208 @@ evalExpr that expr exit = do
 
 
     -- _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+
+
+edhMakeCtorCall
+  :: Object -> Class -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
+edhMakeCtorCall !that cls@(Class !cls'lexi'stack (ProcDecl _ !proc'args _)) !argsSndr !exit
+  = do
+    !pgs <- ask
+    let !ctx@(Context !world _ _ _ _) = edh'context pgs
+
+    -- ensure args sending and receiving happens within a same tx for atomicity of
+    -- the call making
+    let !calleeCtx                    = ctx { callStack = cls'lexi'stack }
+    local (const pgs { edh'in'tx = True })
+      $ packEdhArgs that argsSndr
+      $ \(_, _, pkv) -> case pkv of
+          EdhArgsPack pk ->
+            recvEdhArgs calleeCtx proc'args pk $ \(_, _, scopeObj) ->
+              case scopeObj of
+                EdhObject (Object rcvd'ent rcvd'cls _)
+                  | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
+                  -- run the ctor with original pgs (esp. tx state restored)
+                  $ constructEdhObject pgs that rcvd'ent cls exit
+                _ -> error "bug"
+          _ -> error "bug"
+
+constructEdhObject
+  :: EdhProgState -> Object -> Entity -> Class -> EdhProcExit -> STM ()
+constructEdhObject !pgs !that !ent cls@(Class !cls'lexi'stack clsProc@(ProcDecl _ _ !proc'body)) !exit
+  = do
+    let !ctx@(Context _ !call'stack _ _ _) = edh'context pgs
+        !scope                             = contextScope ctx
+
+    newThis <- viewAsEdhObject ent cls []
+    -- use new this as the scope entity of instance ctor execution
+    runEdhProg pgs
+        { edh'context =
+          ctx
+            { callStack = (Scope ent newThis (NE.toList cls'lexi'stack) clsProc
+                          <| call'stack
+                          )
+            }
+        }
+      -- use newThis as the target object (i.e. `that` object) in 
+      -- running the ctor
+      $ evalStmt newThis proc'body
+      -- restore previous context after ctor returned 
+      $ \(_, scope', ctorRtn) -> local (const pgs) $ case ctorRtn of
+          -- allow a class procedure to explicitly return other
+          -- value than newly constructed `this` object
+          -- it can still `return this to early stop the ctor proc
+          -- this is magically an advanced feature
+          EdhReturn rtnVal -> exitEdhProc exit (that, scope', rtnVal)
+          EdhContinue ->
+            throwEdh EvalError "Unexpected continue from constructor"
+          -- allow the use of `break` to early stop a constructor 
+          -- procedure with nil result
+          EdhBreak -> exitEdhProc exit (that, scope', nil)
+          -- no explicit return from class procedure, return the
+          -- newly constructed this object, throw away the last
+          -- value from the procedure execution
+          _        -> exitEdhProc exit (that, scope, EdhObject newThis)
+
+
+edhMakeMethodCall
+  :: Object -> Object -> Method -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
+edhMakeMethodCall !that !mth'that mth@(Method mth'lexi'stack (ProcDecl _ mth'args _)) !argsSndr !exit
+  = do
+    !pgs <- ask
+    let !ctx@(Context !world _ _ _ _) = edh'context pgs
+
+    let !calleeCtx                    = ctx { callStack = mth'lexi'stack }
+    -- ensure args sending and receiving happens within a same tx
+    -- for atomicity of the call making
+    local (const pgs { edh'in'tx = True })
+      $ packEdhArgs that argsSndr
+      $ \(_, _, pkv) -> case pkv of
+          EdhArgsPack pk ->
+            recvEdhArgs calleeCtx mth'args pk $ \(_, _, scopeObj) ->
+              case scopeObj of
+                -- run the method with original pgs (esp. tx state restored)
+                EdhObject (Object rcvd'ent rcvd'cls _)
+                  | rcvd'cls == (objClass $ scopeSuper world) -> local
+                      (const pgs)
+                  $ callEdhMethod that mth'that rcvd'ent mth exit
+                _ -> error "bug"
+          _ -> error "bug"
+
+callEdhMethod
+  :: Object -> Object -> Entity -> Method -> EdhProcExit -> EdhProg (STM ())
+callEdhMethod !that !mth'that !ent (Method !mth'lexi'stack mthProc@(ProcDecl _ _ !mth'body)) !exit
+  = do
+    !pgs <- ask
+    let !ctx@(Context _ !call'stack _ _ _) = edh'context pgs
+        !scope                             = contextScope ctx
+
+    let (Scope _ !mth'this _ _) = NE.head mth'lexi'stack
+    -- push call stack,
+    -- use the method's lexical `this` in its procedure execution
+    local
+        (const pgs
+          { edh'context =
+            ctx
+              { callStack =
+                (  Scope ent mth'this (NE.toList mth'lexi'stack) mthProc
+                <| call'stack
+                )
+              }
+          }
+        )
+        -- use the resolution target object in how the method is obtained,
+        -- as `that` object in the method's execution
+      $ evalStmt mth'that mth'body
+        -- restore previous context (i.e. pop call stack) after method returned
+      $ \(_, _, mthRtn) -> local (const pgs) $ case mthRtn of
+          -- allow continue to be return from a method proc,
+          -- to carry similar semantics like `NotImplemented` in Python
+          EdhContinue      -> exitEdhProc exit (that, scope, EdhContinue)
+          -- allow the use of `break` to early stop a method 
+          -- procedure with nil result
+          EdhBreak         -> exitEdhProc exit (that, scope, nil)
+          -- explicit return
+          EdhReturn rtnVal -> exitEdhProc exit (that, scope, rtnVal)
+          -- no explicit return, assuming it returns the last
+          -- value from procedure execution
+          _                -> exitEdhProc exit (that, scope, mthRtn)
+
+
+edhMakeInterpCall
+  :: Object
+  -> Object
+  -> Interpreter
+  -> ArgsSender
+  -> EdhProcExit
+  -> EdhProg (STM ())
+edhMakeInterpCall !that !mth'that mth@(Interpreter mth'lexi'stack (ProcDecl _ mth'args _)) !argsSndr !exit
+  = do
+    !pgs <- ask
+    let !ctx@(Context !world _ _ _ _) = edh'context pgs
+        !scope                        = contextScope ctx
+
+    let !calleeCtx = ctx { callStack = mth'lexi'stack }
+    packEdhExprs that argsSndr $ \(_, _, pk) -> case pk of
+      EdhArgsPack (ArgsPack args kwargs) -> contEdhSTM $ do
+        scopeWrapper <- mkScopeWrapper world scope
+        runEdhProg pgs
+          $ recvEdhArgs calleeCtx
+                        mth'args
+                        (ArgsPack (EdhObject scopeWrapper : args) kwargs)
+          $ \(_, _, scopeObj) -> case scopeObj of
+              EdhObject (Object rcvd'ent rcvd'cls _)
+                | rcvd'cls == (objClass $ scopeSuper world) -> callEdhInterpProc
+                  that
+                  mth'that
+                  rcvd'ent
+                  mth
+                  exit
+              _ -> error "bug"
+      _ -> error "bug"
+
+callEdhInterpProc
+  :: Object
+  -> Object
+  -> Entity
+  -> Interpreter
+  -> EdhProcExit
+  -> EdhProg (STM ())
+callEdhInterpProc !that !mth'that !ent (Interpreter !mth'lexi'stack mthProc@(ProcDecl _ _ !mth'body)) !exit
+  = do
+    !pgs <- ask
+    let !ctx@(Context _ !call'stack _ _ _) = edh'context pgs
+        !scope                             = contextScope ctx
+
+    let (Scope _ !mth'this _ _) = NE.head mth'lexi'stack
+    -- push call stack,
+    -- use the method's lexical `this` in its procedure execution
+    local
+        (const pgs
+          { edh'context = ctx
+                            { callStack = Scope ent
+                                                mth'this
+                                                (NE.toList mth'lexi'stack)
+                                                mthProc
+                                            <| call'stack
+                            }
+          }
+        )
+      -- use the resolution target object in how the method is obtained,
+      -- as `that` object in the method's execution
+      $ evalStmt mth'that mth'body
+      -- restore previous context (i.e. pop call stack) after method returned
+      $ \(_, _, mthRtn) -> local (const pgs) $ case mthRtn of
+          -- allow continue to be return from a method proc,
+          -- to carry similar semantics like `NotImplemented` in Python
+          EdhContinue      -> exitEdhProc exit (that, scope, EdhContinue)
+          -- allow the use of `break` to early stop a method 
+          -- procedure with nil result
+          EdhBreak         -> exitEdhProc exit (that, scope, nil)
+          -- explicit return
+          EdhReturn rtnVal -> exitEdhProc exit (that, scope, rtnVal)
+          -- no explicit return, assuming it returns the last
+          -- value from procedure execution
+          _                -> exitEdhProc exit (that, scope, mthRtn)
 
 
 runForLoop

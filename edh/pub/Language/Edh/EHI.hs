@@ -12,7 +12,7 @@ module Language.Edh.EHI
   (
     -- * Exceptions
     InterpretError(..)
-  , ParserError(..)
+  , ParserError
   , EdhErrorContext(..)
   , EvalError(..)
   , UsageError(..)
@@ -21,7 +21,7 @@ module Language.Edh.EHI
     -- * STM/IO API for Edh/RT to be used as a spliced interpreter
 
     -- ** Logging interface
-  , EdhLogger(..)
+  , EdhLogger
   , LogLevel
   , defaultEdhLogger
 
@@ -42,6 +42,12 @@ module Language.Edh.EHI
   , evalEdhSource
   , runEdhProgram
   , runEdhProgram'
+  , edhMakeCtorCall
+  , constructEdhObject
+  , edhMakeMethodCall
+  , callEdhMethod
+  , edhMakeInterpCall
+  , callEdhInterpProc
   , evalStmt
   , evalStmt'
   , evalBlock
@@ -50,7 +56,7 @@ module Language.Edh.EHI
   , recvEdhArgs
   , packEdhExprs
   , packEdhArgs
-  , EdhProg(..)
+  , EdhProg
   , EdhProgState(..)
   , EdhTxTask(..)
   , Context(..)
@@ -92,7 +98,7 @@ module Language.Edh.EHI
   , inf
   , D.Decimal(..)
   , Symbol(..)
-  , Entity(..)
+  , Entity
   , AttrKey(..)
   , Dict(..)
   , ItemKey(..)
@@ -100,7 +106,7 @@ module Language.Edh.EHI
   , ArgsPack(..)
   , Object(..)
   , HostProcedure(..)
-  , EdhGenrCaller(..)
+  , EdhGenrCaller
   , Class(..)
   , Method(..)
   , Operator(..)
@@ -121,8 +127,8 @@ module Language.Edh.EHI
   , runEdhWithoutBatteries
   , runEdhShell
   , evalEdh
-  , EdhShell(..)
-  , EdhBootstrap(..)
+  , EdhShell
+  , EdhBootstrap
   )
 where
 
