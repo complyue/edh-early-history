@@ -19,10 +19,11 @@ doRead :: [Text] -> InputT IO (Maybe Text)
 doRead pendingLines =
   handleInterrupt (return $ Just "")
     $   withInterrupt
-    $   (getInputLine $ case pendingLines of
-          [] -> "Đ: "
-          _  -> "Đ| " <> printf "%3d" (length pendingLines) <> ": "
-        )
+    $   getInputLine
+          (case pendingLines of
+            [] -> "Đ: "
+            _  -> "Đ| " <> printf "%3d" (length pendingLines) <> ": "
+          )
     >>= \case
           Nothing -> case pendingLines of
             [] -> return Nothing
@@ -69,7 +70,7 @@ doPrint = \case
 
 
 doLoop :: EdhWorld -> Object -> InputT IO ()
-doLoop world modu = (doRead []) >>= \case
+doLoop world modu = doRead [] >>= \case
   Nothing   -> return () -- reached EOF (end-of-feed)
   Just code -> if code == ""
     then doLoop world modu  -- ignore empty code

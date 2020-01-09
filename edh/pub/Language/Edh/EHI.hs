@@ -61,6 +61,8 @@ module Language.Edh.EHI
   , EdhTxTask(..)
   , Context(..)
   , Scope(..)
+  , EdhProcedure
+  , EdhProcExit
   , runEdhProg
   , forkEdh
     -- ** Edh Runtime error
