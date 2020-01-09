@@ -8,6 +8,7 @@
     - [Performance Goals](#performance-goals)
   - [Zen of Edh](#zen-of-edh)
   - [Concepts](#concepts)
+    - [World](#world)
     - [Functions (or lack thereof)](#functions-or-lack-thereof)
     - [Procedure](#procedure)
     - [Entity](#entity)
@@ -68,7 +69,7 @@ as a _function_.
 
 But if you ask about
 [Functional programming](https://www.geeksforgeeks.org/functional-programming-paradigm/)
-as a possible paradigm you _DIY_, **Edh** is supportive as well as 
+as a possible paradigm you _DIY_, **Edh** is supportive as well as
 other mainstream languages.
 
 ### Performance Goals
@@ -97,6 +98,8 @@ at it since inception.
 > about how a [**Gopher**](https://blog.golang.org/gopher) would do it
 
 ## Concepts
+
+### World
 
 ### Functions (or lack thereof)
 

@@ -7,6 +7,7 @@ verified in the field. There're a few creative attempts though, but in mind
 is kept that overly smart not to be about.
 
 **Edh** code is imperative, runs embedded in Haskell (GHC), interpreted.
+
 The killer feature may be the very
 [Haskell implementation](http://hackage.haskell.org/package/stm)
 of
@@ -14,6 +15,19 @@ of
 brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
 transactions, with intuitive as well as pragmatic constructs to
 program data consistency under heavy concurrency.
+
+**Edh** competes with [Python](https://python.org) to help **Haskell**
+instead of **C**/**C++** to be the breeding ground for next phenomenal
+piece of softwares, after [TensorFlow](https://tensorflow.org),
+[Pandas](https://pandas.pydata.org/), [Numpy](https://numpy.org/) etc.
+by providing similar constructs. Take the [Tour](./Tour/) to see what
+**Edh** has to offer.
+
+[**Julia**](https://julialang.org) is an alternative all-in-one solution
+for the **next-big-thing**, but has a learning curve not too less
+steep than **Haskell**, **Edh** is faithful to get people with just
+**Python**/**JavaScript**/**Go** knowledge and skills to started with
+a [world](./Tour/#world) in **Haskell**.
 
 - [Đ - (WIP) a modern, transactional Object layer spliced with Haskell](#%c4%90---wip-a-modern-transactional-object-layer-spliced-with-haskell)
   - [Why a new programming language](#why-a-new-programming-language)
