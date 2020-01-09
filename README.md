@@ -1,6 +1,6 @@
 # Đ - (WIP) a modern, transactional Object layer spliced with Haskell
 
-**Edh** as a programming language, has started getting elder just recently,
+**Edh** as a programming language is born just recently,
 but it's vastly neither new, major ideas all come from successful languages
 like **Python**, **Go**, **JavaScript**, and especially **Haskell**,
 verified in the field. There're a few creative attempts though, but in mind
