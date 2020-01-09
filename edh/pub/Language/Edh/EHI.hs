@@ -12,6 +12,11 @@ module Language.Edh.EHI
   (
     -- * Exceptions
     InterpretError(..)
+  , ParserError(..)
+  , EdhErrorContext(..)
+  , EvalError(..)
+  , UsageError(..)
+  , edhKnownError
 
     -- * STM/IO API for Edh/RT to be used as a spliced interpreter
 
@@ -33,6 +38,7 @@ module Language.Edh.EHI
   , bootEdhModule
   , createEdhModule
   , moduleContext
+  , contextScope
   , evalEdhSource
   , runEdhProgram
   , runEdhProgram'
@@ -147,14 +153,12 @@ evalEdh code = do
 
 runEdhShell
   :: ModuleId -- ^ shell module id
-  -> Text -- ^ shell run ctrl code
   -> EdhShell a -- ^ computation in an Edh shell
-  -> EdhBootstrap (Either InterpretError a) -- ^ overall result
-runEdhShell shellModuId shellRunCtrl (ReaderT f) = do
+  -> EdhBootstrap (Either InterpretError a) -- ^ final result
+runEdhShell moduId (ReaderT f) = do
   world <- ask
-  runEdhModule world shellModuId shellRunCtrl >>= \case
-    Left  err  -> return $ Left err
-    Right modu -> liftIO $ tryJust Just $ f (world, modu)
+  modu  <- createEdhModule world moduId
+  liftIO $ tryJust Just $ f (world, modu)
 
 
 runEdh :: MonadIO m => EdhBootstrap a -> EdhLogger -> m a
