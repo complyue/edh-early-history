@@ -6,8 +6,8 @@ like **Python**, **Go**, **JavaScript**, and especially **Haskell**,
 verified in the field. There're a few creative attempts though, but in mind
 is kept that overly smart not to be about.
 
-**Edh** code runs embedded in Haskell (GHC), interpreted. The killer feature
-may be the very
+**Edh** code is imperative, runs embedded in Haskell (GHC), interpreted.
+The killer feature may be the very
 [Haskell implementation](http://hackage.haskell.org/package/stm)
 of
 [Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
@@ -15,31 +15,32 @@ brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
 transactions, with intuitive as well as pragmatic constructs to
 program data consistency under heavy concurrency.
 
-- [Why a new programming language](#why-a-new-programming-language)
-  - [conceptual clearance](#conceptual-clearance)
-  - [easy concurrency, auto parallelism, with easy data consistency](#easy-concurrency-auto-parallelism-with-easy-data-consistency)
-  - [lock-free serialization](#lock-free-serialization)
-  - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
-  - [lossless decimal for numbers](#lossless-decimal-for-numbers)
-- [Why splice](#why-splice)
-- [Teasers](#teasers)
-  - [Python style arguments passing](#python-style-arguments-passing)
-  - [and more of arguments receiving](#and-more-of-arguments-receiving)
-  - [import by arguments receiving](#import-by-arguments-receiving)
-  - [arguments sending, generators](#arguments-sending-generators)
-  - [Go Type-Embedding style multiple inheritance](#go-type-embedding-style-multiple-inheritance)
-  - [ES6 style symbol for better encapsulation](#es6-style-symbol-for-better-encapsulation)
-  - [list/dict/tuple comprehension](#listdicttuple-comprehension)
-  - [list/dict modification](#listdict-modification)
-  - [goroutine, concurrency control, and sink the broadcasting channel](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
-  - [Haskell style case-of, with Go style fallthrough](#haskell-style-case-of-with-go-style-fallthrough)
-  - [ternary operator](#ternary-operator)
-  - [operator override / creation](#operator-override--creation)
-  - [indexing override (Numpy/Pandas upon Repa/AccelerateHS)](#indexing-override-numpypandas-upon-repaacceleratehs)
-  - [lossless decimal for numbers](#lossless-decimal-for-numbers-1)
-  - [reflection](#reflection)
-- [The name](#the-name)
-- [Acknowledgement](#acknowledgement)
+- [Đ - (WIP) a modern, transactional Object layer spliced with Haskell](#%c4%90---wip-a-modern-transactional-object-layer-spliced-with-haskell)
+  - [Why a new programming language](#why-a-new-programming-language)
+    - [conceptual clearance](#conceptual-clearance)
+    - [easy concurrency, auto parallelism, with easy data consistency](#easy-concurrency-auto-parallelism-with-easy-data-consistency)
+    - [lock-free serialization](#lock-free-serialization)
+    - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
+    - [lossless decimal for numbers](#lossless-decimal-for-numbers)
+  - [Why splice](#why-splice)
+  - [Teasers](#teasers)
+    - [Python style arguments passing](#python-style-arguments-passing)
+    - [and more of arguments receiving](#and-more-of-arguments-receiving)
+    - [import by arguments receiving](#import-by-arguments-receiving)
+    - [arguments sending, generators](#arguments-sending-generators)
+    - [Go Type-Embedding style multiple inheritance](#go-type-embedding-style-multiple-inheritance)
+    - [ES6 style symbol for better encapsulation](#es6-style-symbol-for-better-encapsulation)
+    - [list/dict/tuple comprehension](#listdicttuple-comprehension)
+    - [list/dict modification](#listdict-modification)
+    - [goroutine, concurrency control, and sink the broadcasting channel](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
+    - [Haskell style case-of, with Go style fallthrough](#haskell-style-case-of-with-go-style-fallthrough)
+    - [ternary operator](#ternary-operator)
+    - [operator override / creation](#operator-override--creation)
+    - [indexing override (Numpy/Pandas upon Repa/AccelerateHS)](#indexing-override-numpypandas-upon-repaacceleratehs)
+    - [lossless decimal for numbers](#lossless-decimal-for-numbers-1)
+    - [reflection](#reflection)
+  - [The name](#the-name)
+  - [Acknowledgement](#acknowledgement)
 
 ## Why a new programming language
 

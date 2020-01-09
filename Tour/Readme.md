@@ -1,32 +1,34 @@
 # A Tour of Edh
 
-- [Philosophy](#philosophy)
-  - [About Everything](#about-everything)
-  - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
-  - [Performance Goals](#performance-goals)
-- [Zen of Edh](#zen-of-edh)
-- [Concepts](#concepts)
-  - [Functions (or lack thereof)](#functions-or-lack-thereof)
-  - [Procedure](#procedure)
-  - [Entity](#entity)
-  - [Scope](#scope)
-  - [Object](#object)
-- [Module Structures](#module-structures)
-- [Code Structure](#code-structure)
-  - [Operators](#operators)
-  - [Branches](#branches)
-  - [Case-Of](#case-of)
-  - [Pattern Matching](#pattern-matching)
-- [Procedures](#procedures)
-  - [Host Procedures](#host-procedures)
-  - [Method Procedure](#method-procedure)
-  - [Generator Procedure](#generator-procedure)
-  - [Class (Constructor) Procedure](#class-constructor-procedure)
-  - [Multiple Inheritance](#multiple-inheritance)
-  - [Interpreter Procedure](#interpreter-procedure)
-- [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
-- [Indexing and Magic Methods](#indexing-and-magic-methods)
-- [Reflection](#reflection)
+- [A Tour of Edh](#a-tour-of-edh)
+  - [Philosophy](#philosophy)
+    - [About Everything](#about-everything)
+    - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
+    - [Functional? - Try not to abuse this concept](#functional---try-not-to-abuse-this-concept)
+    - [Performance Goals](#performance-goals)
+  - [Zen of Edh](#zen-of-edh)
+  - [Concepts](#concepts)
+    - [Functions (or lack thereof)](#functions-or-lack-thereof)
+    - [Procedure](#procedure)
+    - [Entity](#entity)
+    - [Scope](#scope)
+    - [Object](#object)
+  - [Module Structures](#module-structures)
+  - [Code Structure](#code-structure)
+    - [Operators](#operators)
+    - [Branches](#branches)
+    - [Case-Of](#case-of)
+    - [Pattern Matching](#pattern-matching)
+  - [Procedures](#procedures)
+    - [Host Procedures](#host-procedures)
+    - [Method Procedure](#method-procedure)
+    - [Generator Procedure](#generator-procedure)
+    - [Class (Constructor) Procedure](#class-constructor-procedure)
+    - [Multiple Inheritance](#multiple-inheritance)
+    - [Interpreter Procedure](#interpreter-procedure)
+  - [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
+  - [Indexing and Magic Methods](#indexing-and-magic-methods)
+  - [Reflection](#reflection)
 
 ## Philosophy
 
@@ -55,6 +57,19 @@ in **Go** spirit, while it takes a small step further to offer you
 method, in addition to `this` reference which refers to the lexical
 self record. (There's potential to implement parameterized modules
 from this ground up)
+
+### Functional? - Try not to abuse this concept
+
+In **Haskell**, everything is a computation, and
+[Referencial Transparency](https://wiki.haskell.org/Referential_transparency)
+is an intrinsic (and really fundamental) property. Bearing the
+world-changing potential, a procedure in **Edh** can never qualify
+as a _function_.
+
+But if you ask about
+[Functional programming](https://www.geeksforgeeks.org/functional-programming-paradigm/)
+as a possible paradigm you _DIY_, **Edh** is supportive as well as 
+other mainstream languages.
 
 ### Performance Goals
 

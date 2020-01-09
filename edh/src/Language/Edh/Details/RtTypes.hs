@@ -396,7 +396,8 @@ waitEdhSTM !pgs !act !exit = if edh'in'tx pgs
 
 -- | Type of a procedure in host language that can be called from Edh code.
 --
--- Note the caller context/scope can be obtained from the program state.
+-- Note the caller context/scope can be obtained from callstack of the
+-- program state.
 type EdhProcedure -- such a procedure servs as the callee
   =  ArgsSender -- ^ the manifestation of how the caller wills to send args
   -> Object -- ^ the target object, i.e. `that` object in context
@@ -407,7 +408,7 @@ type EdhProcedure -- such a procedure servs as the callee
 -- | The type for an Edh procedure's return, in continuation passing style.
 type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
 
--- | If you don't know what's this, you don't need to know
+-- | A CPS nop as an Edh procedure exit
 edhNop :: EdhProcExit
 edhNop _ = return $ return ()
 
