@@ -27,7 +27,7 @@ import           Language.Edh.AST
 
 
 sc :: Parser ()
-sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
+sc = L.space space1 (L.skipLineComment "#") (L.skipBlockComment "{#" "#}")
 
 symbol :: Text -> Parser Text
 symbol = L.symbol sc

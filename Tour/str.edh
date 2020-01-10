@@ -1,6 +1,6 @@
 
 join(3,5,7)
-// 3, 5, 7
+# 3, 5, 7
 
 join('I','am','good', sep=' ')
-// I am good
+# I am good

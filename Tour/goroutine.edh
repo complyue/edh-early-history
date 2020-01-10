@@ -5,8 +5,8 @@
   go for nanos from runtime.everySeconds(1) do runtime.info
         <| '  ⏰ tick#' ++ (n+=1) ++ ' ⏲️  ' ++ nanos ++ 'ns'
 
-  // after main thread terminated, all forked descendant threads
-  // will be terminated along with the Edh program too
+  # after main thread terminated, all forked descendant threads
+  # will be terminated along with the Edh program too
   for _ from runtime.everySeconds(5) do { break }
 
 }

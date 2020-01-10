@@ -10,10 +10,10 @@
     method setB(b as this.b) pass
   }
 
-  c = C(17); // this semicolon is necessary,
-  // or the following tuple will parse as a call
-  // against the assignment result, which is the
-  // newly constructed C object.
+  c = C(17); # this semicolon is necessary,
+  # or the following tuple will parse as a call
+  # against the assignment result, which is the
+  # newly constructed C object.
 
   ( c.f(7) , c.g(7) )
 

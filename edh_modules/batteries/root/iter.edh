@@ -1,11 +1,9 @@
 
-  /**
-   * resembles `range` in Python
-   */
+  # resembles `range` in Python
   generator range(start, stop=nil, step=nil) {
 
     if nil == stop && nil == step then case start of {
-      // enable the hidden *Edhic* version of `range` using pair
+      # enable the hidden *Edhic* version of `range` using pair
       {(start:stop:step)} -> {fallthrough}
       {(start:stop)} -> {fallthrough}
     }
@@ -43,14 +41,14 @@
     }
   }
 
-  /**
-   * resembles `enumerate` in Python
-   *
-   * enumerating tuple/list/dict is quite the same, but to enumerate
-   * a generator, you need to pass the generator proc here followed by
-   * its args, instead of calling it your self. as generators in Edh
-   * can only be call by a for-from-do loop.
-   */
+  {#
+   resembles `enumerate` in Python
+  
+   enumerating tuple/list/dict is quite the same, but to enumerate
+   a generator, you need to pass the generator proc here followed by
+   its args, instead of calling it your self. as generators in Edh
+   can only be call by a for-from-do loop.
+  #}
   generator enumerate(g, ***gargs) {
     n = 0
     case type(g) of {
@@ -71,9 +69,7 @@
     }
   }
 
-  /**
-   * resembles `zip` in Haskell
-   */
+  # resembles `zip` in Haskell
   generator zip(xs, ys) {
     while true case xs of {
       {x => xs} -> case ys of {
@@ -84,9 +80,7 @@
     }
   }
 
-  /**
-   * resembles `zip3` in Haskell
-   */
+  # resembles `zip3` in Haskell
   generator zip3(xs, ys, zs) {
     while true case xs of {
       {x => xs} -> case ys of {

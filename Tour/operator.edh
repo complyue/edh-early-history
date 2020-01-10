@@ -1,9 +1,9 @@
 
-// Some fancy chars can be used in operators
-//
-// 🔀🔁🔂⏩⏪🔼⏫🔽⏬⏹️
-// 🌀📢📣🔔🔕🎵⭕
-// 🆔🆘🆚
+# Some fancy chars can be used in operators
+#
+# 🔀🔁🔂⏩⏪🔼⏫🔽⏬⏹️
+# 🌀📢📣🔔🔕🎵⭕
+# 🆔🆘🆚
 
 {
 
@@ -27,13 +27,13 @@ a 🆚 b
 {
 
   method localOverrides * {
-    // overide the (++) operator within this procedure only, avoid
-    // polluting the module scope
+    # overide the (++) operator within this procedure only, avoid
+    # polluting the module scope
 
     before = 'You' ++ ' and ' ++ 'me'
     operator ++ (lhv, rhv) {
-      // inside the overriding operator definition, the overridden,
-      // original operator is available as was before the overide
+      # inside the overriding operator definition, the overridden,
+      # original operator is available as was before the overide
       lhv ++ ' ⭕ ' ++ rhv
     }
     after = 'You' ++ ' and ' ++ 'me'
@@ -47,24 +47,24 @@ localOverrides()
 
 
 {
-  // save the original (=<) operator, use it for append as (<=<)
+  # save the original (=<) operator, use it for append as (<=<)
   append'operator = (=<)
   operator <=< 1 (lhv, rhv) {
-    // restore the original (=<) operator
+    # restore the original (=<) operator
     (=<) = append'operator
-    // do it
+    # do it
     lhv =< rhv
   }
 
-  // override operator (=<) to comprehend into empty ones only
+  # override operator (=<) to comprehend into empty ones only
   operator =< (callerScope, lhe, rhe) {
     lhv = callerScope.eval(lhe)
     if not null(lhv) then
       error("You don't comprehend into non-empty ones!")
-    // left-hand value is empty, can do it
+    # left-hand value is empty, can do it
     rhv = callerScope.eval(rhe)
-    // the overridden original operator is captured for an 
-    // overriding operator automatically, so just use it
+    # the overridden original operator is captured for an 
+    # overriding operator automatically, so just use it
     lhv =< rhv
   }
 }

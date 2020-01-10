@@ -9,16 +9,16 @@
       n > 10 -> {
         runtime.warn <| "  😓 that's too many to count, doing my most ..."
         n = 10
-        fallthrough // similar to `fallthrough` in Go
+        fallthrough # similar to `fallthrough` in Go
       }
 
-      // (:-) will be parsed as another operator, sep need here
+      # (:-) will be parsed as another operator, sep need here
       for i from range(n : 0 : -1) do runtime.info <| '  ⏲️  ' ++ i
       runtime.info <| '  🎉 !!'
 
     }
 
-    _ -> // the underscore condition always matches, similar to underscore in Haskell
+    _ -> # the underscore condition always matches, similar to underscore in Haskell
       runtime.error <| "I don't know what you want from a " ++ type(n) ++ ': ' ++ n
 
     runtime.fatal <| "don't worry, this will never happen."
