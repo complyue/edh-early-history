@@ -140,13 +140,24 @@ evalStmt' that stmt exit = do
     ReturnStmt expr -> evalExpr that expr $ \(this', scope', !val) ->
       exitEdhProc exit (this', scope', EdhReturn val)
 
+
     AtoIsoStmt expr ->
       local (const pgs { edh'in'tx = True })
         $ evalExpr that expr
         -- restore tx state after target expr evaluated
         $ \result -> local (const pgs) $ exitEdhProc exit result
 
-    GoStmt expr -> forkEdh exit $ evalExpr that expr edhNop
+
+    -- TODO capture args if forking a case/call/for-loop
+    GoStmt expr -> case expr of 
+      -- (CallExpr procExpr argsSndr -> evalExpr that procExpr) $ \case
+      --   undefined -- TODO cont. here
+      _ -> forkEdh exit $ evalExpr that expr edhNop
+
+    -- TODO capture args if defering a case/call/for-loop
+    DeferStmt expr -> contEdhSTM $ do
+      modifyTVar' (edh'defers pgs) ((pgs, expr) :)
+      exitEdhSTM pgs exit (that, scope, nil)
 
     ReactorStmt sinkExpr argsRcvr reactionStmt ->
       evalExpr that sinkExpr $ \case
@@ -162,14 +173,11 @@ evalStmt' that stmt exit = do
             <> ": "
             <> T.pack (show val)
 
-    DeferStmt expr -> contEdhSTM $ do
-      modifyTVar' (edh'defers pgs) ((pgs, expr) :)
-      exitEdhSTM pgs exit (that, scope, nil)
-
 
     -- TODO impl. this
     -- TryStmt trunkStmt catchesList finallyStmt -> undefined
     -- ThrowStmt excExpr                         -> undefined
+
 
     WhileStmt cndExpr bodyStmt -> do
       let !stmts = deBlock bodyStmt
