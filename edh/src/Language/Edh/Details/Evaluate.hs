@@ -149,9 +149,22 @@ evalStmt' that stmt exit = do
 
 
     -- TODO capture args if forking a case/call/for-loop
-    GoStmt expr -> case expr of 
-      -- (CallExpr procExpr argsSndr -> evalExpr that procExpr) $ \case
-      --   undefined -- TODO cont. here
+    GoStmt expr -> case expr of
+      CaseExpr tgtExpr branchesStmt ->
+        evalExpr that tgtExpr $ \(_, _, tgtVal) ->
+          forkEdh exit
+            -- eval the branch(es) expr with the case target being the 'contextMatch'
+            $ local (const pgs { edh'context = ctx { contextMatch = tgtVal } })
+            $ evalBlock that (deBlock branchesStmt)
+            -- restore program state after block done
+            $ \blkResult -> local (const pgs) $ exitEdhProc exit blkResult
+      (CallExpr procExpr argsSndr) ->
+        contEdhSTM $ edhPrepareCall pgs that procExpr argsSndr $ \mkCall ->
+          runEdhProg pgs $ forkEdh exit $ (mkCall edhNop)
+
+      (ForExpr {}) -> -- TODO cont. here
+         undefined 
+
       _ -> forkEdh exit $ evalExpr that expr edhNop
 
     -- TODO capture args if defering a case/call/for-loop
@@ -584,24 +597,17 @@ evalExpr that expr exit = do
 
     BlockExpr stmts ->
       -- eval the block with `true` being the 'contextMatch'
-      local
-          (\pgs' ->
-            pgs' { edh'context = (edh'context pgs') { contextMatch = true } }
-          )
+      local (const pgs { edh'context = ctx { contextMatch = true } })
         $ evalBlock that stmts
-        $ \blkResult -> -- restore program state after block done
-                        local (const pgs) $ exitEdhProc exit blkResult
+        -- restore program state after block done
+        $ \blkResult -> local (const pgs) $ exitEdhProc exit blkResult
 
     CaseExpr tgtExpr branchesStmt ->
       evalExpr that tgtExpr $ \(_, _, tgtVal) ->
-        -- eval the block with the case target being the 'contextMatch'
-        local
-            (\pgs' -> pgs'
-              { edh'context = (edh'context pgs') { contextMatch = tgtVal }
-              }
-            )
+        -- eval the branch(es) expr with the case target being the 'contextMatch'
+        local (const pgs { edh'context = ctx { contextMatch = tgtVal } })
           $ evalBlock that (deBlock branchesStmt)
-            -- restore program state after block done
+          -- restore program state after block done
           $ \blkResult -> local (const pgs) $ exitEdhProc exit blkResult
 
 
@@ -732,36 +738,9 @@ evalExpr that expr exit = do
             <> T.pack (show ixVal)
 
 
-    CallExpr procExpr argsSndr -> evalExpr that procExpr $ \case
-
-      -- calling a host procedure
-      (that', hp'home, EdhHostProc (HostProcedure _ proc)) ->
-        proc argsSndr that' hp'home exit
-
-      -- calling a host generator
-      (_, _, EdhHostGenr _) ->
-        throwEdh EvalError "Can only call a host generator by for-from-do"
-
-      -- calling a class (constructor) procedure
-      (_, _, EdhClass cls) -> edhMakeCtorCall that cls argsSndr exit
-
-      -- calling a method procedure
-      (mth'that, _, EdhMethod mth) ->
-        edhMakeMethodCall that mth'that mth argsSndr exit
-
-      (_, _, EdhGenrDef _) ->
-        throwEdh EvalError "Can only call a generator method by for-from-do"
-
-      -- calling an interpreter procedure
-      (mth'that, _, EdhInterpreter mth) ->
-        edhMakeInterpCall that mth'that mth argsSndr exit
-
-      (_, _, val) ->
-        throwEdh EvalError
-          $  "Can not call: "
-          <> T.pack (show val)
-          <> " ❌ expressed with: "
-          <> T.pack (show procExpr)
+    CallExpr procExpr argsSndr ->
+      contEdhSTM $ edhPrepareCall pgs that procExpr argsSndr $ \mkCall ->
+        runEdhProg pgs (mkCall exit)
 
 
     InfixExpr !opSym !lhExpr !rhExpr ->
@@ -879,28 +858,103 @@ evalExpr that expr exit = do
     -- _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
 
 
-edhMakeCtorCall
-  :: Object -> Class -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
-edhMakeCtorCall !that cls@(Class !cls'lexi'stack (ProcDecl _ !proc'args _)) !argsSndr !exit
-  = do
-    !pgs <- ask
-    let !ctx@(Context !world _ _ _ _) = edh'context pgs
+edhPrepareCall
+  :: EdhProgState
+  -> Object
+  -> Expr
+  -> ArgsSender
+  -> ((EdhProcExit -> EdhProg (STM ())) -> STM ())
+  -> STM ()
+edhPrepareCall !pgs !that !procExpr !argsSndr !callMaker =
+  runEdhProg pgs $ evalExpr that procExpr $ \case
 
-    -- ensure args sending and receiving happens within a same tx for atomicity of
-    -- the call making
-    let !calleeCtx                    = ctx { callStack = cls'lexi'stack }
-    local (const pgs { edh'in'tx = True })
-      $ packEdhArgs that argsSndr
-      $ \(_, _, pkv) -> case pkv of
-          EdhArgsPack pk ->
-            recvEdhArgs calleeCtx proc'args pk $ \(_, _, scopeObj) ->
-              case scopeObj of
-                EdhObject (Object rcvd'ent rcvd'cls _)
-                  | rcvd'cls == (objClass $ scopeSuper world) -> contEdhSTM
-                  -- run the ctor with original pgs (esp. tx state restored)
-                  $ constructEdhObject pgs that rcvd'ent cls exit
-                _ -> error "bug"
+    -- calling a host procedure
+    (that', hp'home, EdhHostProc (HostProcedure _ proc)) ->
+      contEdhSTM $ callMaker $ \exit -> proc argsSndr that' hp'home exit
+
+    -- calling a host generator
+    (_, _, EdhHostGenr _) ->
+      throwEdh EvalError "Can only call a host generator by for-from-do"
+
+    -- calling a class (constructor) procedure
+    (_, _, EdhClass cls@(Class !cls'lexi'stack (ProcDecl _ !proc'args _))) ->
+      do
+        let !ctx@(Context !world _ _ _ _) = edh'context pgs
+        -- ensure args sending and receiving happens within a same tx for
+        -- atomicity of the call making
+        let !calleeCtx                    = ctx { callStack = cls'lexi'stack }
+        local (const pgs { edh'in'tx = True })
+          $ packEdhArgs that argsSndr
+          $ \(_, _, pkv) -> case pkv of
+              EdhArgsPack pk ->
+                recvEdhArgs calleeCtx proc'args pk $ \(_, _, scopeObj) ->
+                  case scopeObj of
+                    EdhObject (Object rcvd'ent rcvd'cls _)
+                      | rcvd'cls == (objClass $ scopeSuper world)
+                      -> contEdhSTM
+                        $ callMaker
+                        $ contEdhSTM
+                        . (constructEdhObject pgs that rcvd'ent cls)
+                    _ -> error "bug"
+              _ -> error "bug"
+
+    -- calling a method procedure
+    (mth'that, _, EdhMethod mth@(Method mth'lexi'stack (ProcDecl _ mth'args _)))
+      -> do
+        let !ctx@(Context !world _ _ _ _) = edh'context pgs
+        let !calleeCtx                    = ctx { callStack = mth'lexi'stack }
+        -- ensure args sending and receiving happens within a same tx for
+        -- atomicity of the call making
+        local (const pgs { edh'in'tx = True })
+          $ packEdhArgs that argsSndr
+          $ \(_, _, pkv) -> case pkv of
+              EdhArgsPack pk ->
+                recvEdhArgs calleeCtx mth'args pk $ \(_, _, scopeObj) ->
+                  case scopeObj of
+                    EdhObject (Object rcvd'ent rcvd'cls _)
+                      | rcvd'cls == (objClass $ scopeSuper world)
+                      -> contEdhSTM $ callMaker $ callEdhMethod that
+                                                                mth'that
+                                                                rcvd'ent
+                                                                mth
+                    _ -> error "bug"
+              _ -> error "bug"
+
+    (_, _, EdhGenrDef _) ->
+      throwEdh EvalError "Can only call a generator method by for-from-do"
+
+    -- calling an interpreter procedure
+    (mth'that, _, EdhInterpreter mth@(Interpreter mth'lexi'stack (ProcDecl _ mth'args _)))
+      -> do
+        let !ctx@(Context !world _ _ _ _) = edh'context pgs
+            !scope                        = contextScope ctx
+            !calleeCtx                    = ctx { callStack = mth'lexi'stack }
+        packEdhExprs that argsSndr $ \(_, _, pk) -> case pk of
+          EdhArgsPack (ArgsPack args kwargs) -> contEdhSTM $ do
+            scopeWrapper <- mkScopeWrapper world scope
+            runEdhProg pgs
+              $ recvEdhArgs calleeCtx
+                            mth'args
+                            (ArgsPack (EdhObject scopeWrapper : args) kwargs)
+              $ \(_, _, scopeObj) -> case scopeObj of
+                  EdhObject (Object rcvd'ent rcvd'cls _)
+                    | rcvd'cls == (objClass $ scopeSuper world)
+                    -> contEdhSTM $ callMaker $ callEdhInterpProc that
+                                                                  mth'that
+                                                                  rcvd'ent
+                                                                  mth
+                  _ -> error "bug"
           _ -> error "bug"
+
+    (_, _, val) ->
+      throwEdh EvalError
+        $  "Can not call a "
+        <> T.pack (show $ edhTypeOf val)
+        <> ": "
+        <> T.pack (show val)
+        <> " ❌ expressed with: "
+        <> T.pack (show procExpr)
+
 
 constructEdhObject
   :: EdhProgState -> Object -> Entity -> Class -> EdhProcExit -> STM ()
@@ -939,30 +993,6 @@ constructEdhObject !pgs !that !ent cls@(Class !cls'lexi'stack clsProc@(ProcDecl 
           -- value from the procedure execution
           _        -> exitEdhProc exit (that, scope, EdhObject newThis)
 
-
-edhMakeMethodCall
-  :: Object -> Object -> Method -> ArgsSender -> EdhProcExit -> EdhProg (STM ())
-edhMakeMethodCall !that !mth'that mth@(Method mth'lexi'stack (ProcDecl _ mth'args _)) !argsSndr !exit
-  = do
-    !pgs <- ask
-    let !ctx@(Context !world _ _ _ _) = edh'context pgs
-
-    let !calleeCtx                    = ctx { callStack = mth'lexi'stack }
-    -- ensure args sending and receiving happens within a same tx
-    -- for atomicity of the call making
-    local (const pgs { edh'in'tx = True })
-      $ packEdhArgs that argsSndr
-      $ \(_, _, pkv) -> case pkv of
-          EdhArgsPack pk ->
-            recvEdhArgs calleeCtx mth'args pk $ \(_, _, scopeObj) ->
-              case scopeObj of
-                -- run the method with original pgs (esp. tx state restored)
-                EdhObject (Object rcvd'ent rcvd'cls _)
-                  | rcvd'cls == (objClass $ scopeSuper world) -> local
-                      (const pgs)
-                  $ callEdhMethod that mth'that rcvd'ent mth exit
-                _ -> error "bug"
-          _ -> error "bug"
 
 callEdhMethod
   :: Object -> Object -> Entity -> Method -> EdhProcExit -> EdhProg (STM ())
@@ -1003,38 +1033,6 @@ callEdhMethod !that !mth'that !ent (Method !mth'lexi'stack mthProc@(ProcDecl _ _
           -- value from procedure execution
           _                -> exitEdhProc exit (that, scope, mthRtn)
 
-
-edhMakeInterpCall
-  :: Object
-  -> Object
-  -> Interpreter
-  -> ArgsSender
-  -> EdhProcExit
-  -> EdhProg (STM ())
-edhMakeInterpCall !that !mth'that mth@(Interpreter mth'lexi'stack (ProcDecl _ mth'args _)) !argsSndr !exit
-  = do
-    !pgs <- ask
-    let !ctx@(Context !world _ _ _ _) = edh'context pgs
-        !scope                        = contextScope ctx
-
-    let !calleeCtx = ctx { callStack = mth'lexi'stack }
-    packEdhExprs that argsSndr $ \(_, _, pk) -> case pk of
-      EdhArgsPack (ArgsPack args kwargs) -> contEdhSTM $ do
-        scopeWrapper <- mkScopeWrapper world scope
-        runEdhProg pgs
-          $ recvEdhArgs calleeCtx
-                        mth'args
-                        (ArgsPack (EdhObject scopeWrapper : args) kwargs)
-          $ \(_, _, scopeObj) -> case scopeObj of
-              EdhObject (Object rcvd'ent rcvd'cls _)
-                | rcvd'cls == (objClass $ scopeSuper world) -> callEdhInterpProc
-                  that
-                  mth'that
-                  rcvd'ent
-                  mth
-                  exit
-              _ -> error "bug"
-      _ -> error "bug"
 
 callEdhInterpProc
   :: Object
@@ -1310,8 +1308,8 @@ runForLoop !that !argsRcvr !iterExpr !doExpr !iterCollector !exit = do
 
 mkScopeWrapper :: EdhWorld -> Scope -> STM Object
 mkScopeWrapper world scope@(Scope !ent !this !lexi'stack _) = do
-    -- use an object to wrap the very entity, the entity is same as of this's 
-    -- in case we are in a class procedure, but not if we are in a method proc
+  -- use an object to wrap the scope entity, the entity is same as of this's 
+  -- in case we are in a class procedure, but not if we are in a method proc
   entWrapper <- viewAsEdhObject ent wrapperClass []
   -- a scope wrapper object is itself a blank bucket, can be used to store
   -- arbitrary attributes
@@ -1340,7 +1338,7 @@ mkScopeWrapper world scope@(Scope !ent !this !lexi'stack _) = do
     (objClass $ scopeSuper world) { classLexiStack = scope :| lexi'stack }
 
 
--- | assign an evaluated value to a target expression
+-- | Assign an evaluated value to a target expression
 --
 -- Note the calling procedure should declare in-tx state in evaluating the
 -- right-handle value as well as running this, so the evaluation of the
@@ -1391,22 +1389,27 @@ assignEdhTarget pgsAfter that lhExpr exit (_, _, rhVal) = do
 
 -- The Edh call convention is so called call-by-repacking, i.e. a new pack of
 -- arguments are evaluated & packed at the calling site, then passed to the
--- callee site, where arguments in the pack are received into the callee's
--- entity, the receiving may include more packing into attributes manifested
--- for rest-args.
+-- callee site, where arguments in the pack are received into an entity to be
+-- used as the run-scope of the callee, the receiving may include re-packing
+-- into attributes manifested for rest-args. For any argument mentioned by
+-- the callee but missing from the pack from the caller, the call should fail
+-- if the callee did not specify a default expr for the missing arg; if the
+-- callee did have a default expr specified, the default expr should be eval'ed
+-- in the callee's lexial context to provide the missing value into the entity
+-- with attr name of that arg.
 
 -- This is semantically much the same as Python's call convention, regarding
--- positional and keyword argument matching, and additionally supports:
+-- positional and keyword argument matching, in addition with the following:
 --  * wildcard receiver - receive all keyword arguments into the entity
 --  * retargeting - don't receive the argument into the entity, but assign
 --    to an attribute of another object, typically `this` object in scope
---  * argument renaming - match the name as sent, receive to a  differently
+--  * argument renaming - match the name as sent, receive to a differently
 --     named attribute of the entity. while renaming a positional argument
---     is doable but meaningless, you'd just use the later name
---- * rest-args repacking, in forms of:
----     *args
----     **kwargs
----     ***pkargs
+--     is doable but meaningless, you'd just use the later name for the arg
+--  * rest-args repacking, in forms of:
+--     *args
+--     **kwargs
+--     ***pkargs
 
 
 recvEdhArgs

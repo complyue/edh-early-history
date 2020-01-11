@@ -349,19 +349,19 @@ contEdhSTM :: STM () -> EdhProg (STM ())
 contEdhSTM = return
 {-# INLINE contEdhSTM #-}
 
--- | Exit an stm computation to the specified Edh continuation
-exitEdhSTM :: EdhProgState -> EdhProcExit -> (Object, Scope, EdhValue) -> STM ()
-exitEdhSTM !pgs !exit !result = runEdhProg pgs $ exitEdhProc exit result
-{-# INLINE exitEdhSTM #-}
-
 -- | Convenient function to be used as short-hand to return from an Edh
 -- procedure (or functions with similar signature), this sets transaction
 -- boundaries wrt tx stated in the program's current state.
 exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
-exitEdhProc !exit !result = ask >>= \pgs -> return $ if edh'in'tx pgs
+exitEdhProc !exit !result = ask >>= \pgs -> contEdhSTM $ if edh'in'tx pgs
   then join $ runReaderT (exit result) pgs
   else writeTQueue (edh'task'queue pgs) $ EdhTxTask pgs False result exit
 {-# INLINE exitEdhProc #-}
+
+-- | Exit an stm computation to the specified Edh continuation
+exitEdhSTM :: EdhProgState -> EdhProcExit -> (Object, Scope, EdhValue) -> STM ()
+exitEdhSTM !pgs !exit !result = runEdhProg pgs $ exitEdhProc exit result
+{-# INLINE exitEdhSTM #-}
 
 -- | An atomic task, an Edh program is composed form many this kind of tasks.
 data EdhTxTask = EdhTxTask {

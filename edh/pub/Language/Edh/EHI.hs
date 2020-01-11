@@ -42,11 +42,8 @@ module Language.Edh.EHI
   , evalEdhSource
   , runEdhProgram
   , runEdhProgram'
-  , edhMakeCtorCall
   , constructEdhObject
-  , edhMakeMethodCall
   , callEdhMethod
-  , edhMakeInterpCall
   , callEdhInterpProc
   , evalStmt
   , evalStmt'
