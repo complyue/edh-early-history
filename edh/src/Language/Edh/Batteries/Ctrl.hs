@@ -18,26 +18,24 @@ import           Language.Edh.Runtime
 
 -- | utility error(*args,**kwargs) - eval error reporter
 errorProc :: EdhProcedure
-errorProc !argsSender !that _ _ =
-  packEdhArgs that argsSender
-    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> if null kwargs
-        then case args of
-          [v] -> throwEdh EvalError $ edhValueStr v
-          _   -> throwEdh EvalError $ edhValueStr $ EdhTuple args
-        else
-          let !kwDict =
-                Map.fromAscList
-                  $ (<$> Map.toAscList kwargs)
-                  $ \(attrName, val) -> (ItemByStr attrName, val)
-          in
-            throwEdh EvalError
-            $ T.pack
-            $ showEdhDict
-            $ Map.union kwDict
-            $ Map.fromAscList
-                [ (ItemByNum (fromIntegral i), t)
-                | (i, t) <- zip [(0 :: Int) ..] args
-                ]
+errorProc !argsSender _ =
+  packEdhArgs argsSender $ \(ArgsPack !args !kwargs) -> if null kwargs
+    then case args of
+      [v] -> throwEdh EvalError $ edhValueStr v
+      _   -> throwEdh EvalError $ edhValueStr $ EdhTuple args
+    else
+      let !kwDict =
+            Map.fromAscList $ (<$> Map.toAscList kwargs) $ \(attrName, val) ->
+              (ItemByStr attrName, val)
+      in
+        throwEdh EvalError
+        $ T.pack
+        $ showEdhDict
+        $ Map.union kwDict
+        $ Map.fromAscList
+            [ (ItemByNum (fromIntegral i), t)
+            | (i, t) <- zip [(0 :: Int) ..] args
+            ]
 
 
 -- | operator (->) - the brancher, if its left-hand matches, early stop its
@@ -45,19 +43,17 @@ errorProc !argsSender !that _ _ =
 -- with eval-ed result of its right-hand, unless the right-hand result is
 -- `fallthrough`
 branchProc :: EdhProcedure
-branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
+branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
   !pgs <- ask
-  let !callerCtx@(  Context _ _ _ !ctxMatch _) = edh'context pgs
-      !callerScope@(Scope !ent _ _ _         ) = contextScope callerCtx
+  let !callerCtx@(Context _ _ _ !ctxMatch _) = edh'context pgs
+      !callerScope                           = contextScope callerCtx
   case lhExpr of
     -- | recognize `_` as similar to the wildcard pattern match in Haskell,
     -- it always matches
     AttrExpr (DirectRef (NamedAttr "_")) ->
-      evalExpr that rhExpr $ \(that', scope', rhVal) -> exitEdhProc
+      evalExpr rhExpr $ \(OriginalValue !rhVal _ _) -> exitEdhProc
         exit
-        ( that'
-        , scope'
-        , case rhVal of
+        (case rhVal of
           EdhFallthrough -> EdhFallthrough
           _              -> EdhCaseClose rhVal
         )
@@ -67,31 +63,29 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
 
       -- { continue } -- match with continue
       [StmtSrc (_, ContinueStmt)] -> case ctxMatch of
-        EdhContinue -> contEdhSTM $ do
-          runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
-            exitEdhProc
-              exit
-              ( that'
-              , scope'
-              , case rhVal of
-                EdhFallthrough -> EdhFallthrough
-                _              -> EdhCaseClose rhVal
-              )
-        _ -> exitEdhProc exit (that, callerScope, EdhFallthrough)
+        EdhContinue ->
+          contEdhSTM
+            $ runEdhProg pgs
+            $ evalExpr rhExpr
+            $ \(OriginalValue !rhVal _ _) -> exitEdhProc
+                exit
+                (case rhVal of
+                  EdhFallthrough -> EdhFallthrough
+                  _              -> EdhCaseClose rhVal
+                )
+        _ -> exitEdhProc exit EdhFallthrough
 
       -- { val } -- wild capture pattern, useful when what in case-of is a complex
       -- expression, then this is used to capture the result as an attribute
       [StmtSrc (_, ExprStmt (AttrExpr (DirectRef (NamedAttr attrName))))] ->
         contEdhSTM $ do
-          when (attrName /= "_") $ modifyTVar' ent $ Map.insert
-            (AttrByName attrName)
-            ctxMatch
-          runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
+          when (attrName /= "_")
+            $ modifyTVar' (scopeEntity callerScope)
+            $ Map.insert (AttrByName attrName) ctxMatch
+          runEdhProg pgs $ evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
             exitEdhProc
               exit
-              ( that'
-              , scope'
-              , case rhVal of
+              (case rhVal of
                 EdhFallthrough -> EdhFallthrough
                 _              -> EdhCaseClose rhVal
               )
@@ -100,19 +94,17 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
       [StmtSrc (_, ExprStmt (InfixExpr "=>" (AttrExpr (DirectRef (NamedAttr headName))) (AttrExpr (DirectRef (NamedAttr tailName)))))]
         -> let
              doMatched headVal tailVal = do
-               modifyTVar' ent
+               modifyTVar' (scopeEntity callerScope)
                  $ Map.union
                  $ Map.fromList
                      [ (AttrByName headName, headVal)
                      , (AttrByName tailName, tailVal)
                      ]
                runEdhProg pgs
-                 $ evalExpr that rhExpr
-                 $ \(that', scope', rhVal) -> exitEdhProc
+                 $ evalExpr rhExpr
+                 $ \(OriginalValue !rhVal _ _) -> exitEdhProc
                      exit
-                     ( that'
-                     , scope'
-                     , case rhVal of
+                     (case rhVal of
                        EdhFallthrough -> EdhFallthrough
                        _              -> EdhCaseClose rhVal
                      )
@@ -122,31 +114,31 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                  EdhTuple (h : rest) -> doMatched h (EdhTuple rest)
                  EdhList  (List l  ) -> readTVar l >>= \case
                    (h : rest) -> newTVar rest >>= doMatched h . EdhList . List
-                   _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
-                 _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
+                   _          -> exitEdhSTM pgs exit EdhFallthrough
+                 _ -> exitEdhSTM pgs exit EdhFallthrough
 
       -- | {( x,y,z,... )} -- tuple pattern
       [StmtSrc (_, ExprStmt (TupleExpr vExprs))] -> contEdhSTM $ if null vExprs
         then -- an empty tuple pattern matches any empty sequence
           let doMatched =
                 runEdhProg pgs
-                  $ evalExpr that rhExpr
-                  $ \(that', scope', rhVal) -> exitEdhProc
+                  $ evalExpr rhExpr
+                  $ \(OriginalValue !rhVal _ _) -> exitEdhProc
                       exit
-                      ( that'
-                      , scope'
-                      , case rhVal of
+                      (case rhVal of
                         EdhFallthrough -> EdhFallthrough
                         _              -> EdhCaseClose rhVal
                       )
           in
             case ctxMatch of
               EdhArgsPack (ArgsPack [] !kwargs) | Map.null kwargs -> doMatched
-              EdhTuple []       -> doMatched
-              EdhList  (List l) -> readTVar l >>= \ll -> if null ll
-                then doMatched
-                else exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
-              _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
+              EdhTuple [] -> doMatched
+              EdhList (List l) ->
+                readTVar l
+                  >>= \ll -> if null ll
+                        then doMatched
+                        else exitEdhSTM pgs exit EdhFallthrough
+              _ -> exitEdhSTM pgs exit EdhFallthrough
         else do
           attrNames <- sequence $ (<$> vExprs) $ \case
             (AttrExpr (DirectRef (NamedAttr vAttr))) ->
@@ -157,22 +149,19 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                 <> T.pack (show vPattern)
           case ctxMatch of
             EdhTuple vs | length vs == length vExprs -> do
-              modifyTVar' ent $ Map.union $ Map.fromList
+              modifyTVar' (scopeEntity callerScope) $ Map.union $ Map.fromList
                 [ (an, av)
                 | (an@(AttrByName nm), av) <- zip attrNames vs
                 , nm /= "_"
                 ]
-              runEdhProg pgs
-                $ evalExpr that rhExpr
-                $ \(that', scope', rhVal) -> exitEdhProc
-                    exit
-                    ( that'
-                    , scope'
-                    , case rhVal of
-                      EdhFallthrough -> EdhFallthrough
-                      _              -> EdhCaseClose rhVal
-                    )
-            _ -> exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
+              runEdhProg pgs $ evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
+                exitEdhProc
+                  exit
+                  (case rhVal of
+                    EdhFallthrough -> EdhFallthrough
+                    _              -> EdhCaseClose rhVal
+                  )
+            _ -> exitEdhSTM pgs exit EdhFallthrough
 
        -- | {( x:y:z:... )} -- pair pattern
       [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
@@ -180,16 +169,14 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
           Nothing -> throwEdh EvalError $ "Invalid pair pattern: " <> T.pack
             (show pairPattern)
           Just [] -> -- valid pattern, no match
-            exitEdhProc exit (that, callerScope, EdhFallthrough)
+            exitEdhProc exit EdhFallthrough
           Just mps -> -- pattern matched
                       contEdhSTM $ do
-            modifyTVar' ent $ Map.union (Map.fromList mps)
-            runEdhProg pgs $ evalExpr that rhExpr $ \(that', scope', rhVal) ->
+            modifyTVar' (scopeEntity callerScope) $ Map.union (Map.fromList mps)
+            runEdhProg pgs $ evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
               exitEdhProc
                 exit
-                ( that'
-                , scope'
-                , case rhVal of
+                (case rhVal of
                   EdhFallthrough -> EdhFallthrough
                   _              -> EdhCaseClose rhVal
                 )
@@ -207,23 +194,18 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                         resolveEdhInstance class_ ctxObj >>= \case
                           Just instObj -> do
                             when (instAttr /= "_")
-                              $ modifyTVar' ent
+                              $ modifyTVar' (scopeEntity callerScope)
                               $ Map.insert (AttrByName instAttr)
                                            (EdhObject instObj)
                             runEdhProg pgs
-                              $ evalExpr that rhExpr
-                              $ \(that', scope', rhVal) -> exitEdhProc
+                              $ evalExpr rhExpr
+                              $ \(OriginalValue !rhVal _ _) -> exitEdhProc
                                   exit
-                                  ( that'
-                                  , scope'
-                                  , case rhVal of
+                                  (case rhVal of
                                     EdhFallthrough -> EdhFallthrough
                                     _              -> EdhCaseClose rhVal
                                   )
-                          Nothing -> exitEdhSTM
-                            pgs
-                            exit
-                            (that, callerScope, EdhFallthrough)
+                          Nothing -> exitEdhSTM pgs exit EdhFallthrough
                       _ ->
                         throwEdhSTM pgs EvalError
                           $  "Invalid class "
@@ -232,9 +214,8 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
                           <> T.pack (show $ edhTypeOf val)
                           <> ": "
                           <> T.pack (show val)
-                    Nothing ->
-                      exitEdhSTM pgs exit (that, callerScope, EdhFallthrough)
-          _ -> exitEdhProc exit (that, callerScope, EdhFallthrough)
+                    Nothing -> exitEdhSTM pgs exit EdhFallthrough
+          _ -> exitEdhProc exit EdhFallthrough
 
       -- TODO more kinds of match patterns to support ?
       --      e.g. list pattern, with rest-items repacking etc.
@@ -245,29 +226,26 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] that _ !exit = do
     -- | guarded condition, ignore match target in context, just check if the
     -- condition itself is true
     PrefixExpr Guard guardedExpr ->
-      evalExpr that guardedExpr $ \(_, _, predValue) -> if predValue /= true
-        then exitEdhProc exit (that, callerScope, EdhFallthrough)
-        else evalExpr that rhExpr $ \(that', scope', rhVal) -> exitEdhProc
-          exit
-          ( that'
-          , scope'
-          , case rhVal of
-            EdhFallthrough -> EdhFallthrough
-            _              -> EdhCaseClose rhVal
-          )
+      evalExpr guardedExpr $ \(OriginalValue !predValue _ _) ->
+        if predValue /= true
+          then exitEdhProc exit EdhFallthrough
+          else evalExpr rhExpr $ \(OriginalValue !rhVal _ _) -> exitEdhProc
+            exit
+            (case rhVal of
+              EdhFallthrough -> EdhFallthrough
+              _              -> EdhCaseClose rhVal
+            )
 
     -- | value-wise matching against the target in context
-    _ -> evalExpr that lhExpr $ \(_, _, lhVal) -> if lhVal /= ctxMatch
-      then exitEdhProc exit (that, callerScope, EdhFallthrough)
-      else evalExpr that rhExpr $ \(that', scope', rhVal) -> exitEdhProc
+    _ -> evalExpr lhExpr $ \(OriginalValue !lhVal _ _) -> if lhVal /= ctxMatch
+      then exitEdhProc exit EdhFallthrough
+      else evalExpr rhExpr $ \(OriginalValue !rhVal _ _) -> exitEdhProc
         exit
-        ( that'
-        , scope'
-        , case rhVal of
+        (case rhVal of
           EdhFallthrough -> EdhFallthrough
           _              -> EdhCaseClose rhVal
         )
-branchProc !argsSender _ _ _ =
+branchProc !argsSender _ =
   throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
 
 
