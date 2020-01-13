@@ -145,18 +145,21 @@ data Context = Context {
     -- | currently executing statement
     , contextStmt :: !StmtSrc
   }
-instance Eq Context where
-  Context x'world x'stack _ _ x'ss == Context y'world y'stack _ _ y'ss =
-    x'world == y'world && x'stack == y'stack && x'ss == y'ss
 contextScope :: Context -> Scope
 contextScope = NE.head . callStack
 
 type EdhGenrCaller
-  = (  EdhProgState
-    ,  (Object, Scope, EdhValue)
-    -> ((Object, Scope, EdhValue) -> STM ())
-    -> EdhProg (STM ())
-    )
+  = (EdhProgState, EdhValue -> (EdhValue -> STM ()) -> EdhProg (STM ()))
+
+
+-- | An Edh value with the origin where it came from
+data OriginalValue = OriginalValue {
+    valueFromOrigin :: !EdhValue
+    -- | the scope from which this value is addressed off
+    , originScope :: !Scope
+    -- | the attribute resolution target object in obtaining this value
+    , originObject :: !Object
+  }
 
 
 -- Especially note that Edh has no block scope as in C
@@ -165,36 +168,46 @@ type EdhGenrCaller
 --
 -- There is only `procedure scope` in Edh, and there are only 2 types
 -- of procedures:
---  * class (constructor) procedure
---  * method procedure
--- Note that module scope is a special kind of class procedure, think
--- it as the module object's constructor procedure; and generator
--- procedure is a special kind of method procedure.
+--  * constructor procedure, including:
+--    * class (runs with a new object as `this`/`that`)
+--    * module (runs with the new module object as `this`/`that`)
+--  * method procedure, including:
+--    * method (runs with lexical `this` and hierarchical `that`)
+--    * generator (ditto)
+--    * interpreter (ditto)
 --
 -- Every procedure call will create a new scope, with a new entity created
 -- for it, and:
 --
---  * if it is a class procedure call, a new object of this class is also
---    allocated viewing the entity, serving `this` object of the scope;
+--  * if it is a constructor procedure call, a new object of the called
+--    class, or the `<module>` class defined by the world, is allocated
+--    viewing the entity, serving `this` object of the scope;
 --
 --  * if it is a methd procedure call, no new object is created, and the
---    scope inherits `this` object from the outer scope.
+--    scope inherits `this` object from the lexical outer scope, and the
+--    original object from which the method was obtained, becomes `that`
+--    object in this scope. `that` either contains the method in its 
+--    entity as an attribute, or inherits the method from one of its
+--    supers.
 --
 data Scope = Scope {
-    -- | the entity of current scope, it's unique in a method procedure,
+    -- | the entity of this scope, it's unique in a method procedure,
     -- and is the underlying entity of 'thisObject' in a class procedure.
     scopeEntity :: !Entity
-    -- | `this` object of current scope
+    -- | `this` object in this scope
     , thisObject :: !Object
+    -- | `that` object in this scope
+    -- `that` is the same as `this` unless in a scope of super-method call
+    , thatObject :: !Object
     -- | the lexical context in which the executing procedure is defined
     , lexiStack :: ![Scope]
     -- | the Edh procedure holding this scope
     , scopeProc :: !ProcDecl
   }
 instance Eq Scope where
-  Scope x'e _ _ x'p == Scope y'e _ _ y'p = x'e == y'e && x'p == y'p
+  Scope x'e _ _ _ _ == Scope y'e _ _ _ _ = x'e == y'e
 instance Show Scope where
-  show (Scope _ _ _ (ProcDecl pName argsRcvr (StmtSrc (!srcPos, _)))) =
+  show (Scope _ _ _ _ (ProcDecl pName argsRcvr (StmtSrc (!srcPos, _)))) =
     "<"
       ++ T.unpack pName
       ++ show argsRcvr
@@ -311,6 +324,16 @@ type EdhLogger = LogLevel -> Maybe String -> ArgsPack -> STM ()
 type LogLevel = Int
 
 
+wuji :: EdhProgState -> OriginalValue
+wuji !pgs = OriginalValue nil worldScope root
+ where
+  !worldScope =
+    Scope (objEntity root) root root [] (classProcedure $ moduleClass world)
+  !world = contextWorld $ edh'context pgs
+  !root  = worldRoot world
+{-# INLINE wuji #-}
+
+
 -- | The monad for running of an Edh program
 type EdhProg = ReaderT EdhProgState STM
 
@@ -332,13 +355,10 @@ runEdhProg !pgs !prog = join $ runReaderT prog pgs
 forkEdh :: EdhProcExit -> EdhProg (STM ()) -> EdhProg (STM ())
 forkEdh !exit !prog = ask >>= \pgs -> if edh'in'tx pgs
   then throwEdh EvalError "You don't fork within a transaction"
-  else do
-    let !scope = contextScope $ edh'context pgs
-        !this  = thisObject scope
-    contEdhSTM $ do
-      writeTQueue (edh'fork'queue pgs)
-        $ EdhTxTask pgs False (this, scope, nil) (const prog)
-      exitEdhSTM pgs exit (this, scope, nil)
+  else contEdhSTM $ do
+    writeTQueue (edh'fork'queue pgs)
+      $ EdhTxTask pgs False (wuji pgs) (const prog)
+    exitEdhSTM pgs exit nil
 
 -- | Continue an Edh program with stm computation, there must be NO further
 -- action following this statement, or the stm computation is just lost.
@@ -352,23 +372,36 @@ contEdhSTM = return
 -- | Convenient function to be used as short-hand to return from an Edh
 -- procedure (or functions with similar signature), this sets transaction
 -- boundaries wrt tx stated in the program's current state.
-exitEdhProc :: EdhProcExit -> (Object, Scope, EdhValue) -> EdhProg (STM ())
-exitEdhProc !exit !result = ask >>= \pgs -> contEdhSTM $ if edh'in'tx pgs
-  then join $ runReaderT (exit result) pgs
-  else writeTQueue (edh'task'queue pgs) $ EdhTxTask pgs False result exit
+exitEdhProc :: EdhProcExit -> EdhValue -> EdhProg (STM ())
+exitEdhProc !exit !val = ask >>= \pgs -> contEdhSTM $ exitEdhSTM pgs exit val
 {-# INLINE exitEdhProc #-}
+exitEdhProc' :: EdhProcExit -> OriginalValue -> EdhProg (STM ())
+exitEdhProc' !exit !result =
+  ask >>= \pgs -> contEdhSTM $ exitEdhSTM' pgs exit result
+{-# INLINE exitEdhProc' #-}
 
 -- | Exit an stm computation to the specified Edh continuation
-exitEdhSTM :: EdhProgState -> EdhProcExit -> (Object, Scope, EdhValue) -> STM ()
-exitEdhSTM !pgs !exit !result = runEdhProg pgs $ exitEdhProc exit result
+exitEdhSTM :: EdhProgState -> EdhProcExit -> EdhValue -> STM ()
+exitEdhSTM !pgs !exit !val =
+  let !scope  = contextScope $ edh'context pgs
+      !result = OriginalValue { valueFromOrigin = val
+                              , originScope     = scope
+                              , originObject    = thatObject scope
+                              }
+  in  exitEdhSTM' pgs exit result
 {-# INLINE exitEdhSTM #-}
+exitEdhSTM' :: EdhProgState -> EdhProcExit -> OriginalValue -> STM ()
+exitEdhSTM' !pgs !exit !result = if edh'in'tx pgs
+  then join $ runReaderT (exit result) pgs
+  else writeTQueue (edh'task'queue pgs) $ EdhTxTask pgs False result exit
+{-# INLINE exitEdhSTM' #-}
 
 -- | An atomic task, an Edh program is composed form many this kind of tasks.
 data EdhTxTask = EdhTxTask {
     edh'task'pgs :: !EdhProgState
     , edh'task'wait :: !Bool
-    , edh'task'input :: !(Object, Scope, EdhValue)
-    , edh'task'job :: !((Object, Scope, EdhValue) -> EdhProg (STM ()))
+    , edh'task'input :: !OriginalValue
+    , edh'task'job :: !(OriginalValue -> EdhProg (STM ()))
   }
 
 -- | Instruct the Edh program driver to not auto retry the specified stm
@@ -376,37 +409,32 @@ data EdhTxTask = EdhTxTask {
 waitEdhSTM :: EdhProgState -> STM EdhValue -> (EdhValue -> STM ()) -> STM ()
 waitEdhSTM !pgs !act !exit = if edh'in'tx pgs
   then throwEdhSTM pgs EvalError "You don't wait stm from within a transaction"
-  else do
-    let !scope = contextScope $ edh'context pgs
-        !this  = thisObject scope
-    writeTQueue
-      (edh'task'queue pgs)
-      EdhTxTask
-        { edh'task'pgs   = pgs
-        , edh'task'wait  = True
-        , edh'task'input = (this, scope, nil)
-        , edh'task'job   = \_ -> return $ act >>= \val -> writeTQueue
-                             (edh'task'queue pgs)
-                             EdhTxTask { edh'task'pgs   = pgs
-                                       , edh'task'wait  = False
-                                       , edh'task'input = (this, scope, nil)
-                                       , edh'task'job = \_ -> return $ exit val
-                                       }
-        }
+  else writeTQueue
+    (edh'task'queue pgs)
+    EdhTxTask
+      { edh'task'pgs   = pgs
+      , edh'task'wait  = True
+      , edh'task'input = wuji pgs
+      , edh'task'job   = \_ -> return $ act >>= \val -> writeTQueue
+                           (edh'task'queue pgs)
+                           EdhTxTask { edh'task'pgs   = pgs
+                                     , edh'task'wait  = False
+                                     , edh'task'input = wuji pgs
+                                     , edh'task'job   = \_ -> return $ exit val
+                                     }
+      }
 
 -- | Type of a procedure in host language that can be called from Edh code.
 --
 -- Note the caller context/scope can be obtained from callstack of the
 -- program state.
 type EdhProcedure -- such a procedure servs as the callee
-  =  ArgsSender -- ^ the manifestation of how the caller wills to send args
-  -> Object -- ^ the target object, i.e. `that` object in context
-  -> Scope -- ^ the scope from which the callee is addressed off
+  =  ArgsSender  -- ^ the manifestation of how the caller wills to send args
   -> EdhProcExit -- ^ the CPS exit to return a value from this procedure
   -> EdhProg (STM ())
 
 -- | The type for an Edh procedure's return, in continuation passing style.
-type EdhProcExit = (Object, Scope, EdhValue) -> EdhProg (STM ())
+type EdhProcExit = OriginalValue -> EdhProg (STM ())
 
 -- | A CPS nop as an Edh procedure exit
 edhNop :: EdhProcExit
@@ -415,14 +443,15 @@ edhNop _ = return $ return ()
 -- | Construct an error context from program state and specified message
 getEdhErrorContext :: EdhProgState -> Text -> EdhErrorContext
 getEdhErrorContext !pgs !msg =
-  let (Context _ !stack _ _ (StmtSrc (!sp, _))) = edh'context pgs
-      !frames = foldl'
-        (\sfs (Scope _ _ _ (ProcDecl procName _ (StmtSrc (spos, _)))) ->
+  let !ctx               = edh'context pgs
+      (StmtSrc (!sp, _)) = contextStmt ctx
+      !frames            = foldl'
+        (\sfs (Scope _ _ _ _ (ProcDecl procName _ (StmtSrc (spos, _)))) ->
           (procName, T.pack (sourcePosPretty spos)) : sfs
         )
         []
-        ( takeWhile (\(Scope _ _ lexi'stack _) -> not (null lexi'stack))
-        $ NE.toList stack
+        ( takeWhile (\(Scope _ _ _ lexi'stack _) -> not (null lexi'stack))
+        $ NE.toList (callStack ctx)
         )
   in  EdhErrorContext msg (T.pack $ sourcePosPretty sp) frames
 

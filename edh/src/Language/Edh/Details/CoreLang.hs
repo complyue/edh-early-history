@@ -24,24 +24,22 @@ resolveAddr _ (NamedAttr !attrName) = return (AttrByName attrName)
 resolveAddr !pgs (SymbolicAttr !symName) =
   let scope = contextScope $ edh'context pgs
   in  resolveEdhCtxAttr scope (AttrByName symName) >>= \case
-        Just scope' -> do
-          em <- readTVar (scopeEntity scope')
-          case Map.lookup (AttrByName symName) em of
-            Just (EdhSymbol !symVal) -> return (AttrBySym symVal)
-            Just v ->
-              throwEdhSTM pgs EvalError
-                $  "Not a symbol as "
-                <> symName
-                <> ", it is a "
-                <> T.pack (show $ edhTypeOf v)
-                <> ": "
-                <> T.pack (show v)
-            Nothing -> error "bug in ctx attr resolving"
+        Just (OriginalValue !val _ _) -> case val of
+          (EdhSymbol !symVal) -> return (AttrBySym symVal)
+          _ ->
+            throwEdhSTM pgs EvalError
+              $  "Not a symbol as "
+              <> symName
+              <> ", it is a "
+              <> T.pack (show $ edhTypeOf val)
+              <> ": "
+              <> T.pack (show val)
         Nothing ->
           throwEdhSTM pgs EvalError
             $  "No symbol named "
             <> T.pack (show symName)
             <> " available"
+{-# INLINE resolveAddr #-}
 
 
 -- * Edh attribute resolution
@@ -49,70 +47,84 @@ resolveAddr !pgs (SymbolicAttr !symName) =
 
 lookupEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe EdhValue)
 lookupEdhCtxAttr fromScope addr = resolveEdhCtxAttr fromScope addr >>= \case
-  Nothing                 -> return Nothing
-  Just (Scope !ent _ _ _) -> do
-    em <- readTVar ent
-    return $ Map.lookup addr em
+  Nothing                       -> return Nothing
+  Just (OriginalValue !val _ _) -> return $ Just val
+{-# INLINE lookupEdhCtxAttr #-}
 
 lookupEdhObjAttr :: Object -> AttrKey -> STM (Maybe EdhValue)
 lookupEdhObjAttr this addr = resolveEdhObjAttr this addr >>= \case
-  Nothing                 -> return Nothing
-  Just (Scope !ent _ _ _) -> do
-    em <- readTVar ent
-    return $ Map.lookup addr em
+  Nothing                       -> return Nothing
+  Just (OriginalValue !val _ _) -> return $ Just val
+{-# INLINE lookupEdhObjAttr #-}
 
 
-resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe Scope)
-resolveEdhCtxAttr scope@(Scope !ent _ lexi'stack _) !addr =
-  readTVar ent >>= \em -> if Map.member addr em
-    then -- directly present on current scope
-         return (Just scope)
-    else resolveLexicalAttr lexi'stack addr
+resolveEdhCtxAttr :: Scope -> AttrKey -> STM (Maybe OriginalValue)
+resolveEdhCtxAttr scope@(Scope !ent _ _ lexi'stack _) !addr =
+  readTVar ent >>= \em -> case Map.lookup addr em of
+    Just !val -> return $ Just (OriginalValue val scope $ thatObject scope)
+    Nothing   -> resolveLexicalAttr lexi'stack addr
+{-# INLINE resolveEdhCtxAttr #-}
 
-resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe Scope)
+resolveLexicalAttr :: [Scope] -> AttrKey -> STM (Maybe OriginalValue)
 resolveLexicalAttr [] _ = return Nothing
-resolveLexicalAttr (scope@(Scope !ent !obj _ _) : outerScopes) addr =
-  readTVar ent >>= \em -> if Map.member addr em
-    then -- directly present on current scope
-         return (Just scope)
-    else -- go for the interesting attribute from inheritance hierarchy
-         -- of this context object, so a module as an object, can `extends`
-         -- some objects too, in addition to the `import` mechanism
-      (if ent == objEntity obj
+resolveLexicalAttr (scope@(Scope !ent !this !_that _ _) : outerScopes) addr =
+  readTVar ent >>= \em -> case Map.lookup addr em of
+    Just !val -> return $ Just (OriginalValue val scope $ thatObject scope)
+    Nothing ->
+      -- go for the interesting attribute from inheritance hierarchy
+      -- of this context object, so a module as an object, can `extends`
+      -- some objects too, in addition to the `import` mechanism
+      (if ent == objEntity this
           -- go directly to supers as entity has just got negative result
-          then readTVar (objSupers obj) >>= resolveEdhSuperAttr addr
+          then readTVar (objSupers this) >>= resolveEdhSuperAttr this addr
           -- context scope is different entity from this context object,
           -- start next from this object
-          else resolveEdhObjAttr obj addr
+          else resolveEdhObjAttr' this this addr
         )
         >>= \case
               Just scope'from'object -> return $ Just scope'from'object
               -- go one level outer of the lexical stack
               Nothing                -> resolveLexicalAttr outerScopes addr
+{-# INLINE resolveLexicalAttr #-}
 
-resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe Scope)
-resolveEdhObjAttr !this !addr = readTVar thisEnt >>= \em ->
-  if Map.member addr em
-    then return
-      (Just $ Scope thisEnt
-                    this
-                    (NE.toList $ classLexiStack $ objClass this)
-                    clsProc
-      )
-    else readTVar (objSupers this) >>= resolveEdhSuperAttr addr
+resolveEdhObjAttr :: Object -> AttrKey -> STM (Maybe OriginalValue)
+resolveEdhObjAttr !this !addr = resolveEdhObjAttr' this this addr
+{-# INLINE resolveEdhObjAttr #-}
+
+resolveEdhObjAttr' :: Object -> Object -> AttrKey -> STM (Maybe OriginalValue)
+resolveEdhObjAttr' !that !this !addr = readTVar thisEnt >>= \em ->
+  case Map.lookup addr em of
+    Just !val ->
+      return
+        $ Just
+        $ (OriginalValue
+            val
+            (Scope thisEnt
+                   this
+                   that
+                   (NE.toList $ classLexiStack $ objClass this)
+                   clsProc
+            )
+            that
+          )
+    Nothing -> readTVar (objSupers this) >>= resolveEdhSuperAttr that addr
  where
   !thisEnt = objEntity this
   clsProc  = classProcedure (objClass this)
+{-# INLINE resolveEdhObjAttr' #-}
 
-resolveEdhSuperAttr :: AttrKey -> [Object] -> STM (Maybe Scope)
-resolveEdhSuperAttr _ [] = return Nothing
-resolveEdhSuperAttr !addr (super : restSupers) =
-  resolveEdhObjAttr super addr >>= \case
+resolveEdhSuperAttr
+  :: Object -> AttrKey -> [Object] -> STM (Maybe OriginalValue)
+resolveEdhSuperAttr _ _ [] = return Nothing
+resolveEdhSuperAttr !that !addr (super : restSupers) =
+  resolveEdhObjAttr' that super addr >>= \case
     Just scope -> return $ Just scope
-    Nothing    -> resolveEdhSuperAttr addr restSupers
+    Nothing    -> resolveEdhSuperAttr that addr restSupers
+{-# INLINE resolveEdhSuperAttr #-}
 
 
 resolveEdhInstance :: Class -> Object -> STM (Maybe Object)
 resolveEdhInstance class_ this = if objClass this == class_
   then return (Just this)
   else readTVar (objSupers this) >>= msum . (resolveEdhInstance class_ <$>)
+{-# INLINE resolveEdhInstance #-}

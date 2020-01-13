@@ -124,7 +124,7 @@ createEdhWorld !logger = liftIO $ do
                               , procedure'args = WildReceiver
                               , procedure'body = voidStatement
                               }
-    !worldScope = Scope rootEntity root [] moduClassProc
+    !worldScope = Scope rootEntity root root [] moduClassProc
     !moduClass  = Class { classLexiStack = worldScope :| []
                         , classProcedure = moduClassProc
                         }
