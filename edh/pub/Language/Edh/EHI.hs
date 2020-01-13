@@ -44,7 +44,6 @@ module Language.Edh.EHI
   , runEdhProgram'
   , constructEdhObject
   , callEdhMethod
-  , callEdhInterpProc
   , evalStmt
   , evalStmt'
   , evalBlock

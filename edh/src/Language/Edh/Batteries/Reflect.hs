@@ -194,10 +194,7 @@ scopeEvalProc !argsSender !exit = do
 
 -- | utility makeOp(lhExpr, opSym, rhExpr)
 makeOpProc :: EdhProcedure
-makeOpProc argsSender !exit = do
-  !pgs <- ask
-  let !callerCtx   = edh'context pgs
-      !callerScope = contextScope callerCtx
+makeOpProc argsSender !exit =
   packEdhArgs argsSender $ \(ArgsPack !args !kwargs) -> if (not $ null kwargs)
     then throwEdh EvalError "No kwargs accepted by makeOp"
     else case args of
