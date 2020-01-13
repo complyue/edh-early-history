@@ -90,29 +90,23 @@ scopeObtainProc _ !that _ !exit = do
       !scope                             = NE.head call'stack
   contEdhSTM $ do
     wrapperObj <- mkScopeWrapper world scope
-    exitEdhSTM pgs
-               exit
-               (that, contextScope $ edh'context pgs, EdhObject wrapperObj)
+    exitEdhSTM pgs exit $ EdhObject wrapperObj
 
 
 -- | utility scope.attrs()
 -- get attribute types in the scope
 scopeAttrsProc :: EdhProcedure
-scopeAttrsProc _ !that _ !exit = do
+scopeAttrsProc _ !exit = do
   !pgs <- ask
+  let !that  = thatObject $ contextScope $ edh'context pgs
+      !scope = NE.head $ classLexiStack $ objClass that
   contEdhSTM $ do
-    supers <- readTVar $ objSupers that
-    case supers of
-      [_, ent'wrapper, _wrapped'this] -> do
-        em <- readTVar (objEntity ent'wrapper)
-        ad <-
-          newTVar
-          $ Map.fromAscList
-          $ [ (itemKeyOf ak, v) | (ak, v) <- Map.toAscList em ]
-        exitEdhSTM pgs
-                   exit
-                   (that, contextScope (edh'context pgs), EdhDict $ Dict ad)
-      _ -> error "bug <scope> supers wrong"
+    em <- readTVar (scopeEntity scope)
+    ad <-
+      newTVar
+      $ Map.fromAscList
+      $ [ (itemKeyOf ak, v) | (ak, v) <- Map.toAscList em ]
+    exitEdhSTM pgs exit EdhDict $ Dict ad
  where
   itemKeyOf :: AttrKey -> ItemKey
   itemKeyOf (AttrByName name) = ItemByStr name
@@ -122,30 +116,26 @@ scopeAttrsProc _ !that _ !exit = do
 -- | utility scope.traceback()
 -- get stack trace from the wrapped scope
 scopeTraceBackProc :: EdhProcedure
-scopeTraceBackProc _ !that _ !exit = do
+scopeTraceBackProc _ !exit = do
   !pgs <- ask
-  let callerCtx = edh'context pgs
-      scopesShown =
+  let !that = thatObject $ contextScope $ edh'context pgs
+      !scopesShown =
         show
-              -- the world scope at bottom of any lexical stack has empty
-              -- lexical stack itself, and is of no interest
+          -- the world scope at bottom of any lexical stack has empty
+          -- lexical stack itself, and is of no interest
           <$> (NE.takeWhile (not . null . lexiStack) $ classLexiStack $ objClass
                 that
               )
-  exitEdhProc
-    exit
-    ( that
-    , contextScope callerCtx
-    , EdhString $ T.pack $ unlines $ reverse scopesShown
-    )
+  exitEdhProc exit $ EdhString $ T.pack $ unlines $ reverse scopesShown
 
 
 -- | utility scope.stack()
 -- get lexical context from the wrapped scope
 scopeStackProc :: EdhProcedure
-scopeStackProc _ !that _ !exit = do
+scopeStackProc _ !exit = do
   !pgs <- ask
-  let callerCtx@(Context !world _ _ _ _) = edh'context pgs
+  let !world = contextWrold $ edh'context pgs
+      !that  = thatObject $ contextScope $ edh'context pgs
   contEdhSTM $ do
     wrappedObjs <-
       sequence
@@ -155,20 +145,18 @@ scopeStackProc _ !that _ !exit = do
       <$> (NE.takeWhile (not . null . lexiStack) $ classLexiStack $ objClass
             that
           )
-    exitEdhSTM
-      pgs
-      exit
-      (that, contextScope callerCtx, EdhTuple $ EdhObject <$> wrappedObjs)
+    exitEdhSTM pgs exit $ EdhTuple $ EdhObject <$> wrappedObjs
 
 
 -- | utility scope.eval(expr1, expr2, kw3=expr3, kw4=expr4, ...)
 -- evaluate expressions in this scope
 scopeEvalProc :: EdhProcedure
-scopeEvalProc !argsSender !that _ !exit = do
+scopeEvalProc !argsSender !exit = do
   !pgs <- ask
   let
-    callerCtx@(Context !world _ _ _ _) = edh'context pgs
-    callerScope                        = contextScope $ callerCtx
+    !callerCtx      = edh'context pgs
+    !that           = thatObject $ contextScope callerCtx
+    !scopeCallStack = classLexiStack $ objClass that
     evalThePack
       :: [EdhValue]
       -> Map.Map AttrName EdhValue
@@ -176,21 +164,18 @@ scopeEvalProc !argsSender !that _ !exit = do
       -> Map.Map AttrName EdhValue
       -> EdhProg (STM ())
     evalThePack !argsValues !kwargsValues [] !kwargsExprs
-      | Map.null kwargsExprs =
-      -- restore original program state and return the eval-ed values
-                               local (const pgs) $ exitEdhProc
-        exit
-        ( that
-        , callerScope
-        , case argsValues of
-          [val] | null kwargsValues -> val
-          _ -> EdhArgsPack $ ArgsPack (reverse argsValues) kwargsValues
-        )
+      | Map.null kwargsExprs
+      = contEdhSTM
+        -- restore original program state and return the eval-ed values
+        $ exitEdhSTM pgs exit
+        $ case argsValues of
+            [val] | null kwargsValues -> val
+            _ -> EdhArgsPack $ ArgsPack (reverse argsValues) kwargsValues
     evalThePack !argsValues !kwargsValues [] !kwargsExprs = do
       let (!oneExpr, !kwargsExprs') = Map.splitAt 1 kwargsExprs
           (!kw     , !kwExpr      ) = Map.elemAt 0 oneExpr
       case kwExpr of
-        EdhExpr !expr -> evalExpr that expr $ \(_, _, !val) -> evalThePack
+        EdhExpr !expr -> evalExpr expr $ \OriginalValue !val _ _ -> evalThePack
           argsValues
           (Map.insert kw val kwargsValues)
           []
@@ -198,7 +183,7 @@ scopeEvalProc !argsSender !that _ !exit = do
         v -> throwEdh EvalError $ "Not an expr: " <> T.pack (show v)
     evalThePack !argsValues !kwargsValues (!argExpr : argsExprs') !kwargsExprs
       = case argExpr of
-        EdhExpr expr -> evalExpr that expr $ \(_, _, !val) ->
+        EdhExpr !expr -> evalExpr expr $ \OriginalValue !val _ _ ->
           evalThePack (val : argsValues) kwargsValues argsExprs' kwargsExprs
         v -> throwEdh EvalError $ "Not an expr: " <> T.pack (show v)
   packEdhArgs that argsSender
@@ -210,13 +195,11 @@ scopeEvalProc !argsSender !that _ !exit = do
             $
               -- eval all exprs with the original lexical scope as call stack
               runEdhProg pgs
-                { edh'context = Context
-                                  { contextWorld    = world
-                                  , callStack = (classLexiStack $ objClass that)
-                                  , generatorCaller = Nothing
-                                  , contextMatch    = true
-                                  , contextStmt     = voidStatement
-                                  }
+                { edh'context = callerCtx { callStack       = scopeCallStack
+                                          , generatorCaller = Nothing
+                                          , contextMatch    = true
+                                          , contextStmt     = voidStatement
+                                          }
                 }
             $ evalThePack [] Map.empty args kwargs
 

@@ -166,13 +166,14 @@ data OriginalValue = OriginalValue {
 -- family languages, JavaScript neither does before ES6,
 -- Python neither does until now (2019).
 --
--- There is only `procedure scope` in Edh, and there are only 2 types
+-- There is only `procedure scope` in Edh, and there are only 2 kinds
 -- of procedures:
 --  * constructor procedure, including:
 --    * class (runs with a new object as `this`/`that`)
 --    * module (runs with the new module object as `this`/`that`)
 --  * method procedure, including:
 --    * method (runs with lexical `this` and hierarchical `that`)
+--    * operator (ditto)
 --    * generator (ditto)
 --    * interpreter (ditto)
 --
@@ -258,21 +259,6 @@ data Method = Method {
 instance Show Method where
   show (Method _ (ProcDecl mn _ _)) = "<method: " ++ T.unpack mn ++ ">"
 
-data Operator = Operator {
-    operatorLexiStack :: !(NonEmpty Scope)
-    , operatorProcedure :: !ProcDecl
-    -- the overridden operator procedure
-    , operatorPredecessor :: !(Maybe EdhValue)
-    -- todo this is some redundant, as the precedences are always available
-    -- from 'worldOperators', but being an 'MVar' that's non-trivial to read
-    -- safely from a pure 'show' function. can remove this field once we
-    -- switched to a better introspection tool for operators at runtime.
-    , operatorPrecedence :: !Precedence
-  } deriving (Eq)
-instance Show Operator where
-  show (Operator _ (ProcDecl opSym _ _) _ prec) =
-    "<operator: (" ++ T.unpack opSym ++ ") " ++ show prec ++ ">"
-
 data GenrDef = GenrDef {
     generatorLexiStack :: !(NonEmpty Scope)
     , generatorProcedure :: !ProcDecl
@@ -287,6 +273,21 @@ data Interpreter = Interpreter {
 instance Show Interpreter where
   show (Interpreter _ (ProcDecl mn _ _)) =
     "<interpreter: " ++ T.unpack mn ++ ">"
+
+data Operator = Operator {
+    operatorLexiStack :: !(NonEmpty Scope)
+    , operatorProcedure :: !ProcDecl
+    -- the overridden operator procedure
+    , operatorPredecessor :: !(Maybe EdhValue)
+    -- todo this is some redundant, as the precedences are always available
+    -- from 'worldOperators', but being an 'MVar' that's non-trivial to read
+    -- safely from a pure 'show' function. can remove this field once we
+    -- switched to a better introspection tool for operators at runtime.
+    , operatorPrecedence :: !Precedence
+  } deriving (Eq)
+instance Show Operator where
+  show (Operator _ (ProcDecl opSym _ _) _ prec) =
+    "<operator: (" ++ T.unpack opSym ++ ") " ++ show prec ++ ">"
 
 
 -- | A world for Edh programs to change
@@ -324,13 +325,13 @@ type EdhLogger = LogLevel -> Maybe String -> ArgsPack -> STM ()
 type LogLevel = Int
 
 
+-- | The ultimate nothingness (Chinese 无极/無極), i.e. <nothing> out of <chaos>
 wuji :: EdhProgState -> OriginalValue
 wuji !pgs = OriginalValue nil worldScope root
  where
-  !worldScope =
-    Scope (objEntity root) root root [] (classProcedure $ moduleClass world)
-  !world = contextWorld $ edh'context pgs
-  !root  = worldRoot world
+  !worldScope = NE.head $ classLexiStack $ objClass root
+  !root       = worldRoot world
+  !world      = contextWorld $ edh'context pgs
 {-# INLINE wuji #-}
 
 
@@ -415,12 +416,12 @@ waitEdhSTM !pgs !act !exit = if edh'in'tx pgs
       { edh'task'pgs   = pgs
       , edh'task'wait  = True
       , edh'task'input = wuji pgs
-      , edh'task'job   = \_ -> return $ act >>= \val -> writeTQueue
+      , edh'task'job   = \_ -> contEdhSTM $ act >>= \val -> writeTQueue
                            (edh'task'queue pgs)
                            EdhTxTask { edh'task'pgs   = pgs
                                      , edh'task'wait  = False
                                      , edh'task'input = wuji pgs
-                                     , edh'task'job   = \_ -> return $ exit val
+                                     , edh'task'job = \_ -> contEdhSTM $ exit val
                                      }
       }
 

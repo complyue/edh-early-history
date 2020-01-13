@@ -102,7 +102,7 @@ driveEdhProgram !progCtx !prog = do
     -- bootstrap the program on main thread
     atomically $ writeTQueue
       mainQueue
-      (EdhTxTask pgsAtBoot False (thisAtBoot, scopeAtBoot, nil) (const prog))
+      (EdhTxTask pgsAtBoot False (wuji pgsAtBoot) (const prog))
     -- drive the program from main thread
     driveEdhThread defers $ tryReadTQueue mainQueue
 
