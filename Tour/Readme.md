@@ -86,11 +86,13 @@ at it since inception.
 > Always keep in mind that **Edh** the language can be as horrible as
 > **JavaScript** if overly used in wrong ways (clues as described
 > [here](https://medium.com/javascript-non-grata/the-top-10-things-wrong-with-javascript-58f440d6b3d8)
-> ), do program and think in [**Haskell**](https://www.haskell.org),
-> (i.e. be a _Haskeller_), only for someone who you must work with but
+> , some issues have been fixed in **Edh** while others remain pretty
+> the same), so do programing, modeling and thinking in
+> [**Haskell**](https://www.haskell.org),
+> (i.e. be a _Haskeller_). For someone who you must work with but
 > hasn't feel comfortable with **Haskell** code, ask him/her to use
-> **Edh**, and write [host procedures](#host-procedures) to help get
-> his/her job done
+> **Edh**, and write [host procedures](#host-procedures) wrapping
+> idiomatic models in **Haskell** to help get his/her job done
 >
 > **Edh** code can be even more concise than **Haskell** code at a
 > sweet spot balanced between _imperative_ and _declarative_, do
