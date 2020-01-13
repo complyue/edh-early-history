@@ -107,9 +107,9 @@ evalStmt' !stmt !exit = do
       !scope                 = contextScope ctx
   case stmt of
 
-    ExprStmt expr             -> evalExpr expr exit
+    ExprStmt expr -> evalExpr expr exit
 
-    LetStmt argsRcvr argsSndr -> do
+    LetStmt argsRcvr argsSndr ->
       -- ensure args sending and receiving happens within a same tx
       -- for atomicity of the let statement
       local (const pgs { edh'in'tx = True }) $ packEdhArgs argsSndr $ \pk ->
@@ -184,30 +184,31 @@ evalStmt' !stmt !exit = do
 
 
     WhileStmt cndExpr bodyStmt -> do
-      let !stmts = deBlock bodyStmt
-          doWhile :: EdhProg (STM ())
-          doWhile = do
-            evalExpr cndExpr $ \(OriginalValue !cndVal _ _) -> case cndVal of
-              (EdhBool True) ->
-                evalBlock stmts $ \(OriginalValue !blkVal _ _) -> case blkVal of
-                -- | early stop of procedure
-                  EdhReturn rtnVal   -> exitEdhProc exit rtnVal
-                  -- | break while loop
-                  EdhBreak           -> exitEdhProc exit nil
-                  -- | treat as break here, TODO judge this decision
-                  EdhFallthrough     -> exitEdhProc exit nil
-                  -- | treat as continue here, TODO judge this decision
-                  EdhCaseClose ccVal -> exitEdhProc exit ccVal
-                  -- continue while loop
-                  _                  -> doWhile
-              (EdhBool False) -> exitEdhProc exit nil
-              EdhNil          -> exitEdhProc exit nil
-              _ ->
-                throwEdh EvalError
-                  $  "Invalid condition value for while: "
-                  <> T.pack (show $ edhTypeOf cndVal)
-                  <> ": "
-                  <> T.pack (show cndVal)
+      let
+        !stmts = deBlock bodyStmt
+        doWhile :: EdhProg (STM ())
+        doWhile = evalExpr cndExpr $ \(OriginalValue !cndVal _ _) ->
+          case cndVal of
+            (EdhBool True) ->
+              evalBlock stmts $ \(OriginalValue !blkVal _ _) -> case blkVal of
+              -- | early stop of procedure
+                EdhReturn rtnVal   -> exitEdhProc exit rtnVal
+                -- | break while loop
+                EdhBreak           -> exitEdhProc exit nil
+                -- | treat as break here, TODO judge this decision
+                EdhFallthrough     -> exitEdhProc exit nil
+                -- | treat as continue here, TODO judge this decision
+                EdhCaseClose ccVal -> exitEdhProc exit ccVal
+                -- continue while loop
+                _                  -> doWhile
+            (EdhBool False) -> exitEdhProc exit nil
+            EdhNil          -> exitEdhProc exit nil
+            _ ->
+              throwEdh EvalError
+                $  "Invalid condition value for while: "
+                <> T.pack (show $ edhTypeOf cndVal)
+                <> ": "
+                <> T.pack (show cndVal)
       doWhile
 
     ExtendsStmt superExpr ->
@@ -271,28 +272,27 @@ evalStmt' !stmt !exit = do
 
     OpOvrdStmt opSym opProc opPrec -> contEdhSTM $ do
       let findPredecessor :: STM (Maybe EdhValue)
-          findPredecessor = do
-            lookupEdhCtxAttr scope (AttrByName opSym) >>= \case
-              Nothing -> -- do
-                -- (EdhRuntime logger _) <- readTMVar $ worldRuntime world
-                -- logger 30 (Just $ sourcePosPretty srcPos)
-                --   $ ArgsPack
-                --       [EdhString "overriding an unavailable operator"]
-                --       Map.empty
-                return Nothing
-              Just hostOper@(EdhHostOper _ _) -> return $ Just hostOper
-              Just surfOper@(EdhOperator _  ) -> return $ Just surfOper
-              Just opVal                      -> do
-                (EdhRuntime logger _) <- readTMVar $ worldRuntime world
-                logger 30 (Just $ sourcePosPretty srcPos) $ ArgsPack
-                  [ EdhString
-                    $  "overriding an invalid operator "
-                    <> T.pack (show $ edhTypeOf opVal)
-                    <> ": "
-                    <> T.pack (show opVal)
-                  ]
-                  Map.empty
-                return Nothing
+          findPredecessor = lookupEdhCtxAttr scope (AttrByName opSym) >>= \case
+            Nothing -> -- do
+              -- (EdhRuntime logger _) <- readTMVar $ worldRuntime world
+              -- logger 30 (Just $ sourcePosPretty srcPos)
+              --   $ ArgsPack
+              --       [EdhString "overriding an unavailable operator"]
+              --       Map.empty
+              return Nothing
+            Just hostOper@(EdhHostOper _ _) -> return $ Just hostOper
+            Just surfOper@(EdhOperator _  ) -> return $ Just surfOper
+            Just opVal                      -> do
+              (EdhRuntime logger _) <- readTMVar $ worldRuntime world
+              logger 30 (Just $ sourcePosPretty srcPos) $ ArgsPack
+                [ EdhString
+                  $  "overriding an invalid operator "
+                  <> T.pack (show $ edhTypeOf opVal)
+                  <> ": "
+                  <> T.pack (show opVal)
+                ]
+                Map.empty
+              return Nothing
       predecessor <- findPredecessor
       let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
                                       , operatorProcedure   = opProc
@@ -539,7 +539,7 @@ evalExpr expr exit = do
         (EdhBool True ) -> evalStmt cseq exit
         (EdhBool False) -> case alt of
           Just elseClause -> evalStmt elseClause exit
-          _               -> exitEdhProc exit (nil)
+          _               -> exitEdhProc exit nil
         _ ->
           -- we are so strongly typed
           throwEdh EvalError
@@ -1147,7 +1147,7 @@ edhForLoop !pgsLooper !argsRcvr !iterExpr !doExpr !iterCollector !forLooper =
 
             -- loop over a series of args packs
             iterThem :: [ArgsPack] -> STM ()
-            iterThem []           = exitEdhSTM pgsLooper exit (nil)
+            iterThem []           = exitEdhSTM pgsLooper exit nil
             iterThem (apk : apks) = do1 apk $ iterThem apks
 
             -- loop over a subscriber's channel of an event sink

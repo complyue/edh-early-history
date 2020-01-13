@@ -90,15 +90,13 @@ driveEdhProgram !progCtx !prog = do
     !(mainQueue :: TQueue EdhTxTask) <- newTQueueIO
     !reactors                        <- newTVarIO []
     !defers                          <- newTVarIO []
-    let !scopeAtBoot = contextScope progCtx
-        !thisAtBoot  = thisObject scopeAtBoot
-        !pgsAtBoot   = EdhProgState { edh'fork'queue = forkQueue
-                                    , edh'task'queue = mainQueue
-                                    , edh'reactors   = reactors
-                                    , edh'defers     = defers
-                                    , edh'in'tx      = False
-                                    , edh'context    = progCtx
-                                    }
+    let !pgsAtBoot = EdhProgState { edh'fork'queue = forkQueue
+                                  , edh'task'queue = mainQueue
+                                  , edh'reactors   = reactors
+                                  , edh'defers     = defers
+                                  , edh'in'tx      = False
+                                  , edh'context    = progCtx
+                                  }
     -- bootstrap the program on main thread
     atomically $ writeTQueue
       mainQueue
@@ -111,10 +109,7 @@ driveEdhProgram !progCtx !prog = do
   driveDefers :: [(EdhProgState, Expr)] -> IO ()
   driveDefers [] = return ()
   driveDefers ((!pgsDefer, !deferedExpr) : restDefers) = do
-    let !ctxDefer     = edh'context pgsDefer
-        !scopeAtDefer = contextScope ctxDefer
-        !thisAtDefer  = thisObject scopeAtDefer
-        !deferProg    = evalExpr thisAtDefer deferedExpr edhNop
+    let !deferProg = evalExpr deferedExpr edhNop
     !deferReactors                        <- newTVarIO []
     !deferDefers                          <- newTVarIO []
     !(deferTaskQueue :: TQueue EdhTxTask) <- newTQueueIO
@@ -127,7 +122,7 @@ driveEdhProgram !progCtx !prog = do
                  , edh'in'tx      = False
                  }
         False
-        (thisAtDefer, scopeAtDefer, nil)
+        (wuji pgsDefer)
         (const deferProg)
       )
     driveEdhThread deferDefers (tryReadTQueue deferTaskQueue)
@@ -141,34 +136,27 @@ driveEdhProgram !progCtx !prog = do
       Nothing -> driveReactors restReactors
       Just ev -> do
         !breakThread <- newEmptyTMVarIO
-        let
-          !ctxReactor = edh'context pgsReactor
-          !pk         = case ev of
-            EdhArgsPack pk_ -> pk_
-            _               -> ArgsPack [ev] Map.empty
-          !scopeAtReactor = contextScope ctxReactor
-          !thisAtReactor  = thisObject scopeAtReactor
-          !reactorProg =
-            recvEdhArgs ctxReactor argsRcvr pk $ \(_, _, scopeObj) ->
-              case scopeObj of
-                EdhObject (Object rcvd'ent _ _) ->
-                  local
-                      (\pgs' -> pgs'
-                        { edh'context =
-                          ctxReactor
-                            { callStack =
-                              scopeAtReactor { scopeEntity = rcvd'ent }
-                                <| callStack ctxReactor
-                            }
+        let !ctxReactor = edh'context pgsReactor
+            !pk         = case ev of
+              EdhArgsPack pk_ -> pk_
+              _               -> ArgsPack [ev] Map.empty
+            !scopeAtReactor = contextScope ctxReactor
+            !reactorProg    = recvEdhArgs ctxReactor argsRcvr pk $ \ent ->
+              local
+                  (\pgs' -> pgs'
+                    { edh'context =
+                      ctxReactor
+                        { callStack = scopeAtReactor { scopeEntity = ent }
+                                        <| callStack ctxReactor
                         }
-                      )
-                    $ evalStmt thisAtReactor stmt
-                    $ \(_, _, reactorRtn) ->
-                        let doBreak = case reactorRtn of
-                              EdhBreak -> True -- terminate this thread
-                              _        -> False
-                        in  contEdhSTM $ putTMVar breakThread doBreak
-                _ -> error "bug"
+                    }
+                  )
+                $ evalStmt stmt
+                $ \(OriginalValue !reactorRtn _ _) ->
+                    let doBreak = case reactorRtn of
+                          EdhBreak -> True -- terminate this thread
+                          _        -> False
+                    in  contEdhSTM $ putTMVar breakThread doBreak
         !reactReactors                        <- newTVarIO []
         !reactDefers                          <- newTVarIO []
         !(reactTaskQueue :: TQueue EdhTxTask) <- newTQueueIO
@@ -181,7 +169,7 @@ driveEdhProgram !progCtx !prog = do
                        , edh'in'tx      = False
                        }
             False
-            (thisAtReactor, scopeAtReactor, nil)
+            (wuji pgsReactor)
             (const reactorProg)
           )
         driveEdhThread reactDefers (tryReadTQueue reactTaskQueue)

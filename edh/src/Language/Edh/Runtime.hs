@@ -10,7 +10,6 @@ module Language.Edh.Runtime
   , runEdhProgram'
   , mkHostProc
   , mkHostOper
--- TODO cherrypick what artifacts to export as for user interface
   , module CL
   , module RT
   , module TX
@@ -52,7 +51,7 @@ bootEdhModule !world impSpec = liftIO $ tryJust edhKnownError $ do
   !final <- newEmptyTMVarIO
   runEdhProgram' ctx
     $ importEdhModule (SingleReceiver (RecvRestPkArgs "_")) impSpec
-    $ \(_, _, !val) -> case val of
+    $ \(OriginalValue !val _ _) -> case val of
         EdhObject modu -> contEdhSTM $ putTMVar final modu
         _              -> error "bug: importEdhModule returns non-object?"
   atomically $ readTMVar final
@@ -69,7 +68,7 @@ runEdhProgram
   -> m (Either InterpretError EdhValue)
 runEdhProgram !world !modu !stmts = liftIO $ tryJust edhKnownError $ do
   !final <- newEmptyTMVarIO
-  runEdhProgram' ctx $ evalBlock modu stmts $ \(_, _, !val) ->
+  runEdhProgram' ctx $ evalBlock stmts $ \(OriginalValue !val _ _) ->
     contEdhSTM $ putTMVar final val
   atomically $ readTMVar final
   where !ctx = moduleContext world modu
