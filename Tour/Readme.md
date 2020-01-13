@@ -83,17 +83,24 @@ at it since inception.
 
 ## Zen of Edh
 
-> Do program and think in [**Haskell**](https://www.haskell.org), (i.e.
-> be a _Haskeller_), for anyone who you must work with but hasn't feel
-> comfortable with **Haskell** code, ask him/her to use **Edh**, and
-> write [host procedures](#host-procedures) to help get his/her job done
+> Always keep in mind that **Edh** the language can be as horrible as
+> **JavaScript** if overly used in wrong ways (clues as described
+> [here](https://medium.com/javascript-non-grata/the-top-10-things-wrong-with-javascript-58f440d6b3d8)
+> ), do program and think in [**Haskell**](https://www.haskell.org),
+> (i.e. be a _Haskeller_), only for someone who you must work with but
+> hasn't feel comfortable with **Haskell** code, ask him/her to use
+> **Edh**, and write [host procedures](#host-procedures) to help get
+> his/her job done
 >
-> When programming in **Edh**, be _Edhic_, that to be _Edhic_, is
-> to be more _Pythonic_ than being
+> **Edh** code can be even more concise than **Haskell** code at a
+> sweet spot balanced between _imperative_ and _declarative_, do
+> **Edh** programming around such spots if you can find them, and when
+> you do, be _Edhic_, that to be _Edhic_, is to be more _Pythonic_
+> than being
 > [**Pythonic**](https://www.python.org/dev/peps/pep-0020)
 >
-> And whenever you're not sure how to get a job done, think
-> about how a [**Gopher**](https://blog.golang.org/gopher) would do it
+> Whenever you're not sure how to get a job done, think about how a
+> [**Gopher**](https://blog.golang.org/gopher) would do it
 
 ## Concepts
 
