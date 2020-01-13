@@ -620,9 +620,11 @@ evalExpr expr exit = do
       evalExpr yieldExpr $ \(OriginalValue !yieldResult _ _) ->
         case genr'caller of
           Nothing -> throwEdh EvalError "Unexpected yield"
-          Just (pgs', yieldTo) ->
-            contEdhSTM $ runEdhProg pgs' $ yieldTo yieldResult $ \doResult ->
-              exitEdhSTM pgs exit doResult
+          Just (pgsGenrCaller, yieldTo) ->
+            contEdhSTM
+              $ runEdhProg pgsGenrCaller
+              $ yieldTo yieldResult
+              $ \doResult -> exitEdhSTM pgs exit doResult
 
     ForExpr argsRcvr iterExpr doExpr ->
       contEdhSTM
@@ -638,7 +640,7 @@ evalExpr expr exit = do
         resolveEdhCtxAttr scope key >>= \case
           Nothing ->
             throwEdhSTM pgs EvalError $ "Not in scope: " <> T.pack (show addr')
-          Just (OriginalValue !val _ _) -> exitEdhSTM pgs exit val
+          Just !originVal -> exitEdhSTM' pgs exit originVal
       IndirectRef !tgtExpr !addr' -> contEdhSTM $ do
         key <- resolveAddr pgs addr'
         runEdhProg pgs $ evalExpr tgtExpr $ \(OriginalValue !tgtVal _ _) ->
@@ -651,7 +653,7 @@ evalExpr expr exit = do
                     <> T.pack (show key)
                     <> " from "
                     <> T.pack (show obj)
-                Just (OriginalValue !atrVal _ _) -> exitEdhSTM pgs exit atrVal
+                Just !originVal -> exitEdhSTM' pgs exit originVal
             _ ->
               throwEdh EvalError
                 $  "Expecting an object but got a "
@@ -861,93 +863,106 @@ edhMakeCall !pgsCaller !procExpr !argsSndr !callMaker = do
       !callerScope = contextScope callerCtx
   runEdhProg pgsCaller
     $ evalExpr procExpr
-    $ \(OriginalValue !callee'val _ !callee'that) -> case callee'val of
+    $ \(OriginalValue !callee'val !_callee'scope !callee'that) ->
+        case callee'val of
 
           -- calling a host procedure
-        (EdhHostProc (HostProcedure _ proc)) ->
-          contEdhSTM $ callMaker $ \exit ->
-            contEdhSTM
-              -- insert a cycle tick here, so if no tx required for the call
-              -- overall, the callee resolution tx stops here then the callee
-              -- runs in next stm transaction
-              $ flip (exitEdhSTM' pgsCaller) (wuji pgsCaller)
-              $ \_ -> proc argsSndr exit
+          (EdhHostProc (HostProcedure _ proc)) ->
+            contEdhSTM $ callMaker $ \exit -> do
+              -- a host procedure runs against its caller's scope, with
+              -- 'thatObject' changed to the resolution target object
+              let !calleeScope = callerScope { thatObject = callee'that }
+                  !calleeCtx   = callerCtx
+                    { callStack       = calleeScope <| callStack callerCtx
+                    , generatorCaller = Nothing
+                    , contextMatch    = true
+                    , contextStmt     = voidStatement
+                    }
+                  !pgsCallee = pgsCaller { edh'context = calleeCtx }
+              contEdhSTM
+                -- insert a cycle tick here, so if no tx required for the call
+                -- overall, the callee resolution tx stops here then the callee
+                -- runs in next stm transaction
+                $ flip (exitEdhSTM' pgsCallee) (wuji pgsCallee)
+                $ \_ -> proc argsSndr $ \OriginalValue {..} ->
+                    -- return the result in CPS with caller pgs restored
+                    contEdhSTM $ exitEdhSTM pgsCaller exit valueFromOrigin
 
-        -- calling a class (constructor) procedure
-        (EdhClass cls) ->
+          -- calling a class (constructor) procedure
+          (EdhClass cls) ->
+              -- ensure atomicity of args sending
+            local (const pgsCaller { edh'in'tx = True })
+              $ packEdhArgs argsSndr
+              $ \apk -> contEdhSTM $ callMaker $ constructEdhObject apk cls
+
+          -- calling a method procedure
+          (EdhMethod (Method !mth'lexi'stack !mth'proc)) ->
             -- ensure atomicity of args sending
-          local (const pgsCaller { edh'in'tx = True })
-            $ packEdhArgs argsSndr
-            $ \apk -> contEdhSTM $ callMaker $ constructEdhObject apk cls
+            local (const pgsCaller { edh'in'tx = True })
+              $ packEdhArgs argsSndr
+              $ \apk -> contEdhSTM $ callMaker $ callEdhMethod apk
+                                                               callee'that
+                                                               mth'lexi'stack
+                                                               mth'proc
+                                                               Nothing
 
-        -- calling a method procedure
-        (EdhMethod (Method !mth'lexi'stack !mth'proc)) ->
-          -- ensure atomicity of args sending
-          local (const pgsCaller { edh'in'tx = True })
-            $ packEdhArgs argsSndr
-            $ \apk -> contEdhSTM $ callMaker $ callEdhMethod apk
-                                                             callee'that
-                                                             mth'lexi'stack
-                                                             mth'proc
-                                                             Nothing
+          -- calling an interpreter procedure
+          (EdhInterpreter (Interpreter !mth'lexi'stack !mth'proc)) ->
+            -- ensure atomicity of args sending
+            local (const pgsCaller { edh'in'tx = True })
+              $ packEdhExprs argsSndr
+              $ \(ArgsPack !args !kwargs) -> contEdhSTM $ do
+                  argCallerScope <- mkScopeWrapper (contextWorld callerCtx)
+                                                   (contextScope callerCtx)
+                  callMaker $ callEdhMethod
+                    (ArgsPack (EdhObject argCallerScope : args) kwargs)
+                    callee'that
+                    mth'lexi'stack
+                    mth'proc
+                    Nothing
 
-        -- calling an interpreter procedure
-        (EdhInterpreter (Interpreter !mth'lexi'stack !mth'proc)) ->
-          -- ensure atomicity of args sending
-          local (const pgsCaller { edh'in'tx = True })
-            $ packEdhExprs argsSndr
-            $ \(ArgsPack !args !kwargs) -> contEdhSTM $ do
-                argCallerScope <- mkScopeWrapper (contextWorld callerCtx)
-                                                 callerScope
-                callMaker $ callEdhMethod
-                  (ArgsPack (EdhObject argCallerScope : args) kwargs)
-                  callee'that
-                  mth'lexi'stack
-                  mth'proc
-                  Nothing
+          -- calling a host generator
+          (EdhHostGenr _) ->
+            throwEdh EvalError "Can only call a host generator by for-from-do"
 
-        -- calling a host generator
-        (EdhHostGenr _) ->
-          throwEdh EvalError "Can only call a host generator by for-from-do"
+          -- calling a generator
+          (EdhGenrDef _) ->
+            throwEdh EvalError "Can only call a generator method by for-from-do"
 
-        -- calling a generator
-        (EdhGenrDef _) ->
-          throwEdh EvalError "Can only call a generator method by for-from-do"
-
-        _ ->
-          throwEdh EvalError
-            $  "Can not call a "
-            <> T.pack (show $ edhTypeOf callee'val)
-            <> ": "
-            <> T.pack (show callee'val)
-            <> " ❌ expressed with: "
-            <> T.pack (show procExpr)
+          _ ->
+            throwEdh EvalError
+              $  "Can not call a "
+              <> T.pack (show $ edhTypeOf callee'val)
+              <> ": "
+              <> T.pack (show callee'val)
+              <> " ❌ expressed with: "
+              <> T.pack (show procExpr)
 
 
 constructEdhObject :: ArgsPack -> Class -> EdhProcExit -> EdhProg (STM ())
 constructEdhObject !apk cls@(Class !cls'lexi'stack clsProc@(ProcDecl _ !ctor'args !ctor'body)) !exit
   = do
     pgs <- ask
-    let !ctx     = edh'context pgs
-        !scope   = contextScope ctx
-        !recvCtx = ctx { callStack       = cls'lexi'stack
-                       , generatorCaller = Nothing
-                       , contextMatch    = true
-                       , contextStmt     = voidStatement
-                       }
+    let !callerCtx   = edh'context pgs
+        !calleeScope = NE.head cls'lexi'stack
+        !recvCtx     = callerCtx { callStack       = cls'lexi'stack
+                                 , generatorCaller = Nothing
+                                 , contextMatch    = true
+                                 , contextStmt     = voidStatement
+                                 }
     recvEdhArgs recvCtx ctor'args apk $ \ent -> contEdhSTM $ do
       newThis <- viewAsEdhObject ent cls []
-      let !ctorScope = scope { scopeEntity = ent
-                             , thisObject  = newThis
-                             , thatObject  = newThis
-                             , lexiStack   = NE.toList cls'lexi'stack
-                             , scopeProc   = clsProc
-                             }
-          !ctorCtx = ctx { callStack       = ctorScope <| callStack ctx
-                         , generatorCaller = Nothing
-                         , contextMatch    = true
-                         , contextStmt     = voidStatement
-                         }
+      let !ctorScope = calleeScope { scopeEntity = ent
+                                   , thisObject  = newThis
+                                   , thatObject  = newThis
+                                   , lexiStack   = NE.toList cls'lexi'stack
+                                   , scopeProc   = clsProc
+                                   }
+          !ctorCtx = callerCtx { callStack = ctorScope <| callStack callerCtx
+                               , generatorCaller = Nothing
+                               , contextMatch    = true
+                               , contextStmt     = voidStatement
+                               }
           !pgsCtor = pgs { edh'context = ctorCtx }
       runEdhProg pgsCtor
         $ evalStmt ctor'body
@@ -981,24 +996,24 @@ callEdhMethod
 callEdhMethod !apk !callee'that !mth'lexi'stack mth'proc@(ProcDecl _ !mth'args !mth'body) !gnr'caller !exit
   = do
     !pgs <- ask
-    let !ctx     = edh'context pgs
-        !scope   = contextScope ctx
-        !recvCtx = ctx { callStack       = mth'lexi'stack
-                       , generatorCaller = Nothing
-                       , contextMatch    = true
-                       , contextStmt     = voidStatement
-                       }
+    let !callerCtx   = edh'context pgs
+        !calleeScope = NE.head mth'lexi'stack
+        !recvCtx     = callerCtx { callStack       = mth'lexi'stack
+                                 , generatorCaller = Nothing
+                                 , contextMatch    = true
+                                 , contextStmt     = voidStatement
+                                 }
     recvEdhArgs recvCtx mth'args apk $ \ent -> contEdhSTM $ do
-      let !mthScope = scope { scopeEntity = ent
-                            , thatObject  = callee'that
-                            , lexiStack   = NE.toList mth'lexi'stack
-                            , scopeProc   = mth'proc
-                            }
-          !mthCtx = ctx { callStack       = mthScope <| callStack ctx
-                        , generatorCaller = gnr'caller
-                        , contextMatch    = true
-                        , contextStmt     = voidStatement
-                        }
+      let !mthScope = calleeScope { scopeEntity = ent
+                                  , thatObject  = callee'that
+                                  , lexiStack   = NE.toList mth'lexi'stack
+                                  , scopeProc   = mth'proc
+                                  }
+          !mthCtx = callerCtx { callStack = mthScope <| callStack callerCtx
+                              , generatorCaller = gnr'caller
+                              , contextMatch    = true
+                              , contextStmt     = voidStatement
+                              }
           !pgsMth = pgs { edh'context = mthCtx }
       runEdhProg pgsMth $ evalStmt mth'body $ \(OriginalValue !mthRtn _ _) ->
         local (const pgs) $ case mthRtn of
@@ -1051,7 +1066,7 @@ edhForLoop !pgsLooper !argsRcvr !iterExpr !doExpr !iterCollector !forLooper =
                 modifyTVar' (scopeEntity looperScope) $ Map.union em
                 runEdhProg pgsLooper
                   $ evalExpr doExpr
-                  $ \(OriginalValue doResult _ _) -> case doResult of
+                  $ \(OriginalValue !doResult _ _) -> case doResult of
                       EdhContinue ->
                         -- propagate the continue to generator
                         contEdhSTM $ genrCont EdhContinue
@@ -1069,17 +1084,16 @@ edhForLoop !pgsLooper !argsRcvr !iterExpr !doExpr !iterCollector !forLooper =
     runEdhProg pgsLooper $ case deParen iterExpr of
       CallExpr procExpr argsSndr -> -- loop over a generator
         evalExpr procExpr
-          $ \(OriginalValue !callee'val !callee'scope !callee'that) ->
+          $ \(OriginalValue !callee'val !_callee'scope !callee'that) ->
               case callee'val of
 
                 -- calling a host generator
                 (EdhHostGenr (HostProcedure _ proc)) ->
                   contEdhSTM $ forLooper $ \exit -> do
-                    -- a host procedure has no lexical scope, always runs as in where
-                    -- it's addressed off
-                    let !calleeScope =
-                          callee'scope { thatObject = callee'that }
-                        !calleeCtx = looperCtx
+                    -- a host procedure runs against its caller's scope, with
+                    -- 'thatObject' changed to the resolution target object
+                    let !calleeScope = looperScope { thatObject = callee'that }
+                        !calleeCtx   = looperCtx
                           { callStack       = calleeScope <| callStack looperCtx
                           , generatorCaller = Just (pgsLooper, recvYield exit)
                           , contextMatch    = true

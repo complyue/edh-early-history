@@ -87,10 +87,10 @@ scopeObtainProc _ !exit = do
 scopeAttrsProc :: EdhProcedure
 scopeAttrsProc _ !exit = do
   !pgs <- ask
-  let !that  = thatObject $ contextScope $ edh'context pgs
-      !scope = NE.head $ classLexiStack $ objClass that
+  let !that         = thatObject $ contextScope $ edh'context pgs
+      !wrappedScope = NE.head $ classLexiStack $ objClass that
   contEdhSTM $ do
-    em <- readTVar (scopeEntity scope)
+    em <- readTVar (scopeEntity wrappedScope)
     ad <-
       newTVar
       $ Map.fromAscList
