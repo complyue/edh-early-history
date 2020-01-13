@@ -18,25 +18,21 @@ import           Language.Edh.Runtime
 
 -- | utility constructor(*args,**kwargs)
 ctorProc :: EdhProcedure
-ctorProc !argsSender !that _ !exit = do
+ctorProc !argsSender !exit = do
   !pgs <- ask
-  let callerCtx                      = edh'context pgs
-      callerScope@(Scope _ this _ _) = contextScope callerCtx
-  packEdhArgs that argsSender
-    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) ->
-        let !argsCls = edhClassOf <$> args
-        in  if null kwargs
-              then case argsCls of
-                [] ->
-                  exitEdhProc exit (that, callerScope, EdhClass $ objClass this)
-                [t] -> exitEdhProc exit (that, callerScope, t)
-                _   -> exitEdhProc exit (that, callerScope, EdhTuple argsCls)
-              else exitEdhProc
-                exit
-                ( that
-                , callerScope
-                , EdhArgsPack $ ArgsPack argsCls $ Map.map edhClassOf kwargs
-                )
+  let callerCtx   = edh'context pgs
+      callerScope = contextScope callerCtx
+  packEdhArgs argsSender $ \(ArgsPack !args !kwargs) ->
+    let !argsCls = edhClassOf <$> args
+    in  if null kwargs
+          then case argsCls of
+            [] ->
+              exitEdhProc exit (EdhClass $ objClass $ thisObject callerScope)
+            [t] -> exitEdhProc exit t
+            _   -> exitEdhProc exit (EdhTuple argsCls)
+          else exitEdhProc
+            exit
+            (EdhArgsPack $ ArgsPack argsCls $ Map.map edhClassOf kwargs)
  where
   edhClassOf :: EdhValue -> EdhValue
   edhClassOf (EdhObject o) = EdhClass $ objClass o
@@ -44,35 +40,28 @@ ctorProc !argsSender !that _ !exit = do
 
 -- | utility supers(*args,**kwargs)
 supersProc :: EdhProcedure
-supersProc !argsSender that _ !exit = do
+supersProc !argsSender !exit = do
   !pgs <- ask
   let !callerCtx   = edh'context pgs
       !callerScope = contextScope callerCtx
       !argCnt      = length argsSender
   if argCnt < 1
     then contEdhSTM $ do
-      supers <- map EdhObject <$> (readTVar $ objSupers that)
-      exitEdhSTM pgs exit (that, callerScope, EdhTuple supers)
-    else
-      packEdhArgs that argsSender
-        $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> if null kwargs
-            then case args of
-              [v] -> contEdhSTM $ do
-                supers <- supersOf v
-                exitEdhSTM pgs exit (that, callerScope, supers)
-              _ -> contEdhSTM $ do
-                argsSupers <- sequence $ supersOf <$> args
-                exitEdhSTM pgs exit (that, callerScope, EdhTuple argsSupers)
-            else contEdhSTM $ do
-              argsSupers   <- sequence $ supersOf <$> args
-              kwargsSupers <- sequence $ Map.map supersOf kwargs
-              exitEdhSTM
-                pgs
-                exit
-                ( that
-                , callerScope
-                , EdhArgsPack $ ArgsPack argsSupers kwargsSupers
-                )
+      supers <-
+        map EdhObject <$> (readTVar $ objSupers $ thatObject callerScope)
+      exitEdhSTM pgs exit (EdhTuple supers)
+    else packEdhArgs argsSender $ \(ArgsPack !args !kwargs) -> if null kwargs
+      then case args of
+        [v] -> contEdhSTM $ do
+          supers <- supersOf v
+          exitEdhSTM pgs exit supers
+        _ -> contEdhSTM $ do
+          argsSupers <- sequence $ supersOf <$> args
+          exitEdhSTM pgs exit (EdhTuple argsSupers)
+      else contEdhSTM $ do
+        argsSupers   <- sequence $ supersOf <$> args
+        kwargsSupers <- sequence $ Map.map supersOf kwargs
+        exitEdhSTM pgs exit (EdhArgsPack $ ArgsPack argsSupers kwargsSupers)
  where
   supersOf :: EdhValue -> STM EdhValue
   supersOf v = case v of
@@ -84,12 +73,12 @@ supersProc !argsSender that _ !exit = do
 -- | utility scope()
 -- obtain current scope as reflected object
 scopeObtainProc :: EdhProcedure
-scopeObtainProc _ !that _ !exit = do
+scopeObtainProc _ !exit = do
   !pgs <- ask
-  let (Context !world !call'stack _ _ _) = edh'context pgs
-      !scope                             = NE.head call'stack
+  let !ctx   = edh'context pgs
+      !scope = contextScope ctx
   contEdhSTM $ do
-    wrapperObj <- mkScopeWrapper world scope
+    wrapperObj <- mkScopeWrapper (contextWorld ctx) scope
     exitEdhSTM pgs exit $ EdhObject wrapperObj
 
 
@@ -106,7 +95,7 @@ scopeAttrsProc _ !exit = do
       newTVar
       $ Map.fromAscList
       $ [ (itemKeyOf ak, v) | (ak, v) <- Map.toAscList em ]
-    exitEdhSTM pgs exit EdhDict $ Dict ad
+    exitEdhSTM pgs exit $ EdhDict $ Dict ad
  where
   itemKeyOf :: AttrKey -> ItemKey
   itemKeyOf (AttrByName name) = ItemByStr name
@@ -134,12 +123,12 @@ scopeTraceBackProc _ !exit = do
 scopeStackProc :: EdhProcedure
 scopeStackProc _ !exit = do
   !pgs <- ask
-  let !world = contextWrold $ edh'context pgs
-      !that  = thatObject $ contextScope $ edh'context pgs
+  let !ctx  = edh'context pgs
+      !that = thatObject $ contextScope ctx
   contEdhSTM $ do
     wrappedObjs <-
       sequence
-      $   mkScopeWrapper world
+      $   mkScopeWrapper (contextWorld ctx)
       -- the world scope at bottom of any lexical stack has empty
       -- lexical stack itself, and is of no interest
       <$> (NE.takeWhile (not . null . lexiStack) $ classLexiStack $ objClass
@@ -175,55 +164,54 @@ scopeEvalProc !argsSender !exit = do
       let (!oneExpr, !kwargsExprs') = Map.splitAt 1 kwargsExprs
           (!kw     , !kwExpr      ) = Map.elemAt 0 oneExpr
       case kwExpr of
-        EdhExpr !expr -> evalExpr expr $ \OriginalValue !val _ _ -> evalThePack
-          argsValues
-          (Map.insert kw val kwargsValues)
-          []
-          kwargsExprs'
+        EdhExpr !expr -> evalExpr expr $ \(OriginalValue !val _ _) ->
+          evalThePack argsValues
+                      (Map.insert kw val kwargsValues)
+                      []
+                      kwargsExprs'
         v -> throwEdh EvalError $ "Not an expr: " <> T.pack (show v)
     evalThePack !argsValues !kwargsValues (!argExpr : argsExprs') !kwargsExprs
       = case argExpr of
-        EdhExpr !expr -> evalExpr expr $ \OriginalValue !val _ _ ->
+        EdhExpr !expr -> evalExpr expr $ \(OriginalValue !val _ _) ->
           evalThePack (val : argsValues) kwargsValues argsExprs' kwargsExprs
         v -> throwEdh EvalError $ "Not an expr: " <> T.pack (show v)
-  packEdhArgs that argsSender
-    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) ->
-        if null kwargs && null args
-          then exitEdhProc exit (that, callerScope, nil)
-          else
-            contEdhSTM
-            $
-              -- eval all exprs with the original lexical scope as call stack
-              runEdhProg pgs
-                { edh'context = callerCtx { callStack       = scopeCallStack
-                                          , generatorCaller = Nothing
-                                          , contextMatch    = true
-                                          , contextStmt     = voidStatement
-                                          }
-                }
-            $ evalThePack [] Map.empty args kwargs
+  packEdhArgs argsSender $ \(ArgsPack !args !kwargs) ->
+    if null kwargs && null args
+      then exitEdhProc exit nil
+      else
+        contEdhSTM
+        $
+          -- eval all exprs with the original lexical scope as call stack
+          runEdhProg pgs
+            { edh'context = callerCtx { callStack       = scopeCallStack
+                                      , generatorCaller = Nothing
+                                      , contextMatch    = true
+                                      , contextStmt     = voidStatement
+                                      }
+            }
+        $ evalThePack [] Map.empty args kwargs
 
 
 -- | utility makeOp(lhExpr, opSym, rhExpr)
 makeOpProc :: EdhProcedure
-makeOpProc argsSender that _ !exit = do
+makeOpProc argsSender !exit = do
   !pgs <- ask
   let !callerCtx   = edh'context pgs
       !callerScope = contextScope callerCtx
-  packEdhArgs that argsSender
-    $ \(_, _, EdhArgsPack (ArgsPack !args !kwargs)) -> if (not $ null kwargs)
-        then throwEdh EvalError "No kwargs accepted by makeOp"
-        else case args of
-          [(EdhExpr lhe), (EdhString op), (EdhExpr rhe)] ->
-            exitEdhProc exit (that, callerScope, EdhExpr $ InfixExpr op lhe rhe)
-          _ -> throwEdh EvalError $ "Invalid arguments to makeOp: " <> T.pack
-            (show args)
+  packEdhArgs argsSender $ \(ArgsPack !args !kwargs) -> if (not $ null kwargs)
+    then throwEdh EvalError "No kwargs accepted by makeOp"
+    else case args of
+      [(EdhExpr lhe), (EdhString op), (EdhExpr rhe)] ->
+        exitEdhProc exit (EdhExpr $ InfixExpr op lhe rhe)
+      _ -> throwEdh EvalError $ "Invalid arguments to makeOp: " <> T.pack
+        (show args)
 
 
 -- | utility expr(*args,**kwargs)
 makeExprProc :: EdhProcedure
-makeExprProc !argsSender !that scope !exit = case argsSender of
-  []                    -> exit (that, scope, nil)
-  [SendPosArg !argExpr] -> exit (that, scope, EdhExpr argExpr)
-  argSenders            -> packEdhExprs that argSenders exit
+makeExprProc !argsSender !exit = case argsSender of
+  []                    -> exitEdhProc exit nil
+  [SendPosArg !argExpr] -> exitEdhProc exit (EdhExpr argExpr)
+  argSenders ->
+    packEdhExprs argSenders $ \apk -> exitEdhProc exit $ EdhArgsPack apk
 
