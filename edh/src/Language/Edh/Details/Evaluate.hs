@@ -455,9 +455,10 @@ loadModule !pgs !moduSlot !moduId !moduFile !exit = if edh'in'tx pgs
                   (\(e :: SomeException) -> tryPutTMVar wops opPD >> throwSTM e)
                 $ do
                     -- parse module source
-                    let (pr, opPD') = runState
-                          (runParserT parseProgram (T.unpack moduId) moduSource)
-                          opPD
+                    let
+                      (pr, opPD') = runState
+                        (runParserT parseProgram moduFile moduSource)
+                        opPD
                     case pr of
                       Left  !err   -> throwSTM $ EdhParseError err
                       Right !stmts -> do

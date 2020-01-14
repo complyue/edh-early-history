@@ -29,9 +29,10 @@ data AttrAddressor =
 
 newtype StmtSrc = StmtSrc (SourcePos, Stmt)
 instance Eq StmtSrc where
-  StmtSrc (x'sp, _) == StmtSrc (y'sp, _) = x'sp == y'sp
+  StmtSrc (x'sp, x'stmt) == StmtSrc (y'sp, y'stmt) =
+    x'sp == y'sp && x'stmt == y'stmt
 instance Show StmtSrc where
-  show (StmtSrc (sp, _)) = "Edh statement @ " ++ sourcePosPretty sp
+  show (StmtSrc (sp, stmt)) = show stmt ++ "\n@ " ++ sourcePosPretty sp
 
 
 data Stmt =

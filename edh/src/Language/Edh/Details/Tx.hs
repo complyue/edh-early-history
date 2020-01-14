@@ -129,43 +129,39 @@ driveEdhProgram !progCtx !prog = do
   driveReactors
     :: [(TChan EdhValue, EdhProgState, ArgsReceiver, StmtSrc)] -> IO Bool
   driveReactors [] = return False
-  driveReactors ((!chan, pgsReactor, argsRcvr, stmt) : restReactors) =
+  driveReactors ((!chan, pgsOrigin, argsRcvr, stmt) : restReactors) =
     atomically (tryReadTChan chan) >>= \case
       Nothing  -> driveReactors restReactors
       Just !ev -> do
         !breakThread <- newEmptyTMVarIO
         let
-          !ctxReactor = edh'context pgsReactor
+          !ctxReactor = edh'context pgsOrigin
           !apk        = case ev of
             EdhArgsPack apk_ -> apk_
             _                -> ArgsPack [ev] Map.empty
           !scopeAtReactor = contextScope ctxReactor
-          !reactorProg    = recvEdhArgs ctxReactor argsRcvr apk $ \ent ->
-            contEdhSTM $ do
+          !reactorProg    = ask >>= \pgsReactor ->
+            recvEdhArgs ctxReactor argsRcvr apk $ \ent -> contEdhSTM $ do
               em <- readTVar ent
               modifyTVar' (scopeEntity scopeAtReactor) $ Map.union em
               runEdhProg pgsReactor
                 $ evalStmt stmt
-                $ \(OriginalValue !reactorRtn _ _) ->
+                $ \(OriginalValue !reactorRtn _ _) -> do
                     let doBreak = case reactorRtn of
                           EdhBreak -> True -- terminate this thread
                           _        -> False
-                    in  contEdhSTM $ putTMVar breakThread doBreak
+                    contEdhSTM $ putTMVar breakThread doBreak
         !reactReactors                        <- newTVarIO []
         !reactDefers                          <- newTVarIO []
         !(reactTaskQueue :: TQueue EdhTxTask) <- newTQueueIO
+        let !pgsReactor = pgsOrigin { edh'task'queue = reactTaskQueue
+                                    , edh'reactors   = reactReactors
+                                    , edh'defers     = reactDefers
+                                    , edh'in'tx      = False
+                                    }
         atomically $ writeTQueue
           reactTaskQueue
-          (EdhTxTask
-            pgsReactor { edh'task'queue = reactTaskQueue
-                       , edh'reactors   = reactReactors
-                       , edh'defers     = reactDefers
-                       , edh'in'tx      = False
-                       }
-            False
-            (wuji pgsReactor)
-            (const reactorProg)
-          )
+          (EdhTxTask pgsReactor False (wuji pgsReactor) (const reactorProg))
         driveEdhThread reactDefers (tryReadTQueue reactTaskQueue)
         !doBreak <- atomically $ readTMVar breakThread
         if doBreak then return True else driveReactors restReactors
