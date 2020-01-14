@@ -97,6 +97,6 @@ executable edhi
     build-depends:
         edh-internal -any,
         base >=4.12 && <5,
-        megaparsec >=8.0,
+        megaparsec >7.0,
         text -any,
         haskeline -any
