@@ -48,6 +48,7 @@ import           Language.Edh.Details.Evaluate as EV
 bootEdhModule
   :: MonadIO m => EdhWorld -> Text -> m (Either InterpretError Object)
 bootEdhModule !world impSpec = liftIO $ tryJust edhKnownError $ do
+  ctx    <- atomically $ moduleContext world $ worldRoot world
   !final <- newEmptyTMVarIO
   runEdhProgram' ctx
     $ importEdhModule (SingleReceiver (RecvRestPkArgs "_")) impSpec
@@ -55,9 +56,6 @@ bootEdhModule !world impSpec = liftIO $ tryJust edhKnownError $ do
         EdhObject modu -> contEdhSTM $ putTMVar final modu
         _              -> error "bug: importEdhModule returns non-object?"
   atomically $ readTMVar final
- where
-  !root = worldRoot world
-  !ctx  = moduleContext world root
 
 
 runEdhProgram

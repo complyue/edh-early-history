@@ -28,6 +28,7 @@ import           Language.Edh.Batteries.Runtime
 installEdhBatteries :: MonadIO m => EdhWorld -> m ()
 installEdhBatteries world = liftIO $ do
   envLogLevel <- lookupEnv "EDH_LOG_LEVEL"
+  rootCtx     <- atomically $ moduleContext world $ worldRoot world
   runEdhProgram' rootCtx $ do
     pgs <- ask
     contEdhSTM $ do
@@ -249,7 +250,6 @@ installEdhBatteries world = liftIO $ do
       runEdhProg pgs $ importEdhModule WildReceiver "batteries/root" edhNop
 
  where
-  !rootCtx    = moduleContext world $ worldRoot world
   !rootEntity = objEntity $ worldRoot world
   scopeManiMethods :: Entity
   !scopeManiMethods = objEntity $ scopeSuper world

@@ -473,9 +473,9 @@ loadModule !pgs !moduSlot !moduId !moduFile !exit = if edh'in'tx pgs
                                            , objClass  = moduleClass world
                                            , objSupers = moduSupers
                                            }
+                        moduCtx <- moduleContext world modu
                         -- run statements from the module with its own context
-                        runEdhProg pgs { edh'context = moduleContext world modu
-                                       }
+                        runEdhProg pgs { edh'context = moduCtx }
                           $ evalBlock stmts
                           $ \_ -> contEdhSTM $ do
                               -- arm the successfully loaded module
@@ -483,20 +483,39 @@ loadModule !pgs !moduSlot !moduId !moduFile !exit = if edh'in'tx pgs
                               -- switch back to module importer's scope and continue
                               exitEdhSTM pgs exit (EdhObject modu)
 
-moduleContext :: EdhWorld -> Object -> Context
-moduleContext !w !mo = Context { contextWorld    = w
-                               , callStack       = moduScope <| rootScope
-                               , generatorCaller = Nothing
-                               , contextMatch    = true
-                               , contextStmt     = voidStatement
-                               }
- where
-  !moduScope = Scope (objEntity mo)
-                     mo
-                     mo
-                     (NE.toList rootScope)
-                     (classProcedure $ moduleClass w)
-  !rootScope = (classLexiStack $ moduleClass w)
+
+moduleContext :: EdhWorld -> Object -> STM Context
+moduleContext !world !modu = moduleInfo modu >>= \(moduName, moduFile) ->
+  let !moduScope = Scope
+        (objEntity modu)
+        modu
+        modu
+        (NE.toList rootScope)
+        (classProcedure $ moduleClass world)
+          { procedure'name = moduName
+          , procedure'body = StmtSrc
+                               ( SourcePos { sourceName   = T.unpack moduFile
+                                           , sourceLine   = mkPos 1
+                                           , sourceColumn = mkPos 1
+                                           }
+                               , VoidStmt
+                               )
+          }
+  in  return Context { contextWorld    = world
+                     , callStack       = moduScope <| rootScope
+                     , generatorCaller = Nothing
+                     , contextMatch    = true
+                     , contextStmt     = voidStatement
+                     }
+  where !rootScope = classLexiStack $ moduleClass world
+
+moduleInfo :: Object -> STM (Text, Text)
+moduleInfo !modu = do
+  em <- readTVar $ objEntity modu
+  case flip Map.lookup em . AttrByName <$> ["__name__", "__file__"] of
+    [Just (EdhString moduName), Just (EdhString moduFile)] ->
+      return (moduName, moduFile)
+    _ -> error "bug: module has no valid __name__ and/or __file__"
 
 voidStatement :: StmtSrc
 voidStatement = StmtSrc
