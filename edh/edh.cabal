@@ -32,6 +32,7 @@ library
     build-depends:
         base >=4.12 && <5,
         stm >=2.5,
+        megaparsec >7.0,
         lossless-decimal -any,
         edh-internal -any,
         text -any,
@@ -71,7 +72,7 @@ library edh-internal
         ghc >=8.6.5,
         base >=4.12 && <5,
         stm >=2.5,
-        megaparsec >=8.0,
+        megaparsec >7.0,
         lossless-decimal -any,
         scientific -any,
         filepath -any,

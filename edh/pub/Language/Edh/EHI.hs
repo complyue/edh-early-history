@@ -69,11 +69,15 @@ module Language.Edh.EHI
     -- ** CPS helpers
   , contEdhSTM
   , exitEdhSTM
+  , exitEdhSTM'
   , exitEdhProc
+  , exitEdhProc'
   , waitEdhSTM
   , edhNop
     -- ** AST manipulation
   , module AST
+  , SourcePos(..)
+  , sourcePosPretty
   , deParen
   , deBlock
 
@@ -137,6 +141,8 @@ import           Control.Exception
 import           Control.Monad.Reader
 
 import           Data.Text                     as T
+
+import           Text.Megaparsec
 
 import qualified Data.Lossless.Decimal         as D
 
