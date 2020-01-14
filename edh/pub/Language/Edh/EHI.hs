@@ -52,6 +52,7 @@ module Language.Edh.EHI
   , recvEdhArgs
   , packEdhExprs
   , packEdhArgs
+  , OriginalValue(..)
   , EdhProg
   , EdhProgState(..)
   , EdhTxTask(..)
