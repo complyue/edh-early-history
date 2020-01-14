@@ -342,11 +342,14 @@ type EdhProg = ReaderT EdhProgState STM
 data EdhProgState = EdhProgState {
     edh'fork'queue :: !(TQueue EdhTxTask)
     , edh'task'queue :: !(TQueue EdhTxTask)
-    , edh'reactors :: !(TVar [(TChan EdhValue, EdhProgState, ArgsReceiver , StmtSrc)])
-    , edh'defers :: !(TVar [(EdhProgState, EdhProg (STM ()))])
+    , edh'reactors :: !(TVar [ReactorRecord])
+    , edh'defers :: !(TVar [DeferRecord])
     , edh'in'tx :: !Bool
     , edh'context :: !Context
   }
+
+type ReactorRecord = (TChan EdhValue, EdhProgState, ArgsReceiver, StmtSrc)
+type DeferRecord = (EdhProgState, EdhProg (STM ()))
 
 -- | Run an Edh program from within STM monad
 runEdhProg :: EdhProgState -> EdhProg (STM ()) -> STM ()
