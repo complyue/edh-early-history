@@ -12,7 +12,6 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import qualified Data.Map.Strict               as Map
-import           Data.List.NonEmpty             ( (<|) )
 
 import           Language.Edh.Control
 import           Language.Edh.AST
@@ -132,24 +131,20 @@ driveEdhProgram !progCtx !prog = do
   driveReactors [] = return False
   driveReactors ((!chan, pgsReactor, argsRcvr, stmt) : restReactors) =
     atomically (tryReadTChan chan) >>= \case
-      Nothing -> driveReactors restReactors
-      Just ev -> do
+      Nothing  -> driveReactors restReactors
+      Just !ev -> do
         !breakThread <- newEmptyTMVarIO
-        let !ctxReactor = edh'context pgsReactor
-            !pk         = case ev of
-              EdhArgsPack pk_ -> pk_
-              _               -> ArgsPack [ev] Map.empty
-            !scopeAtReactor = contextScope ctxReactor
-            !reactorProg    = recvEdhArgs ctxReactor argsRcvr pk $ \ent ->
-              local
-                  (\pgs' -> pgs'
-                    { edh'context =
-                      ctxReactor
-                        { callStack = scopeAtReactor { scopeEntity = ent }
-                                        <| callStack ctxReactor
-                        }
-                    }
-                  )
+        let
+          !ctxReactor = edh'context pgsReactor
+          !apk        = case ev of
+            EdhArgsPack apk_ -> apk_
+            _                -> ArgsPack [ev] Map.empty
+          !scopeAtReactor = contextScope ctxReactor
+          !reactorProg    = recvEdhArgs ctxReactor argsRcvr apk $ \ent ->
+            contEdhSTM $ do
+              em <- readTVar ent
+              modifyTVar' (scopeEntity scopeAtReactor) $ Map.union em
+              runEdhProg pgsReactor
                 $ evalStmt stmt
                 $ \(OriginalValue !reactorRtn _ _) ->
                     let doBreak = case reactorRtn of

@@ -189,15 +189,15 @@ evalStmt' !stmt !exit = do
 
 
     ReactorStmt sinkExpr argsRcvr reactionStmt ->
-      evalExpr sinkExpr $ \OriginalValue {..} -> case valueFromOrigin of
+      evalExpr sinkExpr $ \(OriginalValue !val _ _) -> case val of
         (EdhSink sink) -> contEdhSTM $ do
           (reactorChan, _) <- subscribeEvents sink
           modifyTVar' (edh'reactors pgs)
                       ((reactorChan, pgs, argsRcvr, reactionStmt) :)
           exitEdhSTM pgs exit nil
-        val ->
+        _ ->
           throwEdh EvalError
-            $  "Can only reacting to an (event) sink, not a "
+            $  "Can only reacting to an event sink, not a "
             <> T.pack (show $ edhTypeOf val)
             <> ": "
             <> T.pack (show val)

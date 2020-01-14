@@ -59,9 +59,9 @@ data Stmt =
       -- | generator procedure definition
     | GeneratorStmt !ProcDecl
       -- | reactor declaration, a reactor procedure is not bound to a name,
-      -- it's bound to an (event) `sink` with the calling thread as context,
-      -- when an event fires from that (event) `sink`, the bound reactor
-      -- is scheduled to run by the context thread, after its currernt
+      -- it's bound to an event `sink` with the calling thread as context,
+      -- when an event fires from that event `sink`, the bound reactor will
+      -- get run from the thread where it's declared, after the currernt
       -- transaction finishes, a reactor procedure can `break` to terminate
       -- the thread, or the thread will continue to process next reactor, or
       -- next transactional task normally
