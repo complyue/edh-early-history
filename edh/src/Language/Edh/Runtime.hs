@@ -61,17 +61,9 @@ bootEdhModule !world impSpec = liftIO $ tryJust edhKnownError $ do
 
 
 runEdhProgram
-  :: MonadIO m
-  => EdhWorld
-  -> Object
-  -> [StmtSrc]
-  -> m (Either InterpretError EdhValue)
-runEdhProgram !world !modu !stmts = liftIO $ tryJust edhKnownError $ do
-  !final <- newEmptyTMVarIO
-  runEdhProgram' ctx $ evalBlock stmts $ \(OriginalValue !val _ _) ->
-    contEdhSTM $ putTMVar final val
-  atomically $ readTMVar final
-  where !ctx = moduleContext world modu
+  :: MonadIO m => Context -> EdhProg (STM ()) -> m (Either InterpretError ())
+runEdhProgram !ctx !prog =
+  liftIO $ tryJust edhKnownError $ runEdhProgram' ctx prog
 
 runEdhProgram' :: MonadIO m => Context -> EdhProg (STM ()) -> m ()
 runEdhProgram' !ctx !prog = liftIO $ driveEdhProgram ctx prog

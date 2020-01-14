@@ -66,7 +66,11 @@ evalEdhSource world modu code = liftIO $ do
                 -- release world lock as soon as parsing done successfuly
                 atomically $ putTMVar wops opPD'
 
-                runEdhProgram world modu stmts >>= \case
-                  Left  err -> return $ Left err
-                  Right val -> return $ Right val
+                tryJust edhKnownError $ do
+                  !final <- newEmptyTMVarIO
+                  runEdhProgram' (moduleContext world modu)
+                    $ evalBlock stmts
+                    $ \(OriginalValue !val _ _) ->
+                        contEdhSTM $ putTMVar final val
+                  atomically $ readTMVar final
   where !wops = worldOperators world
