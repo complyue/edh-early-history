@@ -45,8 +45,26 @@ errorProc !argsSender _ =
 branchProc :: EdhProcedure
 branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
   !pgs <- ask
-  let !callerCtx@(Context _ _ _ !ctxMatch _) = edh'context pgs
-      !callerScope                           = contextScope callerCtx
+  let !callerCtx   = edh'context pgs
+      !callerScope = contextScope callerCtx
+      !ctxMatch    = contextMatch callerCtx
+
+      handlePairPattern !pairPattern =
+        case matchPairPattern pairPattern ctxMatch [] of
+          Nothing -> throwEdh EvalError $ "Invalid pair pattern: " <> T.pack
+            (show pairPattern)
+          Just [] -> -- valid pattern, no match
+            exitEdhProc exit EdhFallthrough
+          Just mps -> contEdhSTM $ do -- pattern matched
+            modifyTVar' (scopeEntity callerScope) $ Map.union (Map.fromList mps)
+            runEdhProg pgs $ evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
+              exitEdhProc
+                exit
+                (case rhVal of
+                  EdhFallthrough -> EdhFallthrough
+                  _              -> EdhCaseClose rhVal
+                )
+
   case lhExpr of
     -- | recognize `_` as similar to the wildcard pattern match in Haskell,
     -- it always matches
@@ -58,8 +76,11 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
           _              -> EdhCaseClose rhVal
         )
 
-    BlockExpr patternExpr -> case patternExpr of
-      -- ^ a block expr left to (->) invokes pattern matching
+    -- | { x:y:z:... } -- pair pattern matching
+    DictExpr  [pairPattern] -> handlePairPattern pairPattern
+
+    -- | other pattern matching
+    BlockExpr patternExpr   -> case patternExpr of
 
       -- { continue } -- match with continue
       [StmtSrc (_, ContinueStmt)] -> case ctxMatch of
@@ -163,23 +184,9 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
                   )
             _ -> exitEdhSTM pgs exit EdhFallthrough
 
-       -- | {( x:y:z:... )} -- pair pattern
+       -- | {( x:y:z:... )} -- parenthesised pair pattern
       [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
-        case matchPairPattern pairPattern ctxMatch [] of
-          Nothing -> throwEdh EvalError $ "Invalid pair pattern: " <> T.pack
-            (show pairPattern)
-          Just [] -> -- valid pattern, no match
-            exitEdhProc exit EdhFallthrough
-          Just mps -> -- pattern matched
-                      contEdhSTM $ do
-            modifyTVar' (scopeEntity callerScope) $ Map.union (Map.fromList mps)
-            runEdhProg pgs $ evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
-              exitEdhProc
-                exit
-                (case rhVal of
-                  EdhFallthrough -> EdhFallthrough
-                  _              -> EdhCaseClose rhVal
-                )
+        handlePairPattern pairPattern
 
       -- {{ class:inst }} -- instance resolving pattern
       [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr classAttr))) (AttrExpr (DirectRef (NamedAttr instAttr)))]))]
@@ -221,7 +228,6 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
       --      e.g. list pattern, with rest-items repacking etc.
       _ -> throwEdh EvalError $ "Invalid match pattern: " <> T.pack
         (show patternExpr)
-
 
     -- | guarded condition, ignore match target in context, just check if the
     -- condition itself is true

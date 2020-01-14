@@ -757,7 +757,8 @@ evalExpr expr exit = do
             <> T.pack (show opSym)
             <> ") not in scope"
         Just (OriginalValue !opVal _ !op'that) -> case opVal of
-          -- run an operator implemented in Haskell
+
+          -- calling a host operator
           (EdhHostOper _ (HostProcedure _ !proc)) ->
             -- insert a cycle tick here, so if no tx required for the call
             -- overall, the op resolution tx stops here then the op
@@ -765,7 +766,7 @@ evalExpr expr exit = do
             flip (exitEdhSTM' pgs) (wuji pgs)
               $ \_ -> proc [SendPosArg lhExpr, SendPosArg rhExpr] exit
 
-          -- run an operator implemented in Edh
+          -- calling an operator
           (EdhOperator (Operator op'lexi'stack op'proc@(ProcDecl _ op'args op'body) op'pred _))
             -> case op'args of
               -- 2 pos-args - simple lh/rh value receiving operator

@@ -2,7 +2,7 @@
 {
   method essay (v) case type(v) of {
     BoolType -> "to be or not to be, that's a problem"
-    
+  
     DecimalType -> {
         v<2 -> "consume less, produce more";
         v<10 -> "no more than " ++ v ++ " cups of coffee a day";
