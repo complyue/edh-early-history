@@ -138,6 +138,7 @@ evalStmt' !stmt !exit = do
 
 
     GoStmt expr -> case expr of
+
       CaseExpr tgtExpr branchesStmt ->
         evalExpr tgtExpr $ \OriginalValue {..} ->
           forkEdh exit
@@ -147,6 +148,7 @@ evalStmt' !stmt !exit = do
                 } -- eval the branch(es) expr with the case target being
                   -- the 'contextMatch'
             $ evalBlock (deBlock branchesStmt) edhNop
+
       (CallExpr procExpr argsSndr) ->
         contEdhSTM $ edhMakeCall pgs procExpr argsSndr $ \mkCall ->
           runEdhProg pgs $ forkEdh exit (mkCall edhNop)
@@ -154,14 +156,37 @@ evalStmt' !stmt !exit = do
       (ForExpr argsRcvr iterExpr doExpr) ->
         contEdhSTM
           $ edhForLoop pgs argsRcvr iterExpr doExpr (const $ return ())
-          $ \mkLoop -> runEdhProg pgs $ forkEdh exit (mkLoop edhNop)
+          $ \runLoop -> runEdhProg pgs $ forkEdh exit (runLoop edhNop)
 
       _ -> forkEdh exit $ evalExpr expr edhNop
 
-    -- TODO capture args if defering a case/call/for-loop
-    DeferStmt expr -> contEdhSTM $ do
-      modifyTVar' (edh'defers pgs) ((pgs, expr) :)
-      exitEdhSTM pgs exit nil
+    DeferStmt expr -> do
+      let schedDefered :: EdhProgState -> EdhProg (STM ()) -> STM ()
+          schedDefered pgs' prog = do
+            modifyTVar' (edh'defers pgs) ((pgs', prog) :)
+            exitEdhSTM pgs exit nil
+      case expr of
+
+        CaseExpr tgtExpr branchesStmt ->
+          evalExpr tgtExpr $ \OriginalValue {..} ->
+            contEdhSTM
+              $ schedDefered pgs
+                  { edh'context = ctx { contextMatch = valueFromOrigin }
+                  } -- eval the branch(es) expr with the case target being
+                    -- the 'contextMatch'
+              $ evalBlock (deBlock branchesStmt) edhNop
+
+        (CallExpr procExpr argsSndr) ->
+          contEdhSTM $ edhMakeCall pgs procExpr argsSndr $ \mkCall ->
+            schedDefered pgs (mkCall edhNop)
+
+        (ForExpr argsRcvr iterExpr doExpr) ->
+          contEdhSTM
+            $ edhForLoop pgs argsRcvr iterExpr doExpr (const $ return ())
+            $ \runLoop -> schedDefered pgs (runLoop edhNop)
+
+        _ -> contEdhSTM $ schedDefered pgs $ evalExpr expr edhNop
+
 
     ReactorStmt sinkExpr argsRcvr reactionStmt ->
       evalExpr sinkExpr $ \OriginalValue {..} -> case valueFromOrigin of
@@ -629,7 +654,7 @@ evalExpr expr exit = do
     ForExpr argsRcvr iterExpr doExpr ->
       contEdhSTM
         $ edhForLoop pgs argsRcvr iterExpr doExpr (const $ return ())
-        $ \mkLoop -> runEdhProg pgs (mkLoop exit)
+        $ \runLoop -> runEdhProg pgs (runLoop exit)
 
 
     AttrExpr addr -> case addr of

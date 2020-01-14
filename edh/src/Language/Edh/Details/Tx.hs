@@ -106,10 +106,9 @@ driveEdhProgram !progCtx !prog = do
 
  where
 
-  driveDefers :: [(EdhProgState, Expr)] -> IO ()
+  driveDefers :: [(EdhProgState, EdhProg (STM ()))] -> IO ()
   driveDefers [] = return ()
-  driveDefers ((!pgsDefer, !deferedExpr) : restDefers) = do
-    let !deferProg = evalExpr deferedExpr edhNop
+  driveDefers ((!pgsDefer, !deferedProg) : restDefers) = do
     !deferReactors                        <- newTVarIO []
     !deferDefers                          <- newTVarIO []
     !(deferTaskQueue :: TQueue EdhTxTask) <- newTQueueIO
@@ -123,7 +122,7 @@ driveEdhProgram !progCtx !prog = do
                  }
         False
         (wuji pgsDefer)
-        (const deferProg)
+        (const deferedProg)
       )
     driveEdhThread deferDefers (tryReadTQueue deferTaskQueue)
     driveDefers restDefers
@@ -177,7 +176,7 @@ driveEdhProgram !progCtx !prog = do
         if doBreak then return True else driveReactors restReactors
 
   driveEdhThread
-    :: TVar [(EdhProgState, Expr)] -> STM (Maybe EdhTxTask) -> IO ()
+    :: TVar [(EdhProgState, EdhProg (STM ()))] -> STM (Maybe EdhTxTask) -> IO ()
   driveEdhThread !defers !taskSource = atomically taskSource >>= \case
     Nothing -> -- this thread is done, run defers lastly
       readTVarIO defers >>= driveDefers

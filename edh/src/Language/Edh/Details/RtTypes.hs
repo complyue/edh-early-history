@@ -343,7 +343,7 @@ data EdhProgState = EdhProgState {
     edh'fork'queue :: !(TQueue EdhTxTask)
     , edh'task'queue :: !(TQueue EdhTxTask)
     , edh'reactors :: !(TVar [(TChan EdhValue, EdhProgState, ArgsReceiver , StmtSrc)])
-    , edh'defers :: !(TVar [(EdhProgState, Expr)])
+    , edh'defers :: !(TVar [(EdhProgState, EdhProg (STM ()))])
     , edh'in'tx :: !Bool
     , edh'context :: !Context
   }
