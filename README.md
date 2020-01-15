@@ -8,7 +8,7 @@ like **Python**, **Go**, **JavaScript**, and especially **Haskell**,
 verified in the field. There're a few creative attempts though, but in mind
 is kept that overly smart not to be about.
 
-**Edh** code is imperative, runs embedded in Haskell (GHC), interpreted.
+**Edh** code is imperative, runs embedded in **Haskell** (GHC), interpreted.
 
 The killer feature may be the very
 [Haskell implementation](http://hackage.haskell.org/package/stm)
