@@ -104,8 +104,9 @@ at it since inception.
 > [**Haskell**](https://www.haskell.org),
 > (i.e. be a _Haskeller_). For someone who you must work with but
 > hasn't feel comfortable with **Haskell** code, ask him/her to use
-> **Edh**, and write [host procedures](#host-procedures) wrapping
-> idiomatic models in **Haskell** to help get his/her job done
+> **Edh**, and write
+> [host procedures](https://github.com/e-wrks/edh/Tour/#host-procedures)
+> wrapping idiomatic models in **Haskell** to help get his/her job done
 >
 > Under certain circumstances, there are sweet spots balanced between
 > _imperative_ and _declarative_ stylish, when put together, **Edh**
