@@ -11,6 +11,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Favouring Cabal](#favouring-cabal)
   - [Favouring Stack](#favouring-stack)
   - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
+  - [Multi/Single line input modes](#multisingle-line-input-modes)
 - [Concepts](#concepts)
   - [World](#world)
   - [Functions (or lack thereof)](#functions-or-lack-thereof)
@@ -45,7 +46,7 @@ cd edh
 ### Favouring [Cabal](https://www.haskell.org/cabal)
 
 ```shell
-cabal v2-install edh:edhi
+cabal v2-install edhi --overwrite-policy=always
 ```
 
 ### Favouring [Stack](https://haskellstack.org)
@@ -68,6 +69,28 @@ $ edhi
 >> Bare Đ (Edh) Interpreter <<
 * Blank Screen Syndrome ? Take the Tour as your companion, checkout:
   https://github.com/e-wrks/edh/Tour/
+Đ: 
+```
+
+### Multi/Single line input modes
+
+The repl runs in single-line input mode by default, while **unindented**
+curly braces start & end multi-line input mode:
+
+```bash
+$ edhi
+>> Bare Đ (Edh) Interpreter <<
+* Blank Screen Syndrome ? Take the Tour as your companion, checkout:
+  https://github.com/e-wrks/edh/Tour/
+Đ: a=3
+3
+Đ: {
+Đ|  1: x=1
+Đ|  2: y=2
+Đ|  3: }
+2
+Đ: (x, y)
+( 1, 2, )
 Đ: 
 ```
 

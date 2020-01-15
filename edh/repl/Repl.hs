@@ -22,7 +22,7 @@ doRead pendingLines =
     $   getInputLine
           (case pendingLines of
             [] -> "Đ: "
-            _  -> "Đ| " <> printf "%3d" (length pendingLines) <> ": "
+            _  -> "Đ| " <> printf "%2d" (length pendingLines) <> ": "
           )
     >>= \case
           Nothing -> case pendingLines of
