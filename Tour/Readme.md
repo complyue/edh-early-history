@@ -11,21 +11,35 @@ cd edh
 
 ```shell
 cabal v2-install edh:edhi
-export EDH_LOG_LEVEL=DEBUG
-edhi
 ```
 
 ### Favouring [Stack](https://haskellstack.org)
 
 ```shell
 stack install
+```
+
+### Run with verbose (or lean) log level
+
+```shell
 export EDH_LOG_LEVEL=DEBUG
+# export EDH_LOG_LEVEL=WARN
 edhi
+```
+
+```shell
+$ export EDH_LOG_LEVEL=DEBUG
+$ edhi
+>> Bare Đ (Edh) Interpreter <<
+* Blank Screen Syndrome ? Take the Tour as your companion, checkout:
+  https://github.com/e-wrks/edh/Tour/
+Đ: 
 ```
 
 - [Running a bare interpreter](#running-a-bare-interpreter)
   - [Favouring Cabal](#favouring-cabal)
   - [Favouring Stack](#favouring-stack)
+  - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
 - [Concepts](#concepts)
   - [World](#world)
   - [Functions (or lack thereof)](#functions-or-lack-thereof)
