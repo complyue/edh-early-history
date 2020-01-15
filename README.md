@@ -141,7 +141,7 @@ ideas here worth further exploration, to be consolidated or even
 formalized on theoretical ground. If you are doing relevant CS
 researches, **Edh** is yet another piece of friendly _BSD_ licensed
 software at your hand, PRs updating information here, including
-citation requirement for your relevant work are welcomed.
+citation requests for your relevant work are welcomed.
 
 ## A joke
 
