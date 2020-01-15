@@ -141,7 +141,7 @@ ideas here worth further exploration, to be consolidated or even
 formalized on theoretical ground. If you are doing relevant CS
 researches, **Edh** is yet another piece of friendly _BSD_ licensed
 software at your hand, PRs updating information here, including
-citation requirement for your relevant work is welcomed.
+citation requirement for your relevant work are welcomed.
 
 ## A joke
 
@@ -155,5 +155,5 @@ Finally let me tell you a joke:
 >
 > > **Edh** is good because it's arguably a _three star_ language
 > > (`***argspk`), as **Python** is arguably a _two star_ language
-> > (`**kwargs`), others are at most _one star_ languages or even
-> > _no star_ ones.
+> > (`**kwargs`), while others are at most _one star_ languages or
+> > even _no star_ ones.
