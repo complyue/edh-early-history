@@ -23,6 +23,9 @@ program data consistency under heavy concurrency.
   - [Functional? - Try not to abuse this concept](#functional---try-not-to-abuse-this-concept)
   - [Performance Goals](#performance-goals)
 - [Zen of Edh](#zen-of-edh)
+- [Licensing](#licensing)
+- [Academic relationship](#academic-relationship)
+- [A joke](#a-joke)
 
 **Edh** competes with [Python](https://python.org) to help **Haskell**
 instead of **C**/**C++** to be the breeding ground for next phenomenal
@@ -119,3 +122,35 @@ at it since inception.
 >
 > Whenever you're not sure how to get a job done, think about how a
 > [**Gopher**](https://blog.golang.org/gopher) would do it
+
+## Licensing
+
+I (Compl Yue) choose to distribute **Edh** related code under BSD,
+I believe BSD license is proper, it is even permissive for you
+to re-license it under GPL etc. given the BSD clauses kept distributed
+together. Though I sincerely hope no one is to attack me by patent
+infringement.
+
+## Academic relationship
+
+No academic background relevant so far, but I (Compl Yue) do feel some
+ideas here worth further exploration, to be consolidated or even
+formalized on theoretical ground. If you are doing relevant CS
+researches, **Edh** is yet another piece of friendly _BSD_ licensed
+software at your hand, PRs updating information here, including
+citation requirement for your relevant work is welcomed.
+
+## A joke
+
+Finally let me tell you a joke:
+
+> Q:
+>
+> > What's good about **Edh**?
+>
+> A:
+>
+> > **Edh** is good because it's arguably a _three star_ language
+> > (`***pkargs`), as **Python** is arguably a _two star_ language
+> > (`**kwargs`), others are at most _one star_ languages or even
+> > _no star_ ones.
