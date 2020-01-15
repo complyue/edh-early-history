@@ -1,5 +1,31 @@
 # A Tour of Đ (Edh)
 
+## Running a bare interpreter
+
+```bash
+git clone https://github.com/e-wrks/edh
+cd edh
+```
+
+### Favouring [Cabal](https://www.haskell.org/cabal)
+
+```shell
+cabal v2-install edh:edhi
+export EDH_LOG_LEVEL=DEBUG
+edhi
+```
+
+### Favouring [Stack](https://haskellstack.org)
+
+```shell
+stack install
+export EDH_LOG_LEVEL=DEBUG
+edhi
+```
+
+- [Running a bare interpreter](#running-a-bare-interpreter)
+  - [Favouring Cabal](#favouring-cabal)
+  - [Favouring Stack](#favouring-stack)
 - [Concepts](#concepts)
   - [World](#world)
   - [Functions (or lack thereof)](#functions-or-lack-thereof)
