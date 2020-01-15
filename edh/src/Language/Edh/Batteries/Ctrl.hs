@@ -77,10 +77,15 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
         )
 
     -- | { x:y:z:... } -- pair pattern matching
-    DictExpr  [pairPattern] -> handlePairPattern pairPattern
+    DictExpr [pairPattern] -> handlePairPattern pairPattern
+    -- | this is to establish the intuition that `{ ... }` always invokes
+    -- pattern matching. if a literal dict value really meant to be matched,
+    -- the parenthesized form `( {k1: v1, k2: v2, ...} )` should be used.
+    DictExpr !malPairs ->
+      throwEdh EvalError $ "Invalid match pattern: " <> T.pack (show malPairs)
 
     -- | other patterns matching
-    BlockExpr patternExpr   -> case patternExpr of
+    BlockExpr patternExpr -> case patternExpr of
 
       -- | {( x:y:z:... )} -- parenthesised pair pattern
       [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
