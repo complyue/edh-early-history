@@ -1,5 +1,12 @@
 # A Tour of Đ (Edh)
 
+You want to run a bare interpreter to play with the languge basics, to do
+some quick tests etc. While a real **Haskell** + **Đ (Edh)** application
+certainly will include it's own **Edh** interpreter with more powerful
+batteries than the default ones installed.
+
+See [Edh Im](https://github.com/e-wrks/edhim) for an example.
+
 ## Running a bare interpreter
 
 ```bash
@@ -68,8 +75,10 @@ $ edhi
 
 ### World
 
-You create a world in **Haskell**, for some **Edh** programs to change,
-the world is a niche, sandbox or similar concepts you can call it.
+While impure computer programs tend to change the world, you create ones
+for them to manipulate, but with potentials limited.
+
+The world is a niche, sandbox or similar concepts you can call it.
 
 ### Functions (or lack thereof)
 
