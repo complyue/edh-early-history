@@ -7,6 +7,34 @@ batteries than the default ones installed.
 
 See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 
+- [Running a bare interpreter](#running-a-bare-interpreter)
+  - [Favouring Cabal](#favouring-cabal)
+  - [Favouring Stack](#favouring-stack)
+  - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
+- [Concepts](#concepts)
+  - [World](#world)
+  - [Functions (or lack thereof)](#functions-or-lack-thereof)
+  - [Procedure](#procedure)
+  - [Entity](#entity)
+  - [Scope](#scope)
+  - [Object](#object)
+- [Module Structures](#module-structures)
+- [Code Structure](#code-structure)
+  - [Operators](#operators)
+  - [Branches](#branches)
+  - [Case-Of](#case-of)
+  - [Pattern Matching](#pattern-matching)
+- [Procedures](#procedures)
+  - [Host Procedures](#host-procedures)
+  - [Method Procedure](#method-procedure)
+  - [Generator Procedure](#generator-procedure)
+  - [Class (Constructor) Procedure](#class-constructor-procedure)
+  - [Multiple Inheritance](#multiple-inheritance)
+  - [Interpreter Procedure](#interpreter-procedure)
+- [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
+- [Indexing and Magic Methods](#indexing-and-magic-methods)
+- [Reflection](#reflection)
+
 ## Running a bare interpreter
 
 ```bash
@@ -42,34 +70,6 @@ $ edhi
   https://github.com/e-wrks/edh/Tour/
 Đ: 
 ```
-
-- [Running a bare interpreter](#running-a-bare-interpreter)
-  - [Favouring Cabal](#favouring-cabal)
-  - [Favouring Stack](#favouring-stack)
-  - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
-- [Concepts](#concepts)
-  - [World](#world)
-  - [Functions (or lack thereof)](#functions-or-lack-thereof)
-  - [Procedure](#procedure)
-  - [Entity](#entity)
-  - [Scope](#scope)
-  - [Object](#object)
-- [Module Structures](#module-structures)
-- [Code Structure](#code-structure)
-  - [Operators](#operators)
-  - [Branches](#branches)
-  - [Case-Of](#case-of)
-  - [Pattern Matching](#pattern-matching)
-- [Procedures](#procedures)
-  - [Host Procedures](#host-procedures)
-  - [Method Procedure](#method-procedure)
-  - [Generator Procedure](#generator-procedure)
-  - [Class (Constructor) Procedure](#class-constructor-procedure)
-  - [Multiple Inheritance](#multiple-inheritance)
-  - [Interpreter Procedure](#interpreter-procedure)
-- [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
-- [Indexing and Magic Methods](#indexing-and-magic-methods)
-- [Reflection](#reflection)
 
 ## Concepts
 
