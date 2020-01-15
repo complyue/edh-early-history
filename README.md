@@ -1,4 +1,4 @@
-# Đ (Edh) - a modern, transactional Object layer spliced with Haskell
+# Đ (Edh) - the next-big-things ought to happen with Haskell instead of C/C++
 
 Impatient? - Take [A Tour of Đ (Edh)](./Tour/)
 
@@ -18,16 +18,17 @@ brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
 transactions, with intuitive as well as pragmatic constructs to
 program data consistency under heavy concurrency.
 
-- [The name](#the-name)
-- [Philosophy](#philosophy)
-  - [About Everything](#about-everything)
-  - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
-  - [Functional? - Try not to abuse this concept](#functional---try-not-to-abuse-this-concept)
-  - [Performance Goals](#performance-goals)
-- [Zen of Edh](#zen-of-edh)
-- [Licensing](#licensing)
-- [Academic relationship](#academic-relationship)
-- [A joke](#a-joke)
+- [Đ (Edh) - the next-big-things ought to happen with Haskell instead of C/C++](#%c4%90-edh---the-next-big-things-ought-to-happen-with-haskell-instead-of-cc)
+  - [The name](#the-name)
+  - [Philosophy](#philosophy)
+    - [About Everything](#about-everything)
+    - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
+    - [Functional? - Try not to abuse this concept](#functional---try-not-to-abuse-this-concept)
+    - [Performance Goals](#performance-goals)
+  - [Zen of Edh](#zen-of-edh)
+  - [Licensing](#licensing)
+  - [Academic relationship](#academic-relationship)
+  - [A joke](#a-joke)
 
 **Edh** competes with [Python](https://python.org) to help **Haskell**
 instead of **C**/**C++** to be the breeding ground for next phenomenal
@@ -149,11 +150,11 @@ Finally let me tell you a joke:
 
 > Q:
 >
-> > What's good about **Edh**?
+> > So what's good on **Edh** the programming language?
 >
 > A:
 >
 > > **Edh** is good because it's arguably a _three star_ language
-> > (`***pkargs`), as **Python** is arguably a _two star_ language
+> > (`***argspk`), as **Python** is arguably a _two star_ language
 > > (`**kwargs`), others are at most _one star_ languages or even
 > > _no star_ ones.
