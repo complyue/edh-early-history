@@ -18,17 +18,16 @@ brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
 transactions, with intuitive as well as pragmatic constructs to
 program data consistency under heavy concurrency.
 
-- [Đ (Edh) - the next-big-things ought to happen with Haskell instead of C/C++](#%c4%90-edh---the-next-big-things-ought-to-happen-with-haskell-instead-of-cc)
-  - [The name](#the-name)
-  - [Philosophy](#philosophy)
-    - [About Everything](#about-everything)
-    - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
-    - [Functional? - Try not to abuse this concept](#functional---try-not-to-abuse-this-concept)
-    - [Performance Goals](#performance-goals)
-  - [Zen of Edh](#zen-of-edh)
-  - [Licensing](#licensing)
-  - [Academic relationship](#academic-relationship)
-  - [A joke](#a-joke)
+- [The name](#the-name)
+- [Philosophy](#philosophy)
+  - [About Everything](#about-everything)
+  - [Object? - Yes, Oriented? - No](#object---yes-oriented---no)
+  - [Functional? - Try not to abuse this concept](#functional---try-not-to-abuse-this-concept)
+  - [Performance Goals](#performance-goals)
+- [Zen of Edh](#zen-of-edh)
+- [Licensing](#licensing)
+- [Academic relationship](#academic-relationship)
+- [A joke](#a-joke)
 
 **Edh** competes with [Python](https://python.org) to help **Haskell**
 instead of **C**/**C++** to be the breeding ground for next phenomenal
