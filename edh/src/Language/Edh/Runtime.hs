@@ -18,10 +18,9 @@ module Language.Edh.Runtime
 where
 
 import           Prelude
-
 -- import           Debug.Trace
 
-import           System.IO
+import           System.IO                      ( stderr )
 import           GHC.Conc                       ( unsafeIOToSTM )
 
 import           Control.Exception
@@ -34,6 +33,7 @@ import           Foreign.C.String
 import           Foreign.Marshal.Alloc
 import           System.Mem.Weak
 
+import           Data.Text.IO
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Map.Strict               as Map
@@ -69,6 +69,13 @@ runEdhProgram' :: MonadIO m => Context -> EdhProg (STM ()) -> m ()
 runEdhProgram' !ctx !prog = liftIO $ driveEdhProgram ctx prog
 
 
+-- | This logger serializes all log messages to 'stderr' through a 'TQueue',
+-- this is crucial under heavy concurrency.
+--
+-- known issues:
+--  *) can mess up with others writing to 'stderr'
+--  *) if all others use 'trace' only, there're minimum messups but emojis 
+--     seem to be break points
 defaultEdhLogger :: IO EdhLogger
 defaultEdhLogger = do
   logQueue <- newTQueueIO
@@ -80,8 +87,8 @@ defaultEdhLogger = do
       logger :: EdhLogger
       logger !level !srcLoc !pkargs = case pkargs of
         ArgsPack [!argVal] !kwargs | Map.null kwargs ->
-          writeTQueue logQueue $! logPrefix ++ T.unpack (edhValueStr argVal)
-        _ -> writeTQueue logQueue $! logPrefix ++ show pkargs
+          writeTQueue logQueue $! T.pack logPrefix <> edhValueStr argVal
+        _ -> writeTQueue logQueue $! T.pack $ logPrefix ++ show pkargs
        where
         logPrefix :: String
         logPrefix =
