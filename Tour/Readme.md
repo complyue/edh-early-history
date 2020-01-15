@@ -1,6 +1,6 @@
 # A Tour of Đ (Edh)
 
-You want to run a bare interpreter to play with the languge basics, to do
+You want to run a bare interpreter to play with the language basics, to do
 some quick tests etc. While a real **Haskell** + **Đ (Edh)** application
 certainly will include it's own **Edh** interpreter with more powerful
 batteries than the default ones installed.
