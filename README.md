@@ -30,32 +30,31 @@ steep than **Haskell**, **Edh** is faithful to get people with just
 **Python**/**JavaScript**/**Go** knowledge and skills started with
 a [world](./Tour/#world) in **Haskell**.
 
-- [Đ - (WIP) a modern, transactional Object layer spliced with Haskell](#%c4%90---wip-a-modern-transactional-object-layer-spliced-with-haskell)
-  - [Why a new programming language](#why-a-new-programming-language)
-    - [conceptual clearance](#conceptual-clearance)
-    - [easy concurrency, auto parallelism, with easy data consistency](#easy-concurrency-auto-parallelism-with-easy-data-consistency)
-    - [lock-free serialization](#lock-free-serialization)
-    - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
-    - [lossless decimal for numbers](#lossless-decimal-for-numbers)
-  - [Why splice](#why-splice)
-  - [Teasers](#teasers)
-    - [Python style arguments passing](#python-style-arguments-passing)
-    - [and more of arguments receiving](#and-more-of-arguments-receiving)
-    - [import by arguments receiving](#import-by-arguments-receiving)
-    - [arguments sending, generators](#arguments-sending-generators)
-    - [Go Type-Embedding style multiple inheritance](#go-type-embedding-style-multiple-inheritance)
-    - [ES6 style symbol for better encapsulation](#es6-style-symbol-for-better-encapsulation)
-    - [list/dict/tuple comprehension](#listdicttuple-comprehension)
-    - [list/dict modification](#listdict-modification)
-    - [goroutine, concurrency control, and sink the broadcasting channel](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
-    - [Haskell style case-of, with Go style fallthrough](#haskell-style-case-of-with-go-style-fallthrough)
-    - [ternary operator](#ternary-operator)
-    - [operator override / creation](#operator-override--creation)
-    - [indexing override (Numpy/Pandas upon Repa/AccelerateHS)](#indexing-override-numpypandas-upon-repaacceleratehs)
-    - [lossless decimal for numbers](#lossless-decimal-for-numbers-1)
-    - [reflection](#reflection)
-  - [The name](#the-name)
-  - [Acknowledgement](#acknowledgement)
+- [Why a new programming language](#why-a-new-programming-language)
+  - [conceptual clearance](#conceptual-clearance)
+  - [easy concurrency, auto parallelism, with easy data consistency](#easy-concurrency-auto-parallelism-with-easy-data-consistency)
+  - [lock-free serialization](#lock-free-serialization)
+  - [more concise syntax for event handling](#more-concise-syntax-for-event-handling)
+  - [lossless decimal for numbers](#lossless-decimal-for-numbers)
+- [Why splice](#why-splice)
+- [Teasers](#teasers)
+  - [Python style arguments passing](#python-style-arguments-passing)
+  - [and more of arguments receiving](#and-more-of-arguments-receiving)
+  - [import by arguments receiving](#import-by-arguments-receiving)
+  - [arguments sending, generators](#arguments-sending-generators)
+  - [Go Type-Embedding style multiple _inheritance_](#go-type-embedding-style-multiple-inheritance)
+  - [ES6 style symbol for better encapsulation](#es6-style-symbol-for-better-encapsulation)
+  - [list/dict/tuple comprehension](#listdicttuple-comprehension)
+  - [list/dict modification](#listdict-modification)
+  - [goroutine, concurrency control, and `sink` the broadcasting channel](#goroutine-concurrency-control-and-sink-the-broadcasting-channel)
+  - [Haskell style case-of, with Go style fallthrough](#haskell-style-case-of-with-go-style-fallthrough)
+  - [ternary operator](#ternary-operator)
+  - [operator override / creation](#operator-override--creation)
+  - [indexing override (Numpy/Pandas upon Repa/AccelerateHS)](#indexing-override-numpypandas-upon-repaacceleratehs)
+  - [lossless decimal for numbers](#lossless-decimal-for-numbers-1)
+  - [reflection](#reflection)
+- [The name](#the-name)
+- [Acknowledgement](#acknowledgement)
 
 ## Why a new programming language
 
@@ -615,7 +614,7 @@ from practical daily use:
 > handled specifically.
 
 Then here's `Data.Lossless.Decimal` from package
-[lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
+[lossless-decimal](https://github.com/e-wrks/edh/tree/master/lossless-decimal)
 
 ```haskell
 λ> x = 1.1 + 2.2 :: Decimal
@@ -636,7 +635,7 @@ False
 ```
 
 All numbers in **Edh** are `Data.Lossless.Decimal` from
-[lossless-decimal](https://github.com/complyue/edh/tree/master/lossless-decimal)
+[lossless-decimal](https://github.com/e-wrks/edh/tree/master/lossless-decimal)
 , by default and by all means:
 
 ```haskell
