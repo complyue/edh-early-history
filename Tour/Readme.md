@@ -1,4 +1,4 @@
-# A Tour of Edh
+# A Tour of Đ (Edh)
 
 - [Concepts](#concepts)
   - [World](#world)

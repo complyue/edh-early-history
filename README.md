@@ -33,7 +33,8 @@ program data consistency under heavy concurrency.
 instead of **C**/**C++** to be the breeding ground for next phenomenal
 pieces of software, after [TensorFlow](https://tensorflow.org),
 [Pandas](https://pandas.pydata.org/), [Numpy](https://numpy.org/) etc.
-by providing similar constructs to rivals in **Python**.
+by providing equaly good or even better language constructs to rivals
+in **Python**.
 
 Take the [Tour](./Tour/) to see what **Edh** has to offer.
 
@@ -45,7 +46,7 @@ a [world](./Tour/#world) in **Haskell**.
 
 ## The name
 
-Edh stands for **Event Distributing & Hosting**
+**Edh** stands for **Event Distributing & Hosting**
 
 Đ is a more stylish, single letter, symbolic name of **Edh** the language
 
@@ -68,11 +69,11 @@ language (see next section), to be contrasted with **Python**, where:
 ### Object? - Yes, Oriented? - No
 
 Many don't consider **Go** ([GoLang](https://golang.org)) an
-_Object Oriented_ programming language, neither **Edh** is in similar
+_Object Oriented_ programming language, neither is **Edh** in similar
 respect. **Edh** does pointer-wise
 [Type Embedding](https://go101.org/article/type-embedding.html)
-in **Go** spirit, while it takes a small step further to offer you
-`that` reference, which refers to a descendant record from an ancestor
+in **Go** spirit, while it takes a small step further to offer `that`
+reference, which refers to a descendant record from an ancestor
 method, in addition to `this` reference which refers to the lexical
 self record.
 
@@ -117,7 +118,7 @@ at it since inception.
 > _imperative_ and _declarative_ stylish, when put together, **Edh**
 > code can be made even more concise than **Haskell** code (
 > [see proof here](https://github.com/e-wrks/edhim#full-%C4%91-edh-code)
-> ). Do **Edh** programming around such sweet spots if you can find
+> ). Do **Edh** programming around such sweet spots when you can find
 > them, and when you do, be _Edhic_, that to be _Edhic_, is to be
 > more _Pythonic_ than being
 > [**Pythonic**](https://www.python.org/dev/peps/pep-0020)
