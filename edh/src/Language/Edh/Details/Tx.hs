@@ -163,12 +163,11 @@ driveEdhProgram !progCtx !prog = do
   driveEdhThread !defers !taskSource = atomically taskSource >>= \case
     Nothing -> -- this thread is done, run defers lastly
       readTVarIO defers >>= driveDefers
-    Just txTask -> do -- run this task
-      goSTM 0 txTask >>= \case
-        True -> -- terminate this thread, after running defers lastly
-          readTVarIO defers >>= driveDefers
-        False -> -- loop another iteration for the thread
-          driveEdhThread defers taskSource
+    Just txTask -> goSTM 0 txTask >>= \case -- run this task
+      True -> -- terminate this thread, after running defers lastly
+        readTVarIO defers >>= driveDefers
+      False -> -- loop another iteration for the thread
+        driveEdhThread defers taskSource
 
   -- TODO busy, later defined reactors can starve earlier defined
   --      reactors as with current implementation, improve ?
@@ -197,10 +196,9 @@ driveEdhProgram !progCtx !prog = do
           driveReactor ev react
    where
     stmJob :: STM (Either (EdhValue, ReactorRecord) ())
-    stmJob = do
-      readTVar (edh'reactors pgsThread) >>= reactorChk >>= \case
-        Left  react -> return $ Left react
-        Right ()    -> Right <$> join (runReaderT (task input) pgsThread)
+    stmJob = readTVar (edh'reactors pgsThread) >>= reactorChk >>= \case
+      Left  react -> return $ Left react
+      Right ()    -> Right <$> join (runReaderT (task input) pgsThread)
     reactorChk :: [ReactorRecord] -> STM (Either (EdhValue, ReactorRecord) ())
     reactorChk []                        = return $ Right ()
     reactorChk (r@(evc, _, _, _) : rest) = tryReadTChan evc >>= \case

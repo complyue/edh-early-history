@@ -19,6 +19,8 @@ where
 
 import           Prelude
 
+-- import           Debug.Trace
+
 import           System.IO
 import           GHC.Conc                       ( unsafeIOToSTM )
 
@@ -78,8 +80,8 @@ defaultEdhLogger = do
       logger :: EdhLogger
       logger !level !srcLoc !pkargs = case pkargs of
         ArgsPack [!argVal] !kwargs | Map.null kwargs ->
-          writeTQueue logQueue $ logPrefix ++ T.unpack (edhValueStr argVal)
-        _ -> writeTQueue logQueue $ logPrefix ++ show pkargs
+          writeTQueue logQueue $! logPrefix ++ T.unpack (edhValueStr argVal)
+        _ -> writeTQueue logQueue $! logPrefix ++ show pkargs
        where
         logPrefix :: String
         logPrefix =

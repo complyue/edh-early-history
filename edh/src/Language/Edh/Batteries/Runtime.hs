@@ -43,7 +43,7 @@ loggingProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
              exitEdhSTM pgs exit nil
         else runEdhProg pgs $ evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
           do
-            let srcLoc = if rtLogLevel <= 20
+            let !srcLoc = if rtLogLevel <= 20
                   then -- with source location info
                        Just $ sourcePosPretty srcPos
                   else -- no source location info
