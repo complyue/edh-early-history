@@ -79,8 +79,12 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
     -- | { x:y:z:... } -- pair pattern matching
     DictExpr  [pairPattern] -> handlePairPattern pairPattern
 
-    -- | other pattern matching
+    -- | other patterns matching
     BlockExpr patternExpr   -> case patternExpr of
+
+      -- | {( x:y:z:... )} -- parenthesised pair pattern
+      [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
+        handlePairPattern pairPattern
 
       -- { continue } -- match with continue
       [StmtSrc (_, ContinueStmt)] -> case ctxMatch of
@@ -183,10 +187,6 @@ branchProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
                     _              -> EdhCaseClose rhVal
                   )
             _ -> exitEdhSTM pgs exit EdhFallthrough
-
-       -- | {( x:y:z:... )} -- parenthesised pair pattern
-      [StmtSrc (_, ExprStmt (ParenExpr pairPattern))] ->
-        handlePairPattern pairPattern
 
       -- {{ class:inst }} -- instance resolving pattern
       [StmtSrc (_, ExprStmt (DictExpr [InfixExpr ":" (AttrExpr (DirectRef (NamedAttr classAttr))) (AttrExpr (DirectRef (NamedAttr instAttr)))]))]
