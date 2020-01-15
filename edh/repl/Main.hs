@@ -28,7 +28,10 @@ main = do
 
   runInputT inputSettings $ do
 
-    outputStrLn "(EDHi)"
+    outputStrLn ">> Bare Đ (Edh) Interpreter <<"
+    outputStrLn
+      "* Blank Screen Syndrome ? Take the Tour as your companion, checkout:"
+    outputStrLn "  https://github.com/e-wrks/edh/Tour/"
 
     world <- createEdhWorld logger
     installEdhBatteries world
