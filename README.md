@@ -107,11 +107,13 @@ at it since inception.
 > **Edh**, and write [host procedures](#host-procedures) wrapping
 > idiomatic models in **Haskell** to help get his/her job done
 >
-> Under certain circumstances, there are sweet spots between
-> _imperative_ and _declarative_, where **Edh** code can be even more
-> concise than **Haskell** code, do **Edh** programming around such
-> spots if you can find them, and when you do, be _Edhic_, that to be
-> _Edhic_, is to be more _Pythonic_ than being
+> Under certain circumstances, there are sweet spots balanced between
+> _imperative_ and _declarative_ stylish, when put together, **Edh**
+> code can be made even more concise than **Haskell** code,
+> [see proof here](https://github.com/e-wrks/edhim#full-%C4%91-code).
+> Do **Edh** programming around such sweet spots if you can find them,
+> and when you do, be _Edhic_, that to be _Edhic_, is to be more
+> _Pythonic_ than being
 > [**Pythonic**](https://www.python.org/dev/peps/pep-0020)
 >
 > Whenever you're not sure how to get a job done, think about how a
