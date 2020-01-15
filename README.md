@@ -1,5 +1,7 @@
 # Đ (Edh) - a modern, transactional Object layer spliced with Haskell
 
+Impatient? - Take [A Tour of Đ (Edh)](./Tour/)
+
 **Edh** as a programming language is born just recently,
 but it's vastly neither new, major ideas all come from successful languages
 like **Python**, **Go**, **JavaScript**, and especially **Haskell**,
