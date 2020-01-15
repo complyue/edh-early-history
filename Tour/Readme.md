@@ -55,8 +55,7 @@ respect. **Edh** does pointer-wise
 in **Go** spirit, while it takes a small step further to offer you
 `that` reference, which refers to a descendant record from an ancestor
 method, in addition to `this` reference which refers to the lexical
-self record. (There's potential to implement parameterized modules
-from this ground up)
+self record. 
 
 ### Functional? - Try not to abuse this concept
 
