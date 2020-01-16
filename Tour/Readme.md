@@ -19,8 +19,8 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Package / Module Structures](#package--module-structures)
 - [Code Structure](#code-structure)
-  - [Operators](#operators)
   - [Comprehensions](#comprehensions)
+  - [Operators](#operators)
   - [Branches with Value/Pattern Matching](#branches-with-valuepattern-matching)
     - [Case-Of](#case-of)
 - [Procedures](#procedures)
@@ -181,6 +181,49 @@ already (kidding).
 
 ## Code Structure
 
+### Comprehensions
+
+Check out [comprehension.edh](./comprehension.edh)
+
+You do **list** / **dict** / **tuple** comprehensions in **Edh** with
+the _comprehension_ / _concatenation_ operator (**=<**):
+
+The (**=<**) operator does comprehension as well as concatenation by default:
+
+```bash
+Đ: [7, 11] =< for n from range(5) do n
+[ 7, 11, 0, 1, 2, 3, 4, ]
+Đ:
+Đ: {'a': 7, 'b': 11} =< for n from range(5) do 'square of '++n : n*n
+{ "a":7, "b":11, "square of 0":0, "square of 1":1, "square of 2":4, "square of 3":9, "square of 4":16, }
+Đ:
+Đ: (31, 17) =< for n from range(5) do n
+( 31, 17, 0, 1, 2, 3, 4, )
+Đ:
+Đ: {} =< for (k,v) from zip(('a', 'b', 'd'), [3, 7]) do k:v
+{ "a":3, "b":7, }
+Đ:
+```
+
+If you would like comprehension be aligned with traditional semantics that only
+create fresh ones, you can do this:
+
+```bash
+Đ: import * 'batteries/SeparateConcatAndComprehOp'
+<object: <module>>
+Đ: [3, 7] <=< [2, 9]
+[ 3, 7, 2, 9, ]
+Đ: [3, 7] =< [2, 9]
+* 😱 *
+💔
+📜 <interactive> 🔎 <adhoc>:1:1
+📜 =< 🔎 /qw/m3works/edh/edh_modules/batteries/SeparateConcatAndComprehOp.edh:11:37
+📜 error 🔎 <hostcode>:1:1
+💣 You don't comprehend into non-empty ones!
+👉 <Genesis>:1:1
+Đ:
+```
+
 ### Operators
 
 Check out [operator.edh](./operator.edh)
@@ -214,47 +257,22 @@ Check out [operator.edh](./operator.edh)
 Đ:
 ```
 
-### Comprehensions
+Also the implementation of
+[SeparateConcatAndComprehOp](../edh_modules/batteries/SeparateConcatAndComprehOp.edh)
+demonstrates more operator syntaxes:
 
-Check out [comprehension.edh](./comprehension.edh)
+```c++
+# re-declare (=<) as the concat operator (<=<)
+operator <=< 1 () (=<)
 
-You do **list** / **dict** / **tuple** comprehensions in **Edh** with
-the _comprehension_ / _concatenation_ operator (**=<**):
-
-The (**=<**) operator does comprehension as well as concatenation by default:
-
-```bash
-Đ: [] =< for n from range(5) do n
-[ 0, 1, 2, 3, 4, ]
-Đ:
-Đ: {} =< for n from range(5) do 'square of '++n : n*n
-{ "square of 0":0, "square of 1":1, "square of 2":4, "square of 3":9, "square of 4":16, }
-Đ:
-Đ: () =< for n from range(5) do n
-( 0, 1, 2, 3, 4, )
-Đ:
-Đ: {} =< for (k,v) from zip(('a', 'b', 'd'), [3, 7]) do k:v
-{ "a":3, "b":7, }
-Đ:
-```
-
-If you would like comprehension be aligned with traditional semantics that only
-create fresh ones, you can do this:
-
-```bash
-Đ: import * 'batteries/SeparateConcatAndComprehOp'
-<object: <module>>
-Đ: [3, 7] <=< [2, 9]
-[ 3, 7, 2, 9, ]
-Đ: [3, 7] =< [2, 9]
-* 😱 *
-💔
-📜 <interactive> 🔎 <adhoc>:1:1
-📜 =< 🔎 /qw/m3works/edh/edh_modules/batteries/SeparateConcatAndComprehOp.edh:11:37
-📜 error 🔎 <hostcode>:1:1
-💣 You don't comprehend into non-empty ones!
-👉 <Genesis>:1:1
-Đ:
+# Override operator (=<) to comprehend into empty ones only
+operator =< (callerScope, lhe, rhe) {
+  lhv = callerScope.eval(lhe)
+  if not null(lhv) then
+    error("You don't comprehend into non-empty ones!")
+  # left-hand value is empty, can do it
+  callerScope.eval( makeOp(lhe, "<=<", rhe) )
+}
 ```
 
 ### Branches with Value/Pattern Matching
