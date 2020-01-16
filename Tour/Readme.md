@@ -7,11 +7,12 @@ unique **Edh** interpreter with more powerful batteries written in the host
 language (i.e. **Haskell**) installed, in addition to the default ones.
 See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 
-- [Running a bare interpreter](#running-a-bare-interpreter)
+- [Running the REPL (a bare interpreter)](#running-the-repl-a-bare-interpreter)
   - [Favouring Cabal](#favouring-cabal)
   - [Favouring Stack](#favouring-stack)
   - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
   - [Multi/Single line input modes](#multisingle-line-input-modes)
+  - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Concepts](#concepts)
   - [World](#world)
   - [Functions (or lack thereof)](#functions-or-lack-thereof)
@@ -36,7 +37,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Indexing and Magic Methods](#indexing-and-magic-methods)
 - [Reflection](#reflection)
 
-## Running a bare interpreter
+## Running the REPL (a bare interpreter)
 
 ```bash
 git clone https://github.com/e-wrks/edh
@@ -91,6 +92,59 @@ $ edhi
 2
 Đ: (x, y)
 ( 1, 2, )
+Đ:
+```
+
+### Paste code snippets from this Tour
+
+Code in `*.edh` files in this **Tour** directory are designed to be
+copy-and-paste-able to the **REPL**, e.g. pasting:
+
+```c++
+{
+  operator 📣 5 (lhv, rhv) {
+    runtime.info <| rhv ++ ' is telling ' ++ lhv
+  }
+
+  operator 🆚 1 (lhv, rhv) {
+    runtime.info <| "🌀 What's the difference?\n     "
+      ++ lhv ++ '\n  🆚\n     ' ++ rhv
+  }
+}
+
+'a tale' 📣 'the goat'
+
+let (a, b) = ( 'Orange', 'Apple', )
+a 🆚 b
+```
+
+You'll see:
+
+```bash
+Đ: {
+Đ|  1:   operator 📣 5 (lhv, rhv) {
+Đ|  2:     runtime.info <| rhv ++ ' is telling ' ++ lhv
+Đ|  3:   }
+Đ|  4:
+Đ|  5:   operator 🆚 1 (lhv, rhv) {
+Đ|  6:     runtime.info <| "🌀 What's the difference?\n     "
+Đ|  7:       ++ lhv ++ '\n  🆚\n     ' ++ rhv
+Đ|  8:   }
+Đ|  9: }
+<operator: (🆚) 1>
+Đ:
+Đ: 'a tale' 📣 'the goat'
+Đ:
+Đ: let (a, b) = ( 'Orange', 'Apple', )
+ℹ️ <interactive>:2:5
+the goat is telling a tale
+Đ: a 🆚 b
+Đ: ℹ️ <interactive>:6:5
+🌀 What's the difference?
+     Orange
+  🆚
+     Apple
+
 Đ:
 ```
 

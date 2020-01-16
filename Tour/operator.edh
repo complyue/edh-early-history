@@ -6,7 +6,6 @@
 # 🆔🆘🆚
 
 {
-
   operator 📣 5 (lhv, rhv) {
     runtime.info <| rhv ++ ' is telling ' ++ lhv
   }
@@ -15,7 +14,6 @@
     runtime.info <| "🌀 What's the difference?\n     "
       ++ lhv ++ '\n  🆚\n     ' ++ rhv
   }
-
 }
 
 'a tale' 📣 'the goat'
@@ -25,7 +23,6 @@ a 🆚 b
 
 
 {
-
   method localOverrides * {
     # overide the (++) operator within this procedure only, avoid
     # polluting the module scope
@@ -40,7 +37,6 @@ a 🆚 b
 
     before 🆚 after
   }
-
 }
 
 localOverrides()
