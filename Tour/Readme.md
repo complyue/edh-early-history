@@ -501,8 +501,9 @@ zero-to-multiple) **supers** (declared by _many_ `extends` statements
 within the **class** procedure) mounted on the **scope** **entity** of
 the **class** procedure call.
 
-A **class** procedure can explicitly return another **object**, another
-value or even `nil`, but again, this is the black magic you want to avoid.
+> A **class** procedure can explicitly return another **object**, another
+> **value** or even `nil`, but again, this is the black magic you want to
+> avoid.
 
 Note in traditional **Object Oriented** languages, the **class** is
 sensibly a part of the definition of the world structure, which carries
@@ -534,9 +535,15 @@ an **attribute**, or inherits the **method** from one of its **supers**.
 
 During the run of a **class** procedure, each `extends` statement add its
 specified **object** as a **super** object of `this` object under
-construction. Last added **super** is the first attempted target in
-attribute resolution against `this` object, if no attribute associated with
-the interesting key presents in `this` object's underlying **entity**.
+construction.
+
+> Well a **method** procedure can contain `extends` statements too and
+> when called will add **super**(s) with effect. Still this is the black
+> magic you want to avoid.
+
+Last **super** added is the first attempted target in attribute resolution
+against `this` object, if no attribute associated with the interesting key
+directly presents in `this` object's underlying **entity**.
 
 ### EHI (Edh Host Interface)
 
