@@ -521,11 +521,30 @@ instance resolving pattern obtains the right super instance: <object: B>
 
 ### Interpreter Procedures
 
-### Class (Constructor) Procedures
+Check out [interpreter.edh](./interpreter.edh)
 
-### Inheritance Hierarchy
-
-`this` and `that`
+```bash
+Đ: {
+Đ|  1:
+Đ|  2:   interpreter lazy(callerScope, expr) {
+Đ|  3:     method lazyEval () callerScope.eval(expr)
+Đ|  4:   }
+Đ|  5:
+Đ|  6:   a = 5; b = 3
+Đ|  7:   sum = lazy(a + b)
+Đ|  8:
+Đ|  9:   runtime.info <| " once upon a time it's " ++ sum()
+Đ| 10:
+Đ| 11:   a = 7
+Đ| 12:   runtime.info <| " then later it's " ++ sum()
+Đ| 13:
+Đ| 14: }
+Đ: ℹ️ <interactive>:9:3
+ once upon a time it's 8
+ℹ️ <interactive>:12:3
+ then later it's 10
+Đ:
+```
 
 This is by far a much under explored area in **Edh**, it's supposed to
 be the rival of
@@ -534,6 +553,15 @@ be the rival of
 And maybe a rival of
 [Macros in Julia](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros-1)
 ? Though never in performance-wise respects.
+
+But lacks a well thought out, reflective **AST** (especially **Expr**)
+manipulation API.
+
+### Class (Constructor) Procedures
+
+### Inheritance Hierarchy
+
+`this` and `that`
 
 ## Go-Routine / Defer
 

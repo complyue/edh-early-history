@@ -5,7 +5,6 @@
     method lazyEval () callerScope.eval(expr)
   }
 
-
   a = 5; b = 3
   sum = lazy(a + b)
 
