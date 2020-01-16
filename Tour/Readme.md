@@ -36,6 +36,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Reflection](#reflection)
 - [Terminology](#terminology)
   - [World](#world)
+  - [Package](#package)
   - [Module](#module)
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Operator](#operator)
@@ -257,6 +258,16 @@ _\*_ not really enough to just say it,
 See this 190 lines of
 [world modeling code](https://github.com/e-wrks/edhim#world-modeling-code-in-haskell)
 for an example.
+
+### Package
+
+Just a folder tree containing various `*.edh` file, resides directly or nested
+some levels within a `edh_modules` parent directory, so that reachable from
+`import` statements from **Edh** code.
+
+By far no meta data format has been defined for an **Edh** package, but
+there ought to be one together with a package tool managing version dependencies
+as well as to auto download & install packages from some repositories.
 
 ### Module
 
