@@ -525,9 +525,9 @@ except being members of a same, single **object**'s underlying
 
 #### That reference
 
-`that` refers to the **object** against which current runing procedure is
-resolved, i.e. the target **object** of attribute resolution in finding
-the current (**method**) procedure as a callee.
+`that` refers to the **object** against which current running
+**procedure** is resolved, i.e. the target **object** of attribute
+resolution in finding the current (**method**) **procedure** as a callee.
 
 `that` either contains the **method** procedure in its own **entity** as
 an **attribute**, in which case `that` should be the same as `this`,
@@ -540,13 +540,13 @@ constructed by the nearest lexical **class** **procedure**, while `that`
 
 #### Super
 
-During the run of a **class** procedure, each `extends` statement add its
-specified **object** as a **super** object of `this` object under
+During the run of a **class** procedure, each `extends` statement adds
+its specified **object** as a **super** object of `this` object under
 construction.
 
 > Well a **method** procedure can contain `extends` statements too and
-> when called will add **super**(s) with effect. Still this is the black
-> magic you want to avoid.
+> when called will add **super**(s) possibly after the object has been
+> constructed. Still this is the black magic you want to avoid.
 
 Last **super** added is the first attempted target in attribute resolution
 against `this` object, if no attribute associated with the interesting key
