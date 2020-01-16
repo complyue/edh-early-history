@@ -165,21 +165,13 @@ data OriginalValue = OriginalValue {
 
 -- Especially note that Edh has no block scope as in C
 -- family languages, JavaScript neither does before ES6,
--- Python neither does until now (2019).
+-- Python neither does until now (2020).
 --
 -- There is only `procedure scope` in Edh, and there are only 2 kinds
--- of procedures:
---  * constructor procedure, including:
---    * class (runs with a new object as `this`/`that`)
---    * module (runs with the new module object as `this`/`that`)
---  * method procedure, including:
---    * method (runs with lexical `this` and hierarchical `that`)
---    * operator (ditto)
---    * generator (ditto)
---    * interpreter (ditto)
+-- of procedures, see https://github.com/e-wrks/edh/Tour/#procedure
 --
 -- Every procedure call will create a new scope, with a new entity created
--- for it, and:
+-- for it, that:
 --
 --  * if it is a constructor procedure call, a new object of the called
 --    class, or the `<module>` class defined by the world, is allocated

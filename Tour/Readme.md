@@ -17,17 +17,6 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
   - [Multi/Single line input modes](#multisingle-line-input-modes)
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
-- [Concepts](#concepts)
-  - [World](#world)
-  - [Function (or lack thereof)](#function-or-lack-thereof)
-  - [Procedure](#procedure)
-  - [Entity](#entity)
-    - [Attribute](#attribute)
-    - [Symbol](#symbol)
-  - [Scope](#scope)
-  - [Object](#object)
-    - [This reference](#this-reference)
-    - [That reference](#that-reference)
 - [Module Structures](#module-structures)
 - [Code Structure](#code-structure)
   - [Operators](#operators)
@@ -41,9 +30,23 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Class (Constructor) Procedure](#class-constructor-procedure)
   - [Multiple Inheritance](#multiple-inheritance)
   - [Interpreter Procedure](#interpreter-procedure)
-- [Go-Routine and (Event) Sink](#go-routine-and-event-sink)
-- [Indexing and Magic Methods](#indexing-and-magic-methods)
+- [Go-Routine / Defer](#go-routine--defer)
+- [Event Sink / Reactor](#event-sink--reactor)
+- [Indexing](#indexing)
+- [More Magic Methods](#more-magic-methods)
 - [Reflection](#reflection)
+- [Terminology](#terminology)
+  - [World](#world)
+  - [Function (or lack thereof)](#function-or-lack-thereof)
+  - [Procedure](#procedure)
+  - [Entity](#entity)
+    - [Attribute](#attribute)
+    - [Symbol](#symbol)
+  - [Scope](#scope)
+  - [Object/Class](#objectclass)
+    - [This reference](#this-reference)
+    - [That reference](#that-reference)
+    - [Supers](#supers)
 
 ## Running the REPL (a bare interpreter)
 
@@ -156,7 +159,76 @@ the goat is telling a tale
 Đ:
 ```
 
-## Concepts
+## Module Structures
+
+Very similar to deep-nested
+[`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
+with [NodeJS](https://nodejs.org), map the following folder/file names:
+
+- `node_modules` -> `edh_modules`
+- `index.js` -> `__init__.edh`
+- `*.js` -> `*.edh`
+
+_Just_ find&replace all occurences according to above rules, then
+_Maybe_ https://github.com/npm/cli is right ported to manage **Edh**
+projects already (kidding).
+
+## Code Structure
+
+### Operators
+
+### Branches
+
+### Case-Of
+
+### Pattern Matching
+
+## Procedures
+
+### Host Procedures
+
+### Method Procedure
+
+### Generator Procedure
+
+### Class (Constructor) Procedure
+
+### Multiple Inheritance
+
+`this` and `that`
+
+### Interpreter Procedure
+
+The [Indexing](#indexing-and-magic-methods) section demonstrates
+more sophiscated usage of pattern matching, a simpler example
+resides in the `range()` implementation from default batteries:
+
+```javascript
+  /**
+   * resembles `range` in Python
+   */
+  generator range(start, stop=nil, step=nil) {
+
+    if nil == stop && nil == step then case start of {
+      // enable the hidden *Edhic* version of `range` using pair
+      {(start:stop:step)} -> {fallthrough}
+      {(start:stop)} -> {fallthrough}
+    }
+
+...
+```
+
+## Go-Routine / Defer
+
+## Event Sink / Reactor
+
+## Indexing
+
+## More Magic Methods
+
+## Reflection
+
+## Terminology
 
 ### World
 
@@ -239,15 +311,16 @@ There are 2 kinds of procedures:
 
 ### Entity
 
-An entity in Edh is the backing storage for a **scope**, with possibly an **object**
-mounted to it with one **class** and many **supers**
+An entity in **Edh** is the backing storage for a **scope**, with possibly an
+**object** mounted to it with one **class** and many **supers**
 
 > Well there actually can exist multiple **object**s mounted to one same entity,
-> but that's the black magic you want to avoid.
+> with different **class**es and/or set of **supers**, but that's the black magic
+> you want to avoid.
 
 #### Attribute
 
-An entity stores **attributes** associated with alphanumeric or symbolic keys.
+An entity stores **attribute**s associated with alphanumeric or symbolic keys.
 
 #### Symbol
 
@@ -268,73 +341,32 @@ as well as nested **class**es.
 
 ### Scope
 
-### Object
+Especially note that **Edh** has no block **scope** as in **C**
+family languages, **JavaScript** neither does before **ES6**,
+**Python** neither does until now (2020).
+
+There is only **procedure scope** in Edh, and there are 2 kinds of
+procedures, see [Procedure](#procedure).
+
+Every **procedure** call will create a new **scope**, with a new
+[entity](#entity) created for it, that:
+
+- if it is a **constructor procedure** call, a new **object** of the
+  called **class**, or the `<module>` class defined by the world,
+  is allocated mounting the **entity**, serving `this` object of the
+  **scope**;
+
+- if it is a **methd procedure** call, no new **object** is created,
+  and the **scope** inherits `this` **object** from the lexical outer
+  **scope**, and the original **object** from which the **method**
+  was obtained, becomes `that` **object** in this **scope**. `that`
+  either contains the **method** in its **entity** as an **attribute**,
+  or inherits the **method** from one of its **supers**.
+
+### Object/Class
 
 #### This reference
 
 #### That reference
 
-## Module Structures
-
-Very similar to deep-nested
-[`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
-with [NodeJS](https://nodejs.org), map the following folder/file names:
-
-- `node_modules` -> `edh_modules`
-- `index.js` -> `__init__.edh`
-- `*.js` -> `*.edh`
-
-_Just_ find&replace all occurences according to above rules, then
-_Maybe_ https://github.com/npm/cli is right ported to manage **Edh**
-projects already (kidding).
-
-## Code Structure
-
-### Operators
-
-### Branches
-
-### Case-Of
-
-### Pattern Matching
-
-## Procedures
-
-### Host Procedures
-
-### Method Procedure
-
-### Generator Procedure
-
-### Class (Constructor) Procedure
-
-### Multiple Inheritance
-
-`this` and `that`
-
-### Interpreter Procedure
-
-The [Indexing](#indexing-and-magic-methods) section demonstrates
-more sophiscated usage of pattern matching, a simpler example
-resides in the `range()` implementation from default batteries:
-
-```javascript
-  /**
-   * resembles `range` in Python
-   */
-  generator range(start, stop=nil, step=nil) {
-
-    if nil == stop && nil == step then case start of {
-      // enable the hidden *Edhic* version of `range` using pair
-      {(start:stop:step)} -> {fallthrough}
-      {(start:stop)} -> {fallthrough}
-    }
-
-...
-```
-
-## Go-Routine and (Event) Sink
-
-## Indexing and Magic Methods
-
-## Reflection
+#### Supers
