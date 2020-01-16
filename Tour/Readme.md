@@ -265,14 +265,18 @@ Just a folder tree containing various `*.edh` file, resides directly or nested
 some levels within a `edh_modules` parent directory, so that reachable from
 `import` statements from **Edh** code.
 
-By far no meta data format has been defined for an **Edh** package, but
-there ought to be one together with a package tool managing version dependencies
-as well as to auto download & install packages from some repositories.
+See [Package / Module Structures](#package--module-structures)
+
+By far no meta data format has been defined for an **Edh** package, but there
+ought to be one, together with a package tool managing version dependencies
+as well as to auto download & install packages from some shared repositories.
 
 ### Module
 
 A **module** in **Edh** is a single `*.edh` file, imported by some **Edh**
 code or **Haskell** code via the **EHI**.
+
+See [Package / Module Structures](#package--module-structures)
 
 ### Function (or lack thereof)
 
@@ -280,8 +284,8 @@ To stay conceptually clear for the object system (which is
 [procedural](https://en.wikipedia.org/wiki/Procedural_programming)
 per se) living together with the
 [functional](https://en.wikipedia.org/wiki/Functional_programming)
-parts in the host language (i.e. **Haskell**), there are only **procedures** but no
-**function** in **Edh** the surface language.
+parts in the host language (i.e. **Haskell**), there are only **procedures**
+but no **function** in **Edh** the surface language.
 
 Simply put, in **Edh** terminology, a **procedure** tends to _change the world_,
 while a **function** must stay
@@ -290,8 +294,12 @@ free (well, there's no such a thing qualifies within an **Edh** world).
 
 ### Operator
 
+**Edh** allows **operator** declaration and override similar to how **Haskell**
+allows you. You can even roll your own, arbitrary new operators with a
+precendence you'd like with.
+
 You should be supprised that the following language constructs are all
-implemented as overridable operators in **Edh**:
+implemented as overridable **operator**s in **Edh**:
 
 - branch
   - (`->`)
@@ -313,13 +321,10 @@ implemented as overridable operators in **Edh**:
 Meaning you can override them for the entire **Edh** world, or part of the
 program **scope** (e.g. a **module**, a **class**).
 
-And you can even roll your own, arbitrary new operators with a precendence
-you'd like with, as well as how **Haskell** allows you to.
-
 See [**operator** procedure] below.
 
-> Note they are all _left-associative_ _infix_ operators in **Edh**, except
-> a few hardcoded prefix operators:
+> Note that all are _left-associative_ _infix_ operators in **Edh**, except
+> a few hardcoded _prefix_ operators:
 
 - (`+`) prefix plus
 - (`-`) prefix minus
@@ -532,7 +537,7 @@ except being members of a same, single **object**'s underlying
 
 #### This reference
 
-`this` refers to the nearest context object in lexical scope hierarchy.
+`this` refers to the nearest context **object** in lexical scope hierarchy.
 
 #### That reference
 
@@ -545,7 +550,7 @@ an **attribute**, in which case `that` should be the same as `this`,
 or `that` inherits the **method** from one of its **supers**, which is,
 `this`.
 
-It makes sense to remember that `this` **object** was (or being)
+It makes sense to remember that `this` **object** was (or is being)
 constructed by the nearest lexical **class** **procedure**, while `that`
 **object** was not.
 
@@ -556,8 +561,8 @@ its specified **object** as a **super** object of `this` object under
 construction.
 
 > Well a **method** procedure can contain `extends` statements too and
-> when called will add **super**(s) possibly after the object has been
-> constructed. Still this is the black magic you want to avoid.
+> when called will add **super**(s) possibly after its `this` **object**
+> has been constructed. Still this is the black magic you want to avoid.
 
 Last **super** added is the first attempted target in attribute resolution
 against `this` object, if no attribute associated with the interesting key
