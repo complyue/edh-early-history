@@ -17,7 +17,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
   - [Multi/Single line input modes](#multisingle-line-input-modes)
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
-- [Module Structures](#module-structures)
+- [Package/Module Structures](#packagemodule-structures)
 - [Code Structure](#code-structure)
   - [Operators](#operators)
   - [Branches](#branches)
@@ -38,6 +38,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Terminology](#terminology)
   - [World](#world)
   - [Function (or lack thereof)](#function-or-lack-thereof)
+  - [Operator](#operator)
   - [Procedure](#procedure)
   - [Entity](#entity)
     - [Attribute](#attribute)
@@ -159,19 +160,20 @@ the goat is telling a tale
 Đ:
 ```
 
-## Module Structures
+## Package/Module Structures
 
-Very similar to deep-nested
+Very similar to the deeply-nested
 [`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
-with [NodeJS](https://nodejs.org), map the following folder/file names:
+as with [NodeJS](https://nodejs.org), for an **Edh** program, _Just_
+translate the following folder/file names:
 
 - `node_modules` -> `edh_modules`
 - `index.js` -> `__init__.edh`
 - `*.js` -> `*.edh`
 
-_Just_ find&replace all occurences according to above rules, then
-_Maybe_ https://github.com/npm/cli is right ported to manage **Edh**
-projects already (kidding).
+_Maybe_ find & replace all occurences according to above rules, then
+https://github.com/npm/cli is right ported to manage **Edh** projects
+already (kidding).
 
 ## Code Structure
 
@@ -261,6 +263,18 @@ Simply put, in **Edh** terminology, a **procedure** tends to _change the world_,
 while a **function** must stay
 [side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
 free (well, there's no such a thing qualifies within an **Edh** world).
+
+### Operator
+
+see [**operator** procedure] below.
+
+- Note all operators in **Edh** are _left-associative_ _infix_, except a few
+  hardcoded prefix operators:
+
+  - (`+`) prefix plus
+  - (`-`) prefix minus
+  - (`not`) prefix bool negation
+  - (`|`) guard
 
 ### Procedure
 

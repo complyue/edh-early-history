@@ -481,7 +481,6 @@ except a few hardcoded prefix operators:
 - (`-`) prefix minus
 - (`not`) prefix bool negation
 - (`|`) guard
-- the keyword `go` and `defer` are implemented as prefix operator
 
 ### indexing override (Numpy/Pandas upon Repa/AccelerateHS)
 
