@@ -20,15 +20,16 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Package / Module Structures](#package--module-structures)
 - [Code Structure](#code-structure)
   - [Operators](#operators)
+  - [Comprehensions](#comprehensions)
   - [Branches with Value/Pattern Matching](#branches-with-valuepattern-matching)
     - [Case-Of](#case-of)
 - [Procedures](#procedures)
   - [Host Procedures](#host-procedures)
   - [Method Procedures](#method-procedures)
   - [Generator Procedures](#generator-procedures)
+  - [Interpreter Procedures](#interpreter-procedures)
   - [Class (Constructor) Procedures](#class-constructor-procedures)
   - [Inheritance Hierarchy](#inheritance-hierarchy)
-  - [Interpreter Procedures](#interpreter-procedures)
 - [Go-Routine / Defer](#go-routine--defer)
 - [Event Sink / Reactor](#event-sink--reactor)
 - [Indexing](#indexing)
@@ -182,6 +183,80 @@ already (kidding).
 
 ### Operators
 
+Check out [operator.edh](./operator.edh)
+
+```bash
+Đ: {
+Đ|  1:   method localOverrides * {
+Đ|  2:     # overide the (++) operator within this procedure only, avoid
+Đ|  3:     # polluting the module scope
+Đ|  4:
+Đ|  5:     before = 'You' ++ ' and ' ++ 'me'
+Đ|  6:     operator ++ (lhv, rhv) {
+Đ|  7:       # inside the overriding operator definition, the overridden,
+Đ|  8:       # original operator is available as was before the overide
+Đ|  9:       lhv ++ ' ⭕ ' ++ rhv
+Đ| 10:     }
+Đ| 11:     after = 'You' ++ ' and ' ++ 'me'
+Đ| 12:
+Đ| 13:     before 🆚 after
+Đ| 14:   }
+Đ| 15: }
+<method: localOverrides>
+Đ:
+Đ: localOverrides()
+Đ: ℹ️ <interactive>:6:5
+🌀 What's the difference?
+     You and me
+  🆚
+     You ⭕  and  ⭕ me
+
+Đ:
+```
+
+### Comprehensions
+
+Check out [comprehension.edh](./comprehension.edh)
+
+You do **list** / **dict** / **tuple** comprehensions in **Edh** with
+the _comprehension_ / _concatenation_ operator (**=<**):
+
+The (**=<**) operator does comprehension as well as concatenation by default:
+
+```bash
+Đ: [] =< for n from range(5) do n
+[ 0, 1, 2, 3, 4, ]
+Đ:
+Đ: {} =< for n from range(5) do 'square of '++n : n*n
+{ "square of 0":0, "square of 1":1, "square of 2":4, "square of 3":9, "square of 4":16, }
+Đ:
+Đ: () =< for n from range(5) do n
+( 0, 1, 2, 3, 4, )
+Đ:
+Đ: {} =< for (k,v) from zip(('a', 'b', 'd'), [3, 7]) do k:v
+{ "a":3, "b":7, }
+Đ:
+```
+
+If you would like comprehension be aligned with traditional semantics that only
+create fresh ones, you can do this:
+
+```bash
+Đ: import * 'batteries/SeparateConcatAndComprehOp'
+<object: <module>>
+Đ: [3, 7] <=< [2, 9]
+[ 3, 7, 2, 9, ]
+Đ: [3, 7] =< [2, 9]
+* 😱 *
+💔
+📜 <interactive> 🔎 <adhoc>:1:1
+📜 =< 🔎 /qw/m3works/edh/edh_modules/batteries/SeparateConcatAndComprehOp.edh:11:37
+📜 error 🔎 <hostcode>:1:1
+💣 You don't comprehend into non-empty ones!
+👉 <Genesis>:1:1
+Đ:
+```
+
 ### Branches with Value/Pattern Matching
 
 The [Indexing](#indexing-and-magic-methods) section demonstrates
@@ -213,13 +288,13 @@ resides in the `range()` implementation from default batteries:
 
 ### Generator Procedures
 
+### Interpreter Procedures
+
 ### Class (Constructor) Procedures
 
 ### Inheritance Hierarchy
 
 `this` and `that`
-
-### Interpreter Procedures
 
 This is by far a much under explored area in **Edh**, it's supposed to
 be the rival of
@@ -321,7 +396,7 @@ implemented as overridable **operator**s in **Edh**:
 Meaning you can override them for the entire **Edh** world, or part of the
 program **scope** (e.g. a **module**, a **class**).
 
-See [**operator** procedure] below.
+Also see [**operator** procedure] below.
 
 > Note that all are _left-associative_ _infix_ operators in **Edh**, except
 > a few hardcoded _prefix_ operators:

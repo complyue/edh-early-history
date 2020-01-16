@@ -41,30 +41,3 @@ a 🆚 b
 
 localOverrides()
 
-
-{
-  # save the original (=<) operator, use it for append as (<=<)
-  append'operator = (=<)
-  operator <=< 1 (lhv, rhv) {
-    # restore the original (=<) operator
-    (=<) = append'operator
-    # do it
-    lhv =< rhv
-  }
-
-  # override operator (=<) to comprehend into empty ones only
-  operator =< (callerScope, lhe, rhe) {
-    lhv = callerScope.eval(lhe)
-    if not null(lhv) then
-      error("You don't comprehend into non-empty ones!")
-    # left-hand value is empty, can do it
-    rhv = callerScope.eval(rhe)
-    # the overridden original operator is captured for an 
-    # overriding operator automatically, so just use it
-    lhv =< rhv
-  }
-}
-
-[3,2] =< [7,5]
-
-[3,2] <=< [7,5]

@@ -285,17 +285,43 @@ evalStmt' !stmt !exit = do
         mth
       exitEdhSTM pgs exit mth
 
-    OpDeclStmt opSym opPrec opProc -> contEdhSTM $ do
-      let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
-                                      , operatorProcedure   = opProc
-                                      , operatorPredecessor = Nothing
-                                      , operatorPrecedence  = opPrec
-                                      }
-      modifyTVar' (scopeEntity scope)
-        $ \em -> Map.insert (AttrByName opSym) op em
-      exitEdhSTM pgs exit op
+    OpDeclStmt opSym opPrec opProc@(ProcDecl _ _ (StmtSrc (_, body'stmt))) ->
+      case body'stmt of
+        -- support re-declaring an existing operator to another name,
+        -- with possibly a different precedence
+        ExprStmt (AttrExpr (DirectRef (NamedAttr !origOpSym))) ->
+          contEdhSTM $ do
+            origOp <- lookupEdhCtxAttr scope (AttrByName origOpSym) >>= \case
+              Nothing ->
+                throwEdhSTM pgs EvalError
+                  $  "Original operator ("
+                  <> origOpSym
+                  <> ") not in scope"
+              Just (EdhHostOper _ !hp) -> return $ EdhHostOper opPrec hp
+              Just surfOper@(EdhOperator _) -> return surfOper
+              Just val ->
+                throwEdhSTM pgs EvalError
+                  $  "Can not re-declare a "
+                  <> T.pack (show $ edhTypeOf val)
+                  <> ": "
+                  <> T.pack (show val)
+                  <> " as an operator"
+            modifyTVar' (scopeEntity scope)
+              $ Map.insert (AttrByName opSym) origOp
+            exitEdhSTM pgs exit origOp
+        _ -> contEdhSTM $ do
+          validateOperDecl pgs opProc
+          let op = EdhOperator $ Operator { operatorLexiStack   = call'stack
+                                          , operatorProcedure   = opProc
+                                          , operatorPredecessor = Nothing
+                                          , operatorPrecedence  = opPrec
+                                          }
+          modifyTVar' (scopeEntity scope)
+            $ \em -> Map.insert (AttrByName opSym) op em
+          exitEdhSTM pgs exit op
 
     OpOvrdStmt opSym opProc opPrec -> contEdhSTM $ do
+      validateOperDecl pgs opProc
       let findPredecessor :: STM (Maybe EdhValue)
           findPredecessor = lookupEdhCtxAttr scope (AttrByName opSym) >>= \case
             Nothing -> -- do
@@ -896,6 +922,17 @@ evalExpr expr exit = do
 
 
     -- _ -> throwEdh EvalError $ "Eval not yet impl for: " <> T.pack (show expr)
+
+
+validateOperDecl :: EdhProgState -> ProcDecl -> STM ()
+validateOperDecl !pgs (ProcDecl _ !op'args _) = case op'args of
+  -- 2 pos-args - simple lh/rh value receiving operator
+  (PackReceiver [RecvArg _lhName Nothing Nothing, RecvArg _rhName Nothing Nothing])
+    -> return ()
+  -- 3 pos-args - caller scope + lh/rh expr receiving operator
+  (PackReceiver [RecvArg _scopeName Nothing Nothing, RecvArg _lhName Nothing Nothing, RecvArg _rhName Nothing Nothing])
+    -> return ()
+  _ -> throwEdhSTM pgs EvalError "Invalid operator signature"
 
 
 edhMakeCall
