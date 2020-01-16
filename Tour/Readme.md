@@ -24,6 +24,8 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Entity](#entity)
   - [Scope](#scope)
   - [Object](#object)
+    - [This reference](#this-reference)
+    - [That reference](#that-reference)
 - [Module Structures](#module-structures)
 - [Code Structure](#code-structure)
   - [Operators](#operators)
@@ -188,11 +190,44 @@ free (well, there's no such a thing qualifies within an **Edh** world).
 
 ### Procedure
 
+There are 2 kinds of procedures:
+
+- **constructor** procedure, including:
+  - **class** (runs with a new object as `this`/`that`)
+    defined with a `class`statement in **Edh** code
+  - **module** (runs with the new module object as `this`/`that`)
+    defined by a `*.edh` file which is imported by **Edh** code
+- **method** procedure, including:
+  - **method** (runs with lexical `this` and hierarchical `that`)
+    defined by a `method` statement in **Edh**,
+    which is a vanilla callable after an alphanumeric name
+  - **operator** (ditto)
+    defined by a `operator` statement in **Edh**,
+    which is a binary or trinary callable after a name with just operator symbols
+    i.e. `=~!@#$%^&|:<>?+-*/` plus other
+    [Unicode](http://www.unicode.org/reports/tr44/tr44-14.html#GC_Values_Table)
+    [Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
+    .
+    the binary form receives `left-hand-value` and `right-hand-value`;
+    the trinary form receives `callerScope`, `left-hand-expr` and `right-hand-expr`
+    as arguments.
+  - **generator** (ditto)
+    defined by a `generator` statement in **Edh**,
+    which is only callable by a `for-from-do` loop, and contains `yield` expressions
+  - _interpreter_ (ditto)
+    defined by a `interpreter` statement in **Edh**,
+    which is same as a **method** procedure except it receives arguments in expression
+    form rather than values, in addition to the reflective `callerScope` as first argument
+
 ### Entity
 
 ### Scope
 
 ### Object
+
+#### This reference
+
+#### That reference
 
 ## Module Structures
 
