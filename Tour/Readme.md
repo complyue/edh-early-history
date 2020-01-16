@@ -211,15 +211,17 @@ There are 2 kinds of procedures:
 
   - **operator** procedure
 
-    defined by a `operator` statement in **Edh**,
-    which is a binary or trinary callable after a name with just operator symbols
+    defined by an `operator` statement in **Edh**,
+    which is a **binary** or **trinary** callable after a name with just operator symbols
     i.e. `=~!@#$%^&|:<>?+-*/` plus other
     [Unicode](http://www.unicode.org/reports/tr44/tr44-14.html#GC_Values_Table)
     [Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
     .
 
-    the binary form receives `left-hand-value` and `right-hand-value`;
-    the trinary form receives `callerScope`, `left-hand-expr` and `right-hand-expr`
+    the **binary** form receives `left'hand'value` and `right'hand'value`;
+
+    the **trinary** form receives `callerScope`, `left'hand'expr` and `right'hand'expr`
+
     as arguments.
 
   - **generator** procedure
@@ -229,9 +231,10 @@ There are 2 kinds of procedures:
 
   - **interpreter** procedure
 
-    defined by a `interpreter` statement in **Edh**,
-    which is same as a **method** procedure except it receives arguments in expression
-    form rather than values, in addition to the reflective `callerScope` as first argument
+    defined by an `interpreter` statement in **Edh**,
+    which is same as a vanilla **method** procedure except it receives arguments in
+    expression forms rather than evaluated values, in addition to the reflective
+    `callerScope` as first argument
 
 ### Entity
 
