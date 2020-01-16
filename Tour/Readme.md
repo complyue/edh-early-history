@@ -19,6 +19,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Package / Module Structures](#package--module-structures)
 - [Micro Structures](#micro-structures)
+  - [Arguments (Un / Re) Packing](#arguments-un--re-packing)
   - [Comprehensions](#comprehensions)
   - [Operators](#operators)
   - [list/dict modification](#listdict-modification)
@@ -191,6 +192,13 @@ Note that module `batteries/root` will be imported into root scope of an
 when a **world** is created).
 
 ## Micro Structures
+
+### Arguments (Un / Re) Packing
+
+`ArgsPack` is an immutable type of values in **Edh**, it is also part of
+the **Edh** call convention.
+
+...
 
 ### Comprehensions
 
