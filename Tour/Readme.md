@@ -18,11 +18,16 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Multi / Single line input modes](#multi--single-line-input-modes)
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Package / Module Structures](#package--module-structures)
-- [Code Structure](#code-structure)
+- [Micro Structures](#micro-structures)
   - [Comprehensions](#comprehensions)
   - [Operators](#operators)
-  - [Branches with Value/Pattern Matching](#branches-with-valuepattern-matching)
+  - [list/dict modification](#listdict-modification)
+  - [Logging](#logging)
+  - [Type Inspections](#type-inspections)
+  - [Branches with Value Matching / Pattern Matching](#branches-with-value-matching--pattern-matching)
+    - [Value Matching](#value-matching)
     - [Case-Of](#case-of)
+    - [Pattern Matching](#pattern-matching)
 - [Procedures](#procedures)
   - [Host Procedures](#host-procedures)
   - [Method Procedures](#method-procedures)
@@ -179,7 +184,11 @@ _Maybe_ find & replace all occurences according to above rules, then
 https://github.com/npm/cli is right ported to manage **Edh** projects
 already (kidding).
 
-## Code Structure
+Note that module `batteries/root` will be imported into root scope of an
+**Edh** **world** when default batteries are installed (the most common case
+when a **world** is created).
+
+## Micro Structures
 
 ### Comprehensions
 
@@ -227,6 +236,18 @@ fresh ones are created, you can do this:
 ### Operators
 
 Check out [operator.edh](./operator.edh)
+
+You can inspect an operator at the REPL, just print it:
+
+```bash
+Đ: (++)
+<hostop: (++) 2>
+Đ: (+=)
+<operator: (+=) 2>
+Đ:
+```
+
+All operators can be overridden in **Edh**
 
 ```bash
 Đ: {
@@ -279,28 +300,142 @@ operator =< (callerScope, lhe, rhe) {
 }
 ```
 
-### Branches with Value/Pattern Matching
+### list/dict modification
 
-The [Indexing](#indexing-and-magic-methods) section demonstrates
-more sophiscated usage of pattern matching, a simpler example
-resides in the `range()` implementation from default batteries:
+- append to a list/dict
+  just use the comprehension operator as well
+- prepend to a list, insert/update single entry to a dict
+  there's the `cons` operator (**=>**) for it
 
-```javascript
-  /**
-   * resembles `range` in Python
-   */
-  generator range(start, stop=nil, step=nil) {
-
-    if nil == stop && nil == step then case start of {
-      // enable the hidden *Edhic* version of `range` using pair
-      {(start:stop:step)} -> {fallthrough}
-      {(start:stop)} -> {fallthrough}
-    }
-
-...
+```bash
+Đ: let (l, d) = ([3,'foo',5], {'a': 'good', 'b': 9})
+Đ: l =< [2,'bar',9]
+[ 3, "foo", 5, 2, "bar", 9, ]
+Đ: d =< {'b': 1, 'm': 'cool!'}
+{ "a":"good", "b":1, "m":"cool!", }
+Đ: 'baz' => l
+[ "baz", 3, "foo", 5, 2, "bar", 9, ]
+Đ: ('n', 'yeah') => d
+{ "a":"good", "b":1, "m":"cool!", "n":"yeah", }
+Đ:
 ```
 
+### Logging
+
+Logging is done by an operator (**<|**) too, surprise!
+
+`runtime.xxx` are just number values to specify the target level of
+a log record, and the process environment variable `EDH_LOG_LEVEL`
+if set, will cause log records with lower target levels be dropped.
+
+```bash
+$ export EDH_LOG_LEVEL=WARN
+$ edhi
+>> Bare Đ (Edh) Interpreter <<
+* Blank Screen Syndrome ? Take the Tour as your companion, checkout:
+  https://github.com/e-wrks/edh/Tour/
+Đ: runtime.warn <| "You won't see source location info in log if the level is WARN or higher"
+Đ: ⚠️ You won't see source location info in log if the level is WARN or higher
+Đ:
+$ export EDH_LOG_LEVEL=DEBUG
+$ edhi
+>> Bare Đ (Edh) Interpreter <<
+* Blank Screen Syndrome ? Take the Tour as your companion, checkout:
+  https://github.com/e-wrks/edh/Tour/
+Đ: runtime.info <| "Source location is informative most of the time, right?"
+Đ: ℹ️ <interactive>:1:1
+Source location is informative most of the time, right?
+Đ: runtime.debug <| "Especially when trouble shooting some unexpected results."
+Đ: 🐞 <interactive>:1:1
+Especially when trouble shooting some unexpected results.
+Đ: runtime.warn
+30
+Đ: 30<|'use a number works the same way!'
+Đ: ⚠️ <interactive>:1:1
+use a number works the same way!
+Đ:
+```
+
+### Type Inspections
+
+```haskell
+Đ: type(7)
+DecimalType
+Đ: type(3, 'abc', 2:5)
+( DecimalType, StringType, PairType, )
+Đ: type(type, (+), type(1))
+( HostProcType, HostOperType, TypeType, )
+Đ: type(pkargs(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
+pkargs( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
+Đ:
+```
+
+### Branches with Value Matching / Pattern Matching
+
+Check out [branch.edh](./branch.edh)
+
+You may know (**->**) in **Haskell**, it is also in **Edh** but called
+the **branch** operator:
+
+```bash
+Đ: (->)
+<hostop: (->) 0>
+Đ: 1 < 2 -> 'it must be!'
+it must be!
+Đ: 1 > 2 -> 'not the case!'
+<fallthrough>
+Đ: 'more than truth' -> 'Edh do JavaScript style value coercing?'
+<fallthrough>
+Đ: _ -> 'the wildcard always matches!'
+the wildcard always matches!
+Đ:
+```
+
+#### Value Matching
+
+`<fallthrough>` is the result value from evaluating a non-matched branch,
+it signals the _try-next-case_ semantic. And without an enclosing `case-of`
+construct, the _left-hand-value_ to (**->**) operator is matched against
+the value `true`. And since **Edh** is strongly typed (though dynamically
+typed), there is no _trueish_ semantics for another type of value to be
+matched with `true`.
+
+> You'll soon see [Pattern Matching](#pattern-matching), the **branch**
+> does [Value Matching](#value-matching) unless **Pattern Matching** is
+> invoked by _curly-brace-quoting_ at _left-hand_ of the (**->**) operator.
+
 #### Case-Of
+
+Check out [case-of.edh](./case-of.edh)
+
+To match against some value determined at runtime, you use `case-of`:
+
+```bash
+Đ: case type('the question', 5) of (StringType, DecimalType) -> 'yeath'
+yeath
+Đ: case type('the question', 5) of (StringType, StringType) -> 'possible?'
+<fallthrough>
+```
+
+#### Pattern Matching
+
+```bash
+Đ: case 3:2:1 of { { x:y } -> 'pair pattern matches the length'; { x:y:z } -> 'so this one fires' }
+so this one fires
+Đ: case 3:2 of { (x:y) } -> 'the pair pattern can be parenthesised'
+the pair pattern can be parenthesised
+Đ: case 3*7-5 of { result } -> 'a wild capture pattern receives the ' ++ result
+a wild capture pattern receives the 16
+Đ: case [7, 3, 5] of { head => tail } -> 'snoc pattern does snoc, got ' ++ (head, tail)
+snoc pattern does snoc, got ( 7, [ 3, 5, ], )
+Đ: case (3, 5, 7) of { (x, y, z) } -> 'tuple pattern matches the length'
+tuple pattern matches the length
+Đ: case (3, 5, 7) of { (x, y) } -> 'tuple pattern matches the length'
+<fallthrough>
+Đ: case C() of {{ B:b }} -> 'instance resolving pattern obtains the right super instance: ' ++ b
+instance resolving pattern obtains the right super instance: <object: B>
+Đ:
+```
 
 ## Procedures
 
@@ -374,6 +509,10 @@ A **module** in **Edh** is a single `*.edh` file, imported by some **Edh**
 code or **Haskell** code via the **EHI**.
 
 See [Package / Module Structures](#package--module-structures)
+
+Note that module `batteries/root` will be imported into root scope of an
+**Edh** **world** when default batteries are installed (the most common case
+when a **world** is created).
 
 ### Function (or lack thereof)
 
