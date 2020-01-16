@@ -1,10 +1,10 @@
 # A Tour of Đ (Edh)
 
-You want to run a bare interpreter to play with the language basics, to do
-some quick tests etc. While a real **Haskell** + **Edh** application
-certainly will include it's unique **Edh** interpreter with more powerful
-batteries in addition to the default ones installed.
-
+You want to run a bare **Edh** interpreter (the REPL) to play with the language
+basics, to develop new batteries written in **Edh** the surface language, etc.
+While a real **Haskell** + **Edh** application would certainly include it's
+unique **Edh** interpreter with more powerful batteries written in the host
+language (i.e. **Haskell**) installed, in addition to the default ones.
 See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 
 - [Running a bare interpreter](#running-a-bare-interpreter)
@@ -69,7 +69,7 @@ $ edhi
 >> Bare Đ (Edh) Interpreter <<
 * Blank Screen Syndrome ? Take the Tour as your companion, checkout:
   https://github.com/e-wrks/edh/Tour/
-Đ: 
+Đ:
 ```
 
 ### Multi/Single line input modes
@@ -91,7 +91,7 @@ $ edhi
 2
 Đ: (x, y)
 ( 1, 2, )
-Đ: 
+Đ:
 ```
 
 ## Concepts
