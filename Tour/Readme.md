@@ -44,6 +44,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [Attribute](#attribute)
     - [Symbol](#symbol)
   - [Scope](#scope)
+  - [Value](#value)
   - [Object / Class](#object--class)
     - [This reference](#this-reference)
     - [That reference](#that-reference)
@@ -415,7 +416,93 @@ Every **procedure** call will create a new **scope**, with a new
   either contains the **method** in its **entity** as an **attribute**,
   or inherits the **method** from one of its **supers**.
 
+### Value
+
+> Everything in **Edh** is a value
+
+Code may tell better here:
+
+```haskell
+-- | everything in Edh is a value
+data EdhValue =
+  -- | type itself is a kind of (immutable) value
+      EdhType !EdhTypeValue
+  -- * end values (immutable)
+    | EdhNil
+    | EdhDecimal !Decimal
+    | EdhBool !Bool
+    | EdhString !Text
+    | EdhSymbol !Symbol
+
+  -- * direct pointer (to entities) values
+    | EdhObject !Object
+
+  -- * mutable containers
+    | EdhDict !Dict
+    | EdhList !List
+
+  -- * immutable containers
+  --   the elements may still pointer to mutable data
+    | EdhPair !EdhValue !EdhValue
+    | EdhTuple ![EdhValue]
+    | EdhArgsPack ArgsPack
+
+  -- * host procedures callable from Edh world
+    | EdhHostProc !HostProcedure
+    | EdhHostOper !Precedence !HostProcedure
+    | EdhHostGenr !HostProcedure
+
+  -- * precedures defined by Edh code
+    | EdhClass !Class
+    | EdhMethod !Method
+    | EdhOperator !Operator
+    | EdhGenrDef !GenrDef
+    | EdhInterpreter !Interpreter
+
+  -- * flow control
+    | EdhBreak
+    | EdhContinue
+    | EdhCaseClose !EdhValue
+    | EdhFallthrough
+    | EdhYield !EdhValue
+    | EdhReturn !EdhValue
+
+  -- * event sink
+    | EdhSink !EventSink
+
+  -- * reflection
+    | EdhExpr !Expr
+
+edhValueStr :: EdhValue -> Text
+edhValueStr (EdhString s) = s
+edhValueStr v             = T.pack $ show v
+
+edhValueNull :: EdhValue -> STM Bool
+edhValueNull EdhNil                = return True
+edhValueNull (EdhDecimal d       ) = return $ D.decimalIsNaN d || d == 0
+edhValueNull (EdhBool    b       ) = return $ b == False
+edhValueNull (EdhString  s       ) = return $ T.null s
+edhValueNull (EdhDict    (Dict d)) = Map.null <$> readTVar d
+edhValueNull (EdhList    (List l)) = null <$> readTVar l
+edhValueNull (EdhTuple   l       ) = return $ null l
+edhValueNull (EdhArgsPack (ArgsPack args kwargs)) =
+  return $ null args && Map.null kwargs
+edhValueNull _ = return False
+```
+
 ### Object / Class
+
+A **class** in **Edh** is defined by a `class` statement in **Edh**
+code in form of a **class** procedure.
+
+A **class** procedure constructs objects when called, on each invocation,
+it implicitly creates an object taking the **class** and _many_ (reads
+zero-to-multiple) **supers** (declared by _many_ `extends` statements
+within the **class** procedure) mounted on the **scope** **entity** of
+the **class** procedure call.
+
+A **class** procedure can explicitly return another **object**, another
+value or even `nil`, but again, this is the black magic you want to avoid.
 
 #### This reference
 
