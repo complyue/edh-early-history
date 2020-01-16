@@ -266,7 +266,33 @@ free (well, there's no such a thing qualifies within an **Edh** world).
 
 ### Operator
 
-see [**operator** procedure] below.
+You should be supprised that the following language constructs are all
+implemented as overridable operators in **Edh**:
+
+- branch
+  - (`->`)
+- assignment
+  - (`=`), (`+=`), (`-=`), (`*=`), (`/=`)
+- logical arithmetic
+  - (`&&`), (`||`)
+- ternary
+  - (`&>`), (`|>`)
+- list/dict/tuple comprehension/concatenation
+  - (`=<`)
+- list/dict prepend/insert
+  - (`=>`)
+- string coercing concatenation
+  - (`++`)
+- event publish
+  - (`<-`)
+
+Meaning you can override them for the entire **Edh** world, or part of the
+program **scope** (e.g. a **module**, a **class**).
+
+And you can even roll your own, arbitrary new operators with a precendence
+you'd like with, as well as how **Haskell** allows you to.
+
+See [**operator** procedure] below.
 
 - Note all operators in **Edh** are _left-associative_ _infix_, except a few
   hardcoded prefix operators:
