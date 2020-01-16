@@ -19,7 +19,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Concepts](#concepts)
   - [World](#world)
-  - [Functions (or lack thereof)](#functions-or-lack-thereof)
+  - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Procedure](#procedure)
   - [Entity](#entity)
   - [Scope](#scope)
@@ -172,7 +172,19 @@ See this 190 lines of
 [world modeling code](https://github.com/e-wrks/edhim#world-modeling-code-in-haskell)
 for an example.
 
-### Functions (or lack thereof)
+### Function (or lack thereof)
+
+To stay conceptually clear for the object system (which is
+[procedural](https://en.wikipedia.org/wiki/Procedural_programming)
+per se) living together with the
+[functional](https://en.wikipedia.org/wiki/Functional_programming)
+parts in the host language (i.e. **Haskell**), there are only **procedures** but no
+**function** in **Edh** the surface language.
+
+Simply put, in **Edh** terminology, a **procedure** tends to _change the world_,
+while a **function** must stay
+[side effect](<https://en.wikipedia.org/wiki/Side_effect_(computer_science)>)
+free (well, there's no such a thing qualifies within an **Edh** world).
 
 ### Procedure
 
