@@ -530,7 +530,9 @@ resolved, i.e. the target **object** of attribute resolution in finding
 the current (**method**) procedure as a callee.
 
 `that` either contains the **method** procedure in its own **entity** as
-an **attribute**, or inherits the **method** from one of its **supers**.
+an **attribute**, in which case `that` should be the same as `this`,
+or `that` inherits the **method** from one of its **supers**, which is,
+`this`.
 
 It makes sense to remember that `this` **object** was (or being)
 constructed by the nearest lexical **class** **procedure**, while `that`
