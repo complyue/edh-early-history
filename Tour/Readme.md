@@ -475,6 +475,11 @@ do you known, that I live in no where ?
 
 Check out [patterns.edh](./patterns.edh)
 
+**Pattern Matching** is invoked by _curly-brace-quoting_ at _left-hand-side_
+of the (**->**) operator.
+
+Patterns available by now:
+
 ```bash
 Đ: {
 Đ|  1:   case 3:2:1 of {
@@ -510,6 +515,8 @@ tuple pattern matches the length
 instance resolving pattern obtains the right super instance: <object: B>
 Đ:
 ```
+
+More patterns can be added in the future.
 
 ## Procedures
 
