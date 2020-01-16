@@ -1,7 +1,11 @@
 # A Tour of Đ (Edh)
 
-You want to run a bare **Edh** interpreter (the REPL) to play with the language
-basics, to develop new batteries written in **Edh** the surface language, etc.
+You want to run a bare **Edh** interpreter (the **REPL**), to play with the
+language basics, to develop new batteries merely in **Edh** the surface
+language, or do other sorts of fun stuffs. (Note there can be
+[File Operating Edh](https://github.com/e-wrks/foedh)
+for shell scripting support and other derivatives)
+
 While a real **Haskell** + **Edh** application would certainly include it's
 unique **Edh** interpreter with more powerful batteries written in the host
 language (i.e. **Haskell**) installed, in addition to the default ones.
@@ -152,15 +156,17 @@ the goat is telling a tale
 
 ### World
 
-While impure computer programs tend to change the world, you create ones for
-them to manipulate, but with potentials limited.
+> While impure computer programs tend to change the world, you create ones for
+> them to manipulate, but with potentials limited.
 
-The world is a niche, sandbox or similar concepts you can call it. To develop
-a **Haskell** + **Edh** application is somewhat like **playing God**, you
-define an **Edh** world with its physics in entirety - no more, no less, just
-what you **say** (_\*_), that ought to be there.
+The _world_ is a **niche**, **sandbox** or similar concepts you can call it.
+To develop a **Haskell** + **Edh** application is somewhat like **playing God**,
+you define an **Edh** world with its physics in entirety - no more, no less,
+just what you **say** (_\*_), that ought to be there.
 
-_\*_ not really enough just say it, as _talk is cheap, put code there_
+_\*_ not really enough to just say it,
+[talk is cheap](https://lkml.org/lkml/2000/8/25/132)
+, put the code there.
 
 See this 190 lines of
 [world modeling code](https://github.com/e-wrks/edhim#world-modeling-code-in-haskell)
