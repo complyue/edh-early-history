@@ -22,6 +22,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Comprehensions](#comprehensions)
   - [Operators](#operators)
   - [list/dict modification](#listdict-modification)
+  - [Tenary](#tenary)
   - [Logging](#logging)
   - [Type Inspections](#type-inspections)
   - [Branches with Value Matching / Pattern Matching](#branches-with-value-matching--pattern-matching)
@@ -319,6 +320,31 @@ operator =< (callerScope, lhe, rhe) {
 Đ: ('n', 'yeah') => d
 { "a":"good", "b":1, "m":"cool!", "n":"yeah", }
 Đ:
+```
+
+### Tenary
+
+in **C** you do:
+
+```C
+onCnd ? oneThing : theOther
+```
+
+and in **Python** you do:
+
+```python
+onCnd and oneThing or theOther
+```
+
+well in **Edh** you do:
+
+```haskell
+onCnd &> oneThing |> theOther
+```
+
+```bash
+Đ: 2 < 1 &> 'no way!' |> 'of coz'
+of coz
 ```
 
 ### Logging
