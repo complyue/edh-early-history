@@ -15,21 +15,20 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Favouring Cabal](#favouring-cabal)
   - [Favouring Stack](#favouring-stack)
   - [Run with verbose (or lean) log level](#run-with-verbose-or-lean-log-level)
-  - [Multi/Single line input modes](#multisingle-line-input-modes)
+  - [Multi / Single line input modes](#multi--single-line-input-modes)
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
-- [Package/Module Structures](#packagemodule-structures)
+- [Package / Module Structures](#package--module-structures)
 - [Code Structure](#code-structure)
   - [Operators](#operators)
-  - [Branches](#branches)
-  - [Case-Of](#case-of)
-  - [Pattern Matching](#pattern-matching)
+  - [Branches with Value/Pattern Matching](#branches-with-valuepattern-matching)
+    - [Case-Of](#case-of)
 - [Procedures](#procedures)
   - [Host Procedures](#host-procedures)
-  - [Method Procedure](#method-procedure)
-  - [Generator Procedure](#generator-procedure)
-  - [Class (Constructor) Procedure](#class-constructor-procedure)
-  - [Multiple Inheritance](#multiple-inheritance)
-  - [Interpreter Procedure](#interpreter-procedure)
+  - [Method Procedures](#method-procedures)
+  - [Generator Procedures](#generator-procedures)
+  - [Class (Constructor) Procedures](#class-constructor-procedures)
+  - [Inheritance Hierarchy](#inheritance-hierarchy)
+  - [Interpreter Procedures](#interpreter-procedures)
 - [Go-Routine / Defer](#go-routine--defer)
 - [Event Sink / Reactor](#event-sink--reactor)
 - [Indexing](#indexing)
@@ -44,7 +43,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [Attribute](#attribute)
     - [Symbol](#symbol)
   - [Scope](#scope)
-  - [Object/Class](#objectclass)
+  - [Object / Class](#object--class)
     - [This reference](#this-reference)
     - [That reference](#that-reference)
     - [Supers](#supers)
@@ -85,7 +84,7 @@ $ edhi
 Đ:
 ```
 
-### Multi/Single line input modes
+### Multi / Single line input modes
 
 The repl runs in single-line input mode by default, while **unindented**
 curly braces start & end multi-line input mode:
@@ -160,7 +159,7 @@ the goat is telling a tale
 Đ:
 ```
 
-## Package/Module Structures
+## Package / Module Structures
 
 Very similar to the deeply-nested
 [`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
@@ -179,27 +178,7 @@ already (kidding).
 
 ### Operators
 
-### Branches
-
-### Case-Of
-
-### Pattern Matching
-
-## Procedures
-
-### Host Procedures
-
-### Method Procedure
-
-### Generator Procedure
-
-### Class (Constructor) Procedure
-
-### Multiple Inheritance
-
-`this` and `that`
-
-### Interpreter Procedure
+### Branches with Value/Pattern Matching
 
 The [Indexing](#indexing-and-magic-methods) section demonstrates
 more sophiscated usage of pattern matching, a simpler example
@@ -219,6 +198,32 @@ resides in the `range()` implementation from default batteries:
 
 ...
 ```
+
+#### Case-Of
+
+## Procedures
+
+### Host Procedures
+
+### Method Procedures
+
+### Generator Procedures
+
+### Class (Constructor) Procedures
+
+### Inheritance Hierarchy
+
+`this` and `that`
+
+### Interpreter Procedures
+
+This is by far a much under explored area in **Edh**, it's supposed to
+be the rival of
+[Decorators in Python](https://wiki.python.org/moin/PythonDecorators)
+
+And maybe a rival of
+[Macros in Julia](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros-1)
+? Though never in performance-wise respects.
 
 ## Go-Routine / Defer
 
@@ -403,7 +408,7 @@ Every **procedure** call will create a new **scope**, with a new
   either contains the **method** in its **entity** as an **attribute**,
   or inherits the **method** from one of its **supers**.
 
-### Object/Class
+### Object / Class
 
 #### This reference
 
