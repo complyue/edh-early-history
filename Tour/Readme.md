@@ -206,7 +206,7 @@ The (**=<**) operator does comprehension as well as concatenation by default:
 ```
 
 If you would like comprehension be aligned with traditional semantics that only
-create fresh ones, you can do this:
+fresh ones are created, you can do this:
 
 ```bash
 Đ: import * 'batteries/SeparateConcatAndComprehOp'
@@ -259,7 +259,7 @@ Check out [operator.edh](./operator.edh)
 
 Also the implementation of
 [SeparateConcatAndComprehOp](../edh_modules/batteries/SeparateConcatAndComprehOp.edh)
-demonstrates more operator syntaxes:
+demonstrates more operator syntaxes and mechanisms:
 
 ```c++
 # re-declare (=<) as the concat operator (<=<)
@@ -272,6 +272,10 @@ operator =< (callerScope, lhe, rhe) {
     error("You don't comprehend into non-empty ones!")
   # left-hand value is empty, can do it
   callerScope.eval( makeOp(lhe, "<=<", rhe) )
+
+  # the overridden original (=<) operator is in scope of this proc,
+  # but don't do `lhv =< callerScope.eval(rhe)` here, as it won't
+  # work as expected when `rhe` is a for-from-do loop
 }
 ```
 

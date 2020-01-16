@@ -14,4 +14,8 @@ operator =< (callerScope, lhe, rhe) {
     error("You don't comprehend into non-empty ones!")
   # left-hand value is empty, can do it
   callerScope.eval( makeOp(lhe, "<=<", rhe) )
+
+  # the overridden original (=<) operator is in scope of this proc,
+  # but don't do `lhv =< callerScope.eval(rhe)` here, as it won't
+  # work as expected when `rhe` is a for-from-do loop
 }
