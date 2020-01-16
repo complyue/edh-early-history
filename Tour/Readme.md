@@ -152,10 +152,19 @@ the goat is telling a tale
 
 ### World
 
-While impure computer programs tend to change the world, you create ones
-for them to manipulate, but with potentials limited.
+While impure computer programs tend to change the world, you create ones for
+them to manipulate, but with potentials limited.
 
-The world is a niche, sandbox or similar concepts you can call it.
+The world is a niche, sandbox or similar concepts you can call it. To develop
+a **Haskell** + **Edh** application is somewhat like **playing God**, you
+define an **Edh** world with its physics in entirety - no more, no less, just
+what you **say** (_\*_), that ought to be there.
+
+_\*_ not really enough just say it, as _talk is cheap, put code there_
+
+See this 190 lines of
+[world modeling code](https://github.com/e-wrks/edhim#world-modeling-code-in-haskell)
+for an example.
 
 ### Functions (or lack thereof)
 

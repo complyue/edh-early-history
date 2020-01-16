@@ -5,5 +5,4 @@
 
 () =< for n from range(5) do n
 
-
 {} =< for (k,v) from zip(('a', 'b', 'd'), [3, 7]) do k:v
