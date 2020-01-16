@@ -44,11 +44,11 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [Attribute](#attribute)
     - [Symbol](#symbol)
   - [Scope](#scope)
-  - [Value](#value)
+  - [Value / Type](#value--type)
   - [Object / Class](#object--class)
     - [This reference](#this-reference)
     - [That reference](#that-reference)
-    - [Supers](#supers)
+    - [Super](#super)
   - [EHI (Edh Host Interface)](#ehi-edh-host-interface)
 
 ## Running the REPL (a bare interpreter)
@@ -398,7 +398,7 @@ Especially note that **Edh** has no block **scope** as in **C**
 family languages, **JavaScript** neither does before **ES6**,
 **Python** neither does until now (2020).
 
-There is only **procedure scope** in Edh, and there are 2 kinds of
+There is only **procedure scope** in **Edh**, and there are 2 kinds of
 procedures, see [Procedure](#procedure).
 
 Every **procedure** call will create a new **scope**, with a new
@@ -416,7 +416,7 @@ Every **procedure** call will create a new **scope**, with a new
   either contains the **method** in its **entity** as an **attribute**,
   or inherits the **method** from one of its **supers**.
 
-### Value
+### Value / Type
 
 > Everything in **Edh** is a value
 
@@ -504,11 +504,39 @@ the **class** procedure call.
 A **class** procedure can explicitly return another **object**, another
 value or even `nil`, but again, this is the black magic you want to avoid.
 
+Note in traditional **Object Oriented** languages, the **class** is
+sensibly a part of the definition of the world structure, which carries
+rather _static_ semantics, **Python** had made the **class** more
+dynamic in constitutional respects, but seemed most people have ignored
+that and continued to model the program's world with statically sensing
+classes.
+
+The **class** descends to be just a (well still 1st class) citizen in
+an **Edh** world, it's conventionally serving _attribute grouping_
+purpose only, i.e. an **object** should be sensed as a _namespace_ for
+**attribute**s otherwise not possible to stay together unless being
+member of the underlying **entity**.
+
 #### This reference
+
+`this` refers to the nearest context object in lexical scope hierarchy.
 
 #### That reference
 
-#### Supers
+`that` refers to the **object** against which current runing procedure is
+resolved, i.e. the target **object** of attribute resolution in finding
+the current (**method**) procedure as a callee.
+
+`that` either contains the **method** procedure in its own **entity** as
+an **attribute**, or inherits the **method** from one of its **supers**.
+
+#### Super
+
+During the run of a **class** procedure, each `extends` statement add its
+specified **object** as a **super** object of `this` object under
+construction. Last added **super** is the first attempted target in
+attribute resolution against `this` object, if no attribute associated with
+the interesting key presents in `this` object's underlying **entity**.
 
 ### EHI (Edh Host Interface)
 
