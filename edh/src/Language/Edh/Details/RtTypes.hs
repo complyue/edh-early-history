@@ -498,6 +498,21 @@ instance Show HostProcedure where
   show (HostProcedure pn _) = "<hostproc: " ++ nm ++ ">"
     where nm = unsafePerformIO $ peekCString pn
 
+hostProcDecl :: CString -> STM ProcDecl
+hostProcDecl !pn = do
+  nm <- unsafeIOToSTM $ peekCString pn
+  return ProcDecl
+    { procedure'name = T.pack nm
+    , procedure'args = WildReceiver
+    , procedure'body = StmtSrc
+                         ( SourcePos { sourceName   = "<hostcode>"
+                                     , sourceLine   = mkPos 1
+                                     , sourceColumn = mkPos 1
+                                     }
+                         , VoidStmt
+                         )
+    }
+
 
 -- | An event sink is similar to a Go channel, but is broadcast
 -- in nature, in contrast to the unicast nature of channels in Go.

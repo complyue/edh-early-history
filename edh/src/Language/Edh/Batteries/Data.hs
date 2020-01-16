@@ -190,7 +190,7 @@ prpdProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
         exitEdhSTM pgs exit rhVal
       _ ->
         throwEdh EvalError
-          $  "Don't know how to prepend to "
+          $  "Don't know how to prepend to a "
           <> T.pack (show $ edhTypeOf rhVal)
           <> ": "
           <> T.pack (show rhVal)
@@ -248,7 +248,7 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
                 exitEdhSTM pgs exit (EdhTuple $ vs ++ reverse vs')
         _ ->
           throwEdh EvalError
-            $  "Don't know how to comprehend into "
+            $  "Don't know how to comprehend into a "
             <> T.pack (show $ edhTypeOf lhVal)
             <> ": "
             <> T.pack (show lhVal)
@@ -266,7 +266,7 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
             exitEdhSTM pgs exit (EdhTuple $ vs ++ toPairList ds)
           _ ->
             throwEdh EvalError
-              $  "Don't know how to comprehend from: "
+              $  "Don't know how to comprehend from a "
               <> T.pack (show $ edhTypeOf rhVal)
               <> ": "
               <> T.pack (show rhVal)
@@ -288,7 +288,7 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
             exitEdhSTM pgs exit lhVal
           _ ->
             throwEdh EvalError
-              $  "Don't know how to comprehend from: "
+              $  "Don't know how to comprehend from a "
               <> T.pack (show $ edhTypeOf rhVal)
               <> ": "
               <> T.pack (show rhVal)
@@ -313,13 +313,13 @@ cprhProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
             exitEdhSTM pgs exit lhVal
           _ ->
             throwEdh EvalError
-              $  "Don't know how to comprehend from: "
+              $  "Don't know how to comprehend from a "
               <> T.pack (show $ edhTypeOf rhVal)
               <> ": "
               <> T.pack (show rhVal)
         _ ->
           throwEdh EvalError
-            $  "Don't know how to comprehend into "
+            $  "Don't know how to comprehend into a "
             <> T.pack (show $ edhTypeOf lhVal)
             <> ": "
             <> T.pack (show lhVal)
@@ -338,7 +338,7 @@ evtPubProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
         exitEdhSTM pgs exit rhVal
     _ ->
       throwEdh EvalError
-        $  "Can only publish event to a sink, not "
+        $  "Can only publish event to a sink, not a "
         <> T.pack (show $ edhTypeOf lhVal)
         <> ": "
         <> T.pack (show lhVal)

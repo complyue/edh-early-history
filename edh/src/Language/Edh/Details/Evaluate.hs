@@ -913,18 +913,21 @@ edhMakeCall !pgsCaller !procExpr !argsSndr !callMaker = do
         case callee'val of
 
           -- calling a host procedure
-          (EdhHostProc (HostProcedure _ proc)) ->
-            contEdhSTM $ callMaker $ \exit -> do
-              -- a host procedure runs against its caller's scope, with
-              -- 'thatObject' changed to the resolution target object
-              let !calleeScope = callerScope { thatObject = callee'that }
-                  !calleeCtx   = callerCtx
-                    { callStack       = calleeScope <| callStack callerCtx
-                    , generatorCaller = Nothing
-                    , contextMatch    = true
-                    , contextStmt     = voidStatement
-                    }
-                  !pgsCallee = pgsCaller { edh'context = calleeCtx }
+          (EdhHostProc (HostProcedure proc'name proc)) -> contEdhSTM $ do
+            procDecl <- hostProcDecl proc'name
+            callMaker $ \exit -> do
+            -- a host procedure runs against its caller's scope, with
+            -- 'thatObject' changed to the resolution target object
+              let
+                !calleeScope =
+                  callerScope { thatObject = callee'that, scopeProc = procDecl }
+                !calleeCtx = callerCtx
+                  { callStack       = calleeScope <| callStack callerCtx
+                  , generatorCaller = Nothing
+                  , contextMatch    = true
+                  , contextStmt     = voidStatement
+                  }
+                !pgsCallee = pgsCaller { edh'context = calleeCtx }
               contEdhSTM
                 -- insert a cycle tick here, so if no tx required for the call
                 -- overall, the callee resolution tx stops here then the callee
@@ -1136,21 +1139,24 @@ edhForLoop !pgsLooper !argsRcvr !iterExpr !doExpr !iterCollector !forLooper =
               case callee'val of
 
                 -- calling a host generator
-                (EdhHostGenr (HostProcedure _ proc)) ->
-                  contEdhSTM $ forLooper $ \exit -> do
+                (EdhHostGenr (HostProcedure proc'name proc)) -> contEdhSTM $ do
+                  procDecl <- hostProcDecl proc'name
+                  forLooper $ \exit -> do
                     pgs <- ask
                     let !ctx   = edh'context pgs
                         !scope = contextScope ctx
                     -- a host procedure runs against its caller's scope, with
                     -- 'thatObject' changed to the resolution target object
-                    let !calleeScope = scope { thatObject = callee'that }
-                        !calleeCtx   = ctx
-                          { callStack       = calleeScope <| callStack ctx
-                          , generatorCaller = Just (pgs, recvYield exit)
-                          , contextMatch    = true
-                          , contextStmt     = voidStatement
-                          }
-                        !pgsCallee = pgs { edh'context = calleeCtx }
+                    let
+                      !calleeScope =
+                        scope { thatObject = callee'that, scopeProc = procDecl }
+                      !calleeCtx = ctx
+                        { callStack       = calleeScope <| callStack ctx
+                        , generatorCaller = Just (pgs, recvYield exit)
+                        , contextMatch    = true
+                        , contextStmt     = voidStatement
+                        }
+                      !pgsCallee = pgs { edh'context = calleeCtx }
                     contEdhSTM
                       -- insert a cycle tick here, so if no tx required for the call
                       -- overall, the callee resolution tx stops here then the callee
