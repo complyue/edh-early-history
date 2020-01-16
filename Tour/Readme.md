@@ -514,9 +514,10 @@ classes.
 
 The **class** descends to be just a (well still 1st class) citizen in
 an **Edh** world, it's conventionally serving _attribute grouping_
-purpose only, i.e. an **object** should be sensed as a _namespace_ for
-**attribute**s otherwise not possible to stay together unless being
-member of the underlying **entity**.
+purpose for the majority cases, i.e. an **object** should be sensed as
+a _namespace_ for **attribute**s otherwise not possible to stay together
+except being members of a same, single **object**'s underlying
+**entity**.
 
 #### This reference
 
