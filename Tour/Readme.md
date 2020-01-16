@@ -28,6 +28,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [Value Matching](#value-matching)
     - [Case-Of](#case-of)
     - [Pattern Matching](#pattern-matching)
+    - [Branching semantics, Fallthrough](#branching-semantics-fallthrough)
 - [Procedures](#procedures)
   - [Host Procedures](#host-procedures)
   - [Method Procedures](#method-procedures)
@@ -372,8 +373,6 @@ pkargs( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=
 
 ### Branches with Value Matching / Pattern Matching
 
-Check out [branch.edh](./branch.edh)
-
 You may know (**->**) in **Haskell**, it is also in **Edh** but called
 the **branch** operator:
 
@@ -517,6 +516,82 @@ instance resolving pattern obtains the right super instance: <object: B>
 ```
 
 More patterns can be added in the future.
+
+#### Branching semantics, Fallthrough
+
+Check out [branch.edh](./branch.edh)
+
+Once a **branch** has its _left-hand-side_ value or pattern matched, its
+_right-hand-side_ expression is evaluated, then its immediate enclosing
+block is considered to have been evaluated to the result value, without
+consulting any following statements in this block; unless the
+_right-hand-side_ of (**->**) is evaluated to a result of `<fallthrough>`,
+in which case the rest statements in the block continue to be evaluated
+sequentially.
+
+```bash
+Đ: {
+Đ|  1:   method countdown(n) case type(n) of {
+Đ|  2:
+Đ|  3:     DecimalType -> {
+Đ|  4:
+Đ|  5:       n < 1 -> runtime.info <| '  🎉 instantly !!'
+Đ|  6:
+Đ|  7:       n > 5 -> {
+Đ|  8:         runtime.warn <| "  😓 that's too many to count, doing my most ..."
+Đ|  9:         n = 5
+Đ| 10:         fallthrough # similar to `fallthrough` in Go
+Đ| 11:       }
+Đ| 12:
+Đ| 13:       # (:-) will be parsed as another operator, sep (1 space used below) needed here
+Đ| 14:       for i from range(n : 0 : -1) do runtime.info <| '  ⏲️  ' ++ i
+Đ| 15:       runtime.info <| '  🎉 !!'
+Đ| 16:
+Đ| 17:     }
+Đ| 18:
+Đ| 19:     _ -> # the underscore condition always matches, similar to underscore in Haskell
+Đ| 20:       runtime.error <| "I don't know what you want from a " ++ type(n) ++ ': ' ++ n
+Đ| 21:
+Đ| 22:     runtime.fatal <| "don't worry, this will never happen."
+Đ| 23:   }
+Đ| 24: }
+<method: countdown>
+Đ:
+Đ: countdown(3)
+ℹ️ <interactive>:14:7
+  ⏲️  3
+ℹ️ <interactive>:14:7
+  ⏲️  2
+ℹ️ <interactive>:14:7
+  ⏲️  1
+ℹ️ <interactive>:15:7
+  🎉 !!
+Đ:
+Đ: countdown(50)
+⚠️ <interactive>:8:9
+  😓 that's too many to count, doing my most ...
+ℹ️ <interactive>:14:7
+  ⏲️  5
+ℹ️ <interactive>:14:7
+  ⏲️  4
+ℹ️ <interactive>:14:7
+  ⏲️  3
+ℹ️ <interactive>:14:7
+  ⏲️  2
+ℹ️ <interactive>:14:7
+  ⏲️  1
+ℹ️ <interactive>:15:7
+  🎉 !!
+Đ:
+Đ: countdown(-1)
+ℹ️ <interactive>:5:7
+  🎉 instantly !!
+Đ:
+Đ: countdown('the hell')
+Đ: ❗ <interactive>:19:5
+I don't know what you want from a StringType: the hell
+Đ:
+```
 
 ## Procedures
 

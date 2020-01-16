@@ -6,9 +6,9 @@
       
       n < 1 -> runtime.info <| '  🎉 instantly !!'
 
-      n > 10 -> {
+      n > 5 -> {
         runtime.warn <| "  😓 that's too many to count, doing my most ..."
-        n = 10
+        n = 5
         fallthrough # similar to `fallthrough` in Go
       }
 
@@ -25,9 +25,9 @@
   }
 }
 
-countdown(5)
+countdown(3)
 
-countdown(100)
+countdown(50)
 
 countdown(-1)
 
