@@ -194,22 +194,23 @@ There are 2 kinds of procedures:
 
 - **constructor** procedure, including:
 
-  - **class** (runs with a new object as `this`/`that`)
+  - **class** procedure (runs with a new object as `this`/`that`)
 
     defined by a `class`statement in **Edh** code
 
-  - **module** (runs with the new module object as `this`/`that`)
+  - **module** procedure (runs with the new module object as `this`/`that`)
 
     defined by a `*.edh` file which is imported by **Edh** code
 
-- **method** procedure, including:
+- **method** procedure (runs with lexical `this` and hierarchical `that`), including:
 
-  - **method** (runs with lexical `this` and hierarchical `that`)
+  - vanilla **method** procedure
 
     defined by a `method` statement in **Edh**,
     which is a vanilla callable after an alphanumeric name
 
-  - **operator** (ditto)
+  - **operator** procedure
+
     defined by a `operator` statement in **Edh**,
     which is a binary or trinary callable after a name with just operator symbols
     i.e. `=~!@#$%^&|:<>?+-*/` plus other
@@ -221,11 +222,13 @@ There are 2 kinds of procedures:
     the trinary form receives `callerScope`, `left-hand-expr` and `right-hand-expr`
     as arguments.
 
-  - **generator** (ditto)
+  - **generator** procedure
+
     defined by a `generator` statement in **Edh**,
     which is only callable by a `for-from-do` loop, and contains `yield` expressions
 
-  - _interpreter_ (ditto)
+  - **interpreter** procedure
+
     defined by a `interpreter` statement in **Edh**,
     which is same as a **method** procedure except it receives arguments in expression
     form rather than values, in addition to the reflective `callerScope` as first argument
