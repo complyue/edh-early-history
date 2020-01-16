@@ -79,8 +79,8 @@ edhDictFromEntity ent = do
   keyAttr2Item (AttrByName nm ) = ItemByStr nm
   keyAttr2Item (AttrBySym  sym) = ItemBySym sym
 
--- | An entity in Edh is the backing storage for a scope, with
--- possibly an object viewing this entity.
+-- | An entity in Edh is the backing storage for a scope, with possibly 
+-- an object mounted to it with one class and many supers
 --
 -- An entity has attributes associated by 'AttrKey'.
 type Entity = TVar EntityStore
@@ -93,19 +93,20 @@ attrKeyValue (AttrByName nm ) = EdhString nm
 attrKeyValue (AttrBySym  sym) = EdhSymbol sym
 
 -- | A symbol can stand in place of an alphanumeric name, used to
--- address an attribute from an entity object, but symbols are 
--- private to its owning object, can not be read-out from out side
--- of the object, thus serves encapsulation purpose in object
--- oriented type designs.
+-- address an attribute from an object entity, but symbols are 
+-- private to its owning scope, can not be imported from out side
+-- of the scope, thus serves encapsulation purpose in object
+-- structure designs.
 --
--- And symbol values can be addressed from lexical outer entities,
--- e.g. a symbol bound to a module is available to all procedures 
--- defined in the module, and a symbol bound within a class procedure
--- is available to all its methods as well as nested classes.
+-- And symbol values reside in a lexical outer scope are available
+-- to its lexical inner scopes, e.g. a symbol bound to a module is
+-- available to all procedures defined in the module, and a symbol
+-- bound within a class procedure is available to all its methods
+-- as well as nested classes.
 --
 -- Note: we rely on the 'Ord' instance of 'CString' field (which is
 --       essentially a ptr), for trivial implementation of 'Symbol'
---       's 'Ord' instance, so it can be used as attribut key on an
+--       's 'Ord' instance, so it can be used as attribute key on an
 --       entity (the underlying 'Map.Map' storage per se).
 newtype Symbol = Symbol {
     symbol'description :: CString

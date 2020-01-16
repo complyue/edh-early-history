@@ -22,6 +22,8 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Procedure](#procedure)
   - [Entity](#entity)
+    - [Attribute](#attribute)
+    - [Symbol](#symbol)
   - [Scope](#scope)
   - [Object](#object)
     - [This reference](#this-reference)
@@ -218,11 +220,10 @@ There are 2 kinds of procedures:
     [Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
     .
 
-    the **binary** form receives `left'hand'value` and `right'hand'value`;
+    the **binary** form receives `left'hand'value` and `right'hand'value` as arguments
 
     the **trinary** form receives `callerScope`, `left'hand'expr` and `right'hand'expr`
-
-    as arguments.
+    as arguments
 
   - **generator** procedure
 
@@ -233,10 +234,37 @@ There are 2 kinds of procedures:
 
     defined by an `interpreter` statement in **Edh**,
     which is same as a vanilla **method** procedure except it receives arguments in
-    expression forms rather than evaluated values, in addition to the reflective
+    reflective expr forms rather than evaluated values, in addition to the reflective
     `callerScope` as first argument
 
 ### Entity
+
+An entity in Edh is the backing storage for a **scope**, with possibly an **object**
+mounted to it with one **class** and many **supers**
+
+> Well there actually can exist multiple **object**s mounted to one same entity,
+> but that's the black magic you want to avoid.
+
+#### Attribute
+
+An entity stores **attributes** associated with alphanumeric or symbolic keys.
+
+#### Symbol
+
+**Symbol** in **Edh** is much the same as
+[Symbol in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol)
+
+A **symbol** can stand in place of an alphanumeric name, used to
+address an attribute from an **object entity**, but symbols are
+private to its owning scope, can not be imported from out side
+of the scope, thus serves encapsulation purpose in object
+structure designs.
+
+And symbol values reside in a lexical outer scope are available
+to its lexical inner scopes, e.g. a **symbol** bound to a **module** is
+available to all **procedure**s defined in the **module**, and a **symbol**
+bound within a **class procedure** is available to all its **method**s
+as well as nested **class**es.
 
 ### Scope
 
