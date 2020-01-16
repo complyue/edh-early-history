@@ -532,6 +532,10 @@ the current (**method**) procedure as a callee.
 `that` either contains the **method** procedure in its own **entity** as
 an **attribute**, or inherits the **method** from one of its **supers**.
 
+It makes sense to remember that `this` **object** was (or being)
+constructed by the nearest lexical **class** **procedure**, while `that`
+**object** was not.
+
 #### Super
 
 During the run of a **class** procedure, each `extends` statement add its
