@@ -117,7 +117,7 @@ at it since inception.
 > Under certain circumstances, there are sweet spots balanced between
 > _imperative_ and _declarative_ stylish, when put together, **Edh**
 > code can be made even more concise than **Haskell** code (
-> [see proof here](https://github.com/e-wrks/edhim#full-%C4%91-edh-code)
+> [see proof here](https://github.com/e-wrks/edhim#full-%C4%91-edh-code-95-loc)
 > ). Do **Edh** programming around such sweet spots when you can find
 > them, and when you do, be _Edhic_, that to be _Edhic_, is to be
 > more _Pythonic_ than being
