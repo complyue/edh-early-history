@@ -303,9 +303,9 @@ operator =< (callerScope, lhe, rhe) {
 ### list/dict modification
 
 - append to a list/dict
-  just use the comprehension operator as well
+  - just use the comprehension operator as well
 - prepend to a list, insert/update single entry to a dict
-  there's the `cons` operator (**=>**) for it
+  - there's the `cons` operator (**=>**) for it
 
 ```bash
 Đ: let (l, d) = ([3,'foo',5], {'a': 'good', 'b': 9})
@@ -402,7 +402,8 @@ matched with `true`.
 
 > You'll soon see [Pattern Matching](#pattern-matching), the **branch**
 > does [Value Matching](#value-matching) unless **Pattern Matching** is
-> invoked by _curly-brace-quoting_ at _left-hand_ of the (**->**) operator.
+> invoked by _curly-brace-quoting_ at _left-hand-side_ of the (**->**)
+> operator.
 
 #### Case-Of
 
@@ -417,22 +418,95 @@ yeath
 <fallthrough>
 ```
 
+```bash
+Đ: {
+Đ|  1:   method essay (v) case type(v) of {
+Đ|  2:     BoolType -> "to be or not to be, that's a problem"
+Đ|  3:
+Đ|  4:     DecimalType -> {
+Đ|  5:         v<2 -> "consume less, produce more";
+Đ|  6:         v<10 -> "no more than " ++ v ++ " cups of coffee a day";
+Đ|  7:         _ -> "every one get his/her lucky number"
+Đ|  8:     }
+Đ|  9:
+Đ| 10:     StringType -> {quiz=v fallthrough}
+Đ| 11:
+Đ| 12:     SymbolType -> {quiz='mistery attracts most people' fallthrough}
+Đ| 13:
+Đ| 14:     ObjectType -> {
+Đ| 15:       quiz = 'I live in ' ++ v?__name__ |> 'no where';
+Đ| 16:       fallthrough
+Đ| 17:     }
+Đ| 18:
+Đ| 19:     "do you known, that " ++ quiz ++ " ?"
+Đ| 20:   }
+Đ| 21: }
+<method: essay>
+Đ:
+Đ: essay(true)
+to be or not to be, that's a problem
+Đ:
+Đ: essay(1)
+consume less, produce more
+Đ:
+Đ: essay(5)
+no more than 5 cups of coffee a day
+Đ:
+Đ: essay(25)
+every one get his/her lucky number
+Đ:
+Đ: essay('magic happens')
+do you known, that magic happens ?
+Đ:
+Đ: essay(Symbol('hidden-secrete'))
+do you known, that mistery attracts most people ?
+Đ:
+Đ: essay(this)
+do you known, that I live in <interactive> ?
+Đ:
+Đ: class C * pass
+<class: C>
+Đ: essay(C())
+do you known, that I live in no where ?
+Đ:
+```
+
 #### Pattern Matching
 
+Check out [patterns.edh](./patterns.edh)
+
 ```bash
-Đ: case 3:2:1 of { { x:y } -> 'pair pattern matches the length'; { x:y:z } -> 'so this one fires' }
+Đ: {
+Đ|  1:   case 3:2:1 of {
+Đ|  2:     { x:y } -> 'pair pattern matches the length'
+Đ|  3:     { x:y:z } -> 'so this one fires'
+Đ|  4:   }
+Đ|  5: }
 so this one fires
+Đ:
 Đ: case 3:2 of { (x:y) } -> 'the pair pattern can be parenthesised'
 the pair pattern can be parenthesised
+Đ:
 Đ: case 3*7-5 of { result } -> 'a wild capture pattern receives the ' ++ result
 a wild capture pattern receives the 16
+Đ:
 Đ: case [7, 3, 5] of { head => tail } -> 'snoc pattern does snoc, got ' ++ (head, tail)
 snoc pattern does snoc, got ( 7, [ 3, 5, ], )
+Đ:
 Đ: case (3, 5, 7) of { (x, y, z) } -> 'tuple pattern matches the length'
 tuple pattern matches the length
+Đ:
 Đ: case (3, 5, 7) of { (x, y) } -> 'tuple pattern matches the length'
 <fallthrough>
-Đ: case C() of {{ B:b }} -> 'instance resolving pattern obtains the right super instance: ' ++ b
+Đ:
+Đ: class B () pass
+<class: B>
+Đ: class C () extends B()
+<class: C>
+Đ: c = C()
+<object: C>
+Đ:
+Đ: case c of {{ B:b }} -> 'instance resolving pattern obtains the right super instance: ' ++ b
 instance resolving pattern obtains the right super instance: <object: B>
 Đ:
 ```
