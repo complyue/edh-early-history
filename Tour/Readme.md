@@ -36,6 +36,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Reflection](#reflection)
 - [Terminology](#terminology)
   - [World](#world)
+  - [Module](#module)
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Operator](#operator)
   - [Procedure](#procedure)
@@ -47,6 +48,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [This reference](#this-reference)
     - [That reference](#that-reference)
     - [Supers](#supers)
+  - [EHI (Edh Host Interface)](#ehi-edh-host-interface)
 
 ## Running the REPL (a bare interpreter)
 
@@ -255,6 +257,11 @@ See this 190 lines of
 [world modeling code](https://github.com/e-wrks/edhim#world-modeling-code-in-haskell)
 for an example.
 
+### Module
+
+A **module** in **Edh** is a single `*.edh` file, imported by some **Edh**
+code or **Haskell** code via the **EHI**.
+
 ### Function (or lack thereof)
 
 To stay conceptually clear for the object system (which is
@@ -284,7 +291,7 @@ implemented as overridable operators in **Edh**:
   - (`&>`), (`|>`)
 - list/dict/tuple comprehension/concatenation
   - (`=<`)
-- list/dict prepend/insert
+- list prepend / dict insert/update
   - (`=>`)
 - string coercing concatenation
   - (`++`)
@@ -299,13 +306,13 @@ you'd like with, as well as how **Haskell** allows you to.
 
 See [**operator** procedure] below.
 
-- Note all operators in **Edh** are _left-associative_ _infix_, except a few
-  hardcoded prefix operators:
+> Note they are all _left-associative_ _infix_ operators in **Edh**, except
+> a few hardcoded prefix operators:
 
-  - (`+`) prefix plus
-  - (`-`) prefix minus
-  - (`not`) prefix bool negation
-  - (`|`) guard
+- (`+`) prefix plus
+- (`-`) prefix minus
+- (`not`) prefix bool negation
+- (`|`) guard
 
 ### Procedure
 
@@ -356,7 +363,7 @@ There are 2 kinds of procedures:
 
 ### Entity
 
-An entity in **Edh** is the backing storage for a **scope**, with possibly an
+An **entity** in **Edh** is the backing storage for a **scope**, with possibly an
 **object** mounted to it with one **class** and many **supers**
 
 > Well there actually can exist multiple **object**s mounted to one same entity,
@@ -415,3 +422,13 @@ Every **procedure** call will create a new **scope**, with a new
 #### That reference
 
 #### Supers
+
+### EHI (Edh Host Interface)
+
+With **Haskell** as the host language, **Edh** as the surface language,
+the **EHI** defines the interface for host code in **Haskell** to create
+& control embedded **Edh** worlds, and to splice host (typically
+side-effects free, i.e. pure, and fast-in-machine-speed)
+functions, wrapped as host procedures, with procedures written
+in **Edh**, those do arbitrary manipulations on arbitrary objects
+in the world, but, less speedy as with interpreted execution.
