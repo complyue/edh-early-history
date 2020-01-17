@@ -1078,6 +1078,11 @@ free (well, there's no such a thing qualifies within an **Edh** world).
 allows you. You can even roll your own, arbitrary new operators with a
 precendence you'd like with.
 
+Checkout the implementation of the default batteries of **Edh**:
+[parts written in **Haskell**](../edh/src/Language/Edh/Batteries/)
+and
+[parts written in **Edh**](../edh_modules/batteries/)
+
 You should be supprised that the following language constructs are all
 implemented as overridable **operator**s in **Edh**:
 
