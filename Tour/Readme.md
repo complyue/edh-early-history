@@ -819,10 +819,16 @@ traditional sense of imperative programming languages.
 > statistics etc. of course), because that's how current generation of computing
 > hardwares work, not how computing works in general.
 >
+> I still remember the hard time to wrap my head around `x = x + 1` when learning
+> [BASIC](https://wiki.c2.com/?BasicLanguage), and the pleasure when I finally
+> established the perception. But I'm not happy with it now, and feel false faith
+> with it.
+>
 > Using _variables_ in thoughts is anti-human, imagine yourself allocating a
 > box area on a piece of paper, along with other tasks performed, you write sth
 > into the box, erase it later followed by writing sth new, and repeat and repeat
-> ... I would feel ridiculous.
+> ... I would feel ridiculous. Computers ought to do that on their own, without
+> the aid from human programmers.
 
 At least, you should really convert your intuition when coding in **Edh**, for the
 sake of the fact that you are programming transactional concurrency in contrast
@@ -890,7 +896,7 @@ though). It's called
 [Optimistic Locking](http://en.wikipedia.org/wiki/Optimistic_locking)
 elsewhere but the spirit is an upgraded version of **EAFP**.
 
-You get an implicit transaction in each of the following cases:
+In **Edh**, you get an implicit transaction in each of the following cases:
 
 - Attribute assignment
 
