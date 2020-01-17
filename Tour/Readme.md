@@ -19,6 +19,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Package / Module Structures](#package--module-structures)
 - [Micro Structures](#micro-structures)
+  - [Lossless Decimal for Numbers](#lossless-decimal-for-numbers)
   - [Arguments (Un / Re) Packing](#arguments-un--re-packing)
   - [Comprehensions](#comprehensions)
   - [Operators](#operators)
@@ -203,6 +204,95 @@ Note that module `batteries/root` will be imported into root scope of an
 when a **world** is created).
 
 ## Micro Structures
+
+### Lossless Decimal for Numbers
+
+In **JavaScript**, even today, all numbers are `float64`, it puzzled me a while,
+before I figured out this is the reason why we can not have `Int64Array`
+besides `Int32Array`/`Int16Array`/`Float64Array`/`Float32Array` etc. that
+the language simply unable to handle elements from an `Int64Array` if it's
+ever provided.
+
+**Python** gives you lossless integers by default, but `float64` for decimal:
+
+```python
+>>> 1.1 + 2.2
+3.3000000000000003
+>>>
+```
+
+**Haskell** forces you to choose a type for every number in your program,
+normal options including the lossless `Integer`, bounded `Int`, and
+precision-lossing `Double`/`Float`:
+
+```haskell
+λ> 1.1 + 2.2 :: Double
+3.3000000000000003
+λ> 1.1 + 2.2 :: Float
+3.3000002
+λ>
+```
+
+And you have `Data.Scientific` for the rescure, but with its own quirks
+from practical daily use:
+
+```haskell
+λ> :m +Data.Scientific
+λ> x = 1.1 + 2.2 :: Scientific
+λ> x
+3.3
+λ> x / 0
+*** Exception: Ratio has zero denominator
+λ>
+```
+
+> Your compiled **Haskell** program will crash on division-by-zero if not
+> handled specifically.
+
+Then here's `Data.Lossless.Decimal` from package
+[lossless-decimal](../lossless-decimal)
+
+```haskell
+λ> x = 1.1 + 2.2 :: Decimal
+λ> x
+3.3
+λ> x / 0
+inf
+λ> (-x) / 0
+-inf
+λ> 0/0 :: Decimal
+nan
+λ> (0/0 :: Decimal) == 0/0
+False
+λ> pi = Decimal 1 (-40) 31415926535897932384626433832795028841971
+λ> pi
+3.1415926535897932384626433832795028841971
+λ>
+```
+
+All numbers in **Edh** are `Data.Lossless.Decimal` from
+[lossless-decimal](../lossless-decimal)
+, by default and by all means:
+
+```haskell
+Đ: x = 1.1 + 2.2
+3.3
+Đ: x / 0
+inf
+Đ: -x / 0
+-inf
+Đ: 0/0
+nan
+Đ: nan == nan
+false
+Đ: y = 7/11
+7/11
+Đ: ( x, y, x * y )
+( 3.3, 7/11, 2.1, )
+Đ: pi
+3.1415926535897932384626433832795028841971
+Đ:
+```
 
 ### Arguments (Un / Re) Packing
 
