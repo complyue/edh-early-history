@@ -1104,7 +1104,11 @@ Also see [**operator** procedure] below.
 
 ### Procedure
 
-There are 3 kinds of procedures:
+There are 3 kinds of procedures in **Edh**:
+
+- [Host Procedure](#host-procedure)
+- [Constructor Procedure](#constructor-procedure)
+- [Method Procedure](#method-procedure)
 
 #### Host Procedure
 
