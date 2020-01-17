@@ -55,7 +55,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [Attribute Assignment](#attribute-assignment)
     - [Attribute Read](#attribute-read)
     - [Transactional Semantics Amplification](#transactional-semantics-amplification)
-  - [Transaction](#transaction)
+  - [Transaction (STM)](#transaction-stm)
     - [The ai keyword](#the-ai-keyword)
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Operator](#operator)
@@ -843,7 +843,31 @@ sections of your **Edh** code, see [The ai keyword](#the-ai-keyword), doing
 that improperly or plainly wrong, you will be punished with excessive **stm**
 retries or even dropped into infinite vain loops without progress.
 
-### Transaction
+Above said may sound pretty dreadful, but it should make you feel better if
+I tell you that you can forget about all kinds of
+[synchronization primitives](http://www.cs.columbia.edu/~hgs/os/sync.html)
+scattered here and there, with every methods you attempt to program
+concurrency, except within an **Edh** world.
+
+### Transaction (STM)
+
+> EAFP in **Python** spirit:
+>
+> > Easier to ask for forgiveness than permission. This common Python coding
+> > style assumes the existence of valid keys or attributes and catches
+> > exceptions if the assumption proves false. This clean and fast style is
+> > characterized by the presence of many try and except statements.
+> > The technique contrasts with the LBYL style common to many other
+> > languages such as C.
+
+Well with
+[Software transactional memory](https://en.wikipedia.org/wiki/Software_transactional_memory)
+, you don't even ask for either forgiveness or permission, just do
+what seems right to do, and it's done (with
+[CAVEATs](#transactional-semantics-amplification)
+though). It's called
+[Optimistic Locking](http://en.wikipedia.org/wiki/Optimistic_locking)
+else where but the spirit is an upgraded version of **EAFP**.
 
 You get an implicit transaction in each of the following cases:
 
