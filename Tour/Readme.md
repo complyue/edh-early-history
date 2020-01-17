@@ -799,9 +799,19 @@ Every **procedure** call will create a new **scope**, with a new
 
 ### No Variable
 
-**variable** is a nonconcept in **Edh**, but given the strong _imperative_
-stylish of **Edh** code, **entity** **attribute**s ( see
-[Attribute](#attribute) ) are likely to be misperceived as _variables_ in
+Despite the existence of
+[IORef](https://hackage.haskell.org/package/base/docs/Data-IORef.html),
+[STRef](https://hackage.haskell.org/package/base/docs/Data-STRef.html),
+[MVar](https://hackage.haskell.org/package/base/docs/Control-Concurrent-MVar.html)
+and the very
+[TVar](https://hackage.haskell.org/package/stm/docs/Control-Concurrent-STM-TVar.html)
+and etc. the
+[word "variable" as applied to **Haskell** variables](https://wiki.haskell.org/Variable)
+is quite misleading.
+
+**Edh** tries to get rid of it completely. **variable** is a nonconcept in **Edh**,
+but given the strong _imperative_ stylish of **Edh** code, **entity** **attribute**s
+(see [Attribute](#attribute)) are likely to be misperceived as _variables_ in
 traditional sense of imperative programming languages.
 
 But you should really convert your intuition when coding in **Edh**, for the
