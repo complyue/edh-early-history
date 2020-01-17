@@ -1154,6 +1154,44 @@ reflective expr forms rather than evaluated values, in addition to the reflectiv
 
 ### Go-Routine
 
+Checkout [Goroutine](https://tour.golang.org/concurrency) in
+[Go](https://golang.org/), if not already.
+
+**Go** _routine_ in **Edh** is very similar:
+
+- Things are prepared before you **go**
+
+  i.e. arguments are packed in a transaction run by the current thread
+
+- There is no _return_
+
+  Once you **go**, you are not _awaited_ or _joined_ anyway
+
+Yet there are differences:
+
+- **Edh** can not only **go** a procedure call:
+
+  You can **go** a **for-from-do** loop, a block, or even a single expression.
+
+- Whenever not **go** calling another procedure:
+
+  The lexical **scope** is shared among all threads forked from the originating
+  thread, this is quite the opposite to
+  [Share Memory By Communicating](https://blog.golang.org/share-memory-by-communicating)
+  in **Go** spirit.
+
+  Well in **Edh** you'd better neither do the **Go** anti-pattern described as
+
+  > communicate by sharing memory
+
+  While it's quite okay to read / modify the shared **scope** if it seems right,
+  but for communication purpose, you use one or more [Event Sink](#event-sink)s,
+  this is quite the same in **Go** spirit as communicating through
+  [channels](https://tour.golang.org/concurrency/2) in **Go**.
+
+  Guess what, you have even the same channel operator (**<-**) on **event sink**s
+  in **Edh** as in **Go**.
+
 #### The go keyword
 
 ### Event Sink
