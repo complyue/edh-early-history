@@ -814,7 +814,16 @@ but given the strong _imperative_ stylish of **Edh** code, **entity** **attribut
 (see [Attribute](#attribute)) are likely to be misperceived as _variables_ in
 traditional sense of imperative programming languages.
 
-But you should really convert your intuition when coding in **Edh**, for the
+> I urge you to quarantine the _variable_ concept in context of a programming
+> language and programming in general (it's still safe and sound in mathematics,
+> statistics etc. of course), because that's how current generation of computing
+> hardwares work, not how computing works in general.
+>
+> Using _variables_ in thoughts is anti-human, imagine yourself allocating an
+> box area on a piece of paper, writing sth into it, erase it, write sth new,
+> and repeat and repeat ... I would feel ridiculous.
+
+At least, you should really convert your intuition when coding in **Edh**, for the
 sake of the fact that you are programming transactional concurrency in contrast
 to traditional single-threaded programs, or multi-threaded programs synchronized.
 
@@ -856,8 +865,9 @@ retries or even dropped into infinite vain loops without progress.
 Above said may sound pretty dreadful, but it should make you feel better if
 I tell you that you can forget about all kinds of
 [synchronization primitives](http://www.cs.columbia.edu/~hgs/os/sync.html)
-scattered here and there, with every methods you attempt to program
-concurrency, except within an **Edh** world.
+scattered here and there (despite of many **async** frameworks trying to
+mitigate that disputable complexity), with every methods you attempt to
+program concurrency, except within an **Edh** world.
 
 ### Transaction (STM)
 
