@@ -870,7 +870,7 @@ f ( x.pendingItems, x.doneItems )
 
 ```python
 for itemOfInterest from [*a.cart, *a.wishlist] do
-  withItem itemOfInterest
+  withItem (itemOfInterest)
 ```
 
 So above cases are intrinsically _atomic_, while for other cases that
@@ -878,7 +878,7 @@ atomicity / isolation are needed, you use:
 
 #### The ai keyword
 
-`ai` stands for **Atomically Isolatedly**, or `AtoIso` for short, it isused
+`ai` stands for **Atomically Isolatedly**, or `AtoIso` for short, it is used
 as the transaction boundary delimiter.
 
 `ai <expr>` is a statement where the expr (being a block is common case) is
