@@ -1159,6 +1159,16 @@ Checkout [Goroutine](https://tour.golang.org/concurrency) in
 
 **Go** _routine_ in **Edh** is very similar:
 
+#### The go keyword
+
+`go <expr>` is a statement in **Edh** for the specified computation be scheduled
+to run in a separate _lightweigth-thread_ , while in case a forked thread throws
+an exception, the execption will be
+[throwTo](https://hackage.haskell.org/package/base/docs/Control-Concurrent.html#v:throwTo)
+the main thread of the **Edh** program.
+
+The sames as in **Go**:
+
 - Things are prepared before you **go**
 
   i.e. arguments are packed in a transaction run by the current thread
@@ -1189,10 +1199,9 @@ Yet there are differences:
   this is quite the same in **Go** spirit as communicating through
   [channels](https://tour.golang.org/concurrency/2) in **Go**.
 
-  Guess what, you have even the same channel operator (**<-**) on **event sink**s
-  in **Edh** as in **Go**.
-
-#### The go keyword
+  Guess what, you have even the same operator (**<-**) on **event sink**s in
+  **Edh** as the **channel** operator in **Go**. But just remember a **Go**
+  **channel** does _unicast_ while a **Edh** **sink** does _broadcast_ .
 
 ### Event Sink
 
