@@ -21,6 +21,14 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Micro Structures](#micro-structures)
   - [Lossless Decimal for Numbers](#lossless-decimal-for-numbers)
   - [Arguments (Un / Re) Packing](#arguments-un--re-packing)
+    - [Compatible with Pythonic arguments](#compatible-with-pythonic-arguments)
+    - [pkargs() the utility](#pkargs-the-utility)
+    - [Args Unpacking on receiving](#args-unpacking-on-receiving)
+  - [Args Repacking on receiving](#args-repacking-on-receiving)
+    - [let does args](#let-does-args)
+    - [for-from-do loop does args](#for-from-do-loop-does-args)
+    - [import does args](#import-does-args)
+    - [generator does args](#generator-does-args)
   - [Comprehensions](#comprehensions)
   - [Operators](#operators)
   - [list/dict modification](#listdict-modification)
@@ -312,7 +320,124 @@ false
 `ArgsPack` is an immutable type of values in **Edh**, it is also part of
 the **Edh** call convention.
 
-...
+#### Compatible with Pythonic arguments
+
+```python
+method f (x, y=10, *ns, c=3, **kwargs) pass
+
+f (3, 7, 21, *[9, 11], name='doer', **{'msg': "you've got it", 'keynum': 2})
+```
+
+#### pkargs() the utility
+
+```bash
+Đ: pkargs
+<hostproc: pkargs>
+Đ:
+Đ: apk = pkargs(3,7,5,z=9,y=11)
+pkargs( 3, 7, 5, y=11, z=9, )
+Đ:
+```
+
+#### Args Unpacking on receiving
+
+```bash
+Đ: method f (x, y, z, a, b) [x, y, z, a, b]
+<method: f>
+Đ: f (***apk)
+[ 3, 11, 9, 7, 5, ]
+Đ:
+```
+
+### Args Repacking on receiving
+
+```bash
+Đ: method f (*args, **kwargs) [args, kwargs]
+<method: f>
+Đ: f (***apk)
+[ pkargs( 3, 7, 5, ), pkargs( y=11, z=9, ), ]
+Đ:
+Đ: method f (***argspk) { 'full args': argspk }
+<method: f>
+Đ: f (***apk)
+{ "full args":pkargs( 3, 7, 5, y=11, z=9, ), }
+Đ:
+```
+
+#### let does args
+
+```bash
+Đ: let (x, y, z, a, b) = (***apk)
+Đ: [x, y, z, a, b]
+[ 3, 11, 9, 7, 5, ]
+Đ:
+Đ: let (*args, **kwargs) = (***apk); [args, kwargs]
+[ pkargs( 3, 7, 5, ), pkargs( y=11, z=9, ), ]
+Đ:
+Đ: let (***argspk) = (***apk); { 'full args': argspk }
+{ "full args":pkargs( 3, 7, 5, y=11, z=9, ), }
+Đ:
+```
+
+#### for-from-do loop does args
+
+```bash
+Đ: for (x, y, z, a, b) from [apk] do runtime.info <| [x, y, z, a, b]
+Đ: ℹ️ <interactive>:1:1
+[ 3, 11, 9, 7, 5, ]
+
+Đ: for (*args, **kwargs) from [apk] do runtime.info <| [args, kwargs]
+Đ: ℹ️ <interactive>:1:1
+[ pkargs( 3, 7, 5, ), pkargs( y=11, z=9, ), ]
+
+Đ: for (***argspk) from [apk] do runtime.info <| { 'full args': argspk }
+Đ: ℹ️ <interactive>:1:1
+{ "full args":pkargs( 3, 7, 5, y=11, z=9, ), }
+
+Đ:
+```
+
+#### import does args
+
+```bash
+Đ: import (**magics) 'batteries/magic'
+<object: <module>>
+Đ: magics
+pkargs( *=<operator: (*) 7>, +=<operator: (+) 6>, -=<operator: (-) 6>, /=<operator: (/) 7>, )
+Đ:
+```
+
+#### generator does args
+
+Checkout [argspk.edh](./argspk.edh)
+
+```bash
+Đ: {
+Đ|  1:   generator g (n) {
+Đ|  2:     for i from range(n) do
+Đ|  3:       # pack an arguments sender to yield out,
+Đ|  4:       # you'd feel it like calling a callback
+Đ|  5:       yield pkargs (i, i * i, desc="square of " ++ i)
+Đ|  6:   }
+Đ|  7:
+Đ|  8:   # arguments receiver syntax in for expression,
+Đ|  9:   # you'd feel it like defining a callback
+Đ| 10:   for (x, y, desc="the result") from g(5) do
+Đ| 11:     runtime.info <| (x ++ ": " ++ desc ++ " is " ++ y)
+Đ| 12: }
+Đ: ℹ️ <interactive>:10:3
+0: square of 0 is 0
+ℹ️ <interactive>:10:3
+1: square of 1 is 1
+ℹ️ <interactive>:10:3
+2: square of 2 is 4
+ℹ️ <interactive>:10:3
+3: square of 3 is 9
+ℹ️ <interactive>:10:3
+4: square of 4 is 16
+
+Đ:
+```
 
 ### Comprehensions
 
@@ -745,9 +870,106 @@ I don't know what you want from a StringType: the hell
 
 ### Host Procedures
 
+Host procedures are written in the host language (i.e. **Haskell**),
+e.g.
+
+```haskell
+-- | utility null(*args,**kwargs) - null tester
+isNullProc :: EdhProcedure
+isNullProc !argsSender !exit = do
+  !pgs <- ask
+  packEdhArgs argsSender $ \(ArgsPack !args !kwargs) -> if null kwargs
+    then case args of
+      [v] -> contEdhSTM $ do
+        isNull <- EdhBool <$> edhValueNull v
+        exitEdhSTM pgs exit isNull
+      _ -> contEdhSTM $ do
+        argsNulls <- sequence $ ((EdhBool <$>) . edhValueNull) <$> args
+        exitEdhSTM pgs exit (EdhTuple argsNulls)
+    else contEdhSTM $ do
+      argsNulls   <- sequence $ ((EdhBool <$>) . edhValueNull) <$> args
+      kwargsNulls <- sequence $ Map.map ((EdhBool <$>) . edhValueNull) kwargs
+      exitEdhSTM pgs exit (EdhArgsPack $ ArgsPack argsNulls kwargsNulls)
+```
+
+```haskell
+-- | operator (:) - pair constructor
+consProc :: EdhProcedure
+consProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
+  pgs <- ask
+  -- make sure left hand and right hand values are evaluated in same tx
+  local (const pgs { edh'in'tx = True })
+    $ evalExpr lhExpr
+    $ \(OriginalValue !lhVal _ _) ->
+        evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
+          contEdhSTM $ exitEdhSTM pgs exit (EdhPair lhVal rhVal)
+consProc !argsSender _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+```
+
+```haskell
+timelyNotify :: Int -> EdhGenrCaller -> STM ()
+timelyNotify !delayMicros genr'caller@(!pgs', !iter'cb) = do
+  nanos <- (toNanoSecs <$>) $ unsafeIOToSTM $ do
+    threadDelay delayMicros
+    getTime Realtime
+  -- yield the nanosecond timestamp to iterator
+  runEdhProg pgs' $ iter'cb (EdhDecimal $ fromInteger nanos) $ \_ ->
+    timelyNotify delayMicros genr'caller
+
+-- | host generator runtime.everyMicros(n) - with fixed interval
+rtEveryMicrosProc :: EdhProcedure
+rtEveryMicrosProc !argsSender _ = ask >>= \pgs ->
+  case generatorCaller $ edh'context pgs of
+    Nothing          -> throwEdh EvalError "Can only be called as generator"
+    Just genr'caller -> case argsSender of
+      [SendPosArg !nExpr] -> evalExpr nExpr $ \(OriginalValue nVal _ _) ->
+        case nVal of
+          (EdhDecimal (Decimal d e n)) | d == 1 ->
+            contEdhSTM $ timelyNotify (fromIntegral n * 10 ^ e) genr'caller
+          _ -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
+      _ ->
+        throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
+```
+
 ### Method Procedures
 
+e.g. checkout [str.edh](../edh_modules/batteries/root/str.edh)
+
+```javascript
+method join(fst, *rest, sep=', ') {
+  s = '' ++ fst # do coerce to string now, in case only one arg passed
+  for one from rest do s = s ++ sep ++ one
+  s
+}
+```
+
+```bash
+Đ: join(3,5,7)
+3, 5, 7
+Đ:
+Đ: join('I','am','good', sep=' ')
+I am good
+Đ:
+```
+
 ### Generator Procedures
+
+Values can be exchanged between the generator and the `do` expr
+
+```bash
+Đ: generator ss n while true n = yield n*n
+<generator: ss>
+Đ:
+Đ: for n from ss(3) do { runtime.info<|n; if n > 100 then break else n }
+Đ: ℹ️ <interactive>:1:23
+9
+ℹ️ <interactive>:1:23
+81
+ℹ️ <interactive>:1:23
+6561
+Đ:
+```
 
 ### Interpreter Procedures
 

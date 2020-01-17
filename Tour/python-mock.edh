@@ -15,15 +15,6 @@
   for n from range(5:10:2) do runtime.info <| ' ** iter # ' ++ n
   for n from range(7:3) do runtime.info <| ' ** iter # ' ++ n
 
-  # yield args pack to be received by `for`
-  generator g * { for n from range(5) do yield pkargs(1,2,3,m=n+1) }
-  for (a,m,b,c) from g() do runtime.info <| (a,b,c,m)
-
   # Python style `enumerate`
   for (i, n) from enumerate(range, 5) do runtime.info <| ' # ' ++ i ++ ' >> ' ++ n
-
-  # exchange values between the generator and the `do` expr
-  generator ss n while true n = yield n*n
-  for n from ss(3) do { runtime.info<|n; if n > 100 then break else n }
 }
-
