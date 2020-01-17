@@ -821,8 +821,7 @@ traditional sense of imperative programming languages.
 >
 > I still remember the hard time to wrap my head around `x = x + 1` when learning
 > [BASIC](https://wiki.c2.com/?BasicLanguage), and the pleasure when I finally
-> established the perception. But I'm not happy with it now, and feel false faith
-> with it.
+> established the perception. But I'm not happy and feel false faith with it now.
 >
 > Using _variables_ in thoughts is anti-human, imagine yourself allocating a
 > box area on a piece of paper, along with other tasks performed, you write sth
@@ -869,12 +868,13 @@ sections of your **Edh** code, see the [ai keyword](#the-ai-keyword), doing
 that improperly or plainly wrong, you will be punished with excessive **stm**
 retries or even dropped into infinite vain loops without progress.
 
-Above said may sound pretty dreadful, but it should make you feel better if
-I tell you that you can forget about all kinds of
+Above said may sound pretty dreadful, but it should make you feel better if I
+tell you that, when coding an **Edh** world, you can forget about all kinds of
 [synchronization primitives](http://www.cs.columbia.edu/~hgs/os/sync.html)
-scattered here and there (despite of many **async** frameworks trying to
-mitigate that disputable complexity), with every methods you attempt to
-program concurrency otherwise, when coding an **Edh** world.
+scattered [here](https://docs.python.org/3/library/asyncio-sync.html),
+[there](https://golang.org/pkg/sync) and many _otherwhere_
+(despite of many **async** frameworks trying to mitigate that disputable
+complexity), with every methods you attempt to program concurrency otherwise.
 
 ### Transaction (STM)
 
