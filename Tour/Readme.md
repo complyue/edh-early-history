@@ -809,7 +809,7 @@ and etc. the
 [word "variable" as applied to **Haskell** variables](https://wiki.haskell.org/Variable)
 is quite misleading.
 
-**Edh** tries to get rid of it completely. **variable** is a nonconcept in **Edh**,
+**Edh** tries to get rid of it completely, by making **variable** a nonconcept,
 but given the strong _imperative_ stylish of **Edh** code, **entity** **attribute**s
 (see [Attribute](#attribute)) are likely to be misperceived as _variables_ in
 traditional sense of imperative programming languages.
@@ -826,7 +826,7 @@ but actually, it is modification to the owning **entity** of the target
 
 Without an addressing prefix (`xxx.attr`), assigning to a named attribute
 (`attr = expr`) is to update the **entity** of the nearest lexical **scope**,
-associating with `attr` name as the key, to evaluated value from the
+associating with `attr` as the key, to evaluated value from the
 _right-hand-side_ expr.
 
 See [Object / Class](#object--class) for the concept of an **object**.
