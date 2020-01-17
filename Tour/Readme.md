@@ -47,13 +47,19 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [World](#world)
   - [Package](#package)
   - [Module](#module)
-  - [Function (or lack thereof)](#function-or-lack-thereof)
-  - [Operator](#operator)
-  - [Procedure](#procedure)
   - [Entity](#entity)
     - [Attribute](#attribute)
     - [Symbol](#symbol)
   - [Scope](#scope)
+  - [No Variable](#no-variable)
+    - [Attribute Assignment](#attribute-assignment)
+    - [Attribute Read](#attribute-read)
+    - [Transactional Semantics Amplification](#transactional-semantics-amplification)
+  - [Transaction](#transaction)
+    - [The ai keyword](#the-ai-keyword)
+  - [Function (or lack thereof)](#function-or-lack-thereof)
+  - [Operator](#operator)
+  - [Procedure](#procedure)
   - [Value / Type](#value--type)
   - [Object / Class](#object--class)
     - [This reference](#this-reference)
@@ -732,6 +738,141 @@ Note that module `batteries/root` will be imported into root scope of an
 **Edh** **world** when default batteries are installed (the most common case
 when a **world** is created).
 
+### Entity
+
+An **entity** in **Edh** is the backing storage for a **scope**, with possibly an
+**object** mounted to it with one **class** and many **supers**
+
+> Well there actually can exist multiple **object**s mounted to one same entity,
+> with different **class**es and/or set of **supers**, but that's the black magic
+> you want to avoid.
+
+#### Attribute
+
+An entity stores **attribute**s associated with alphanumeric or symbolic keys.
+
+#### Symbol
+
+**Symbol** in **Edh** is much the same as
+[Symbol in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol)
+
+A **symbol** can stand in place of an alphanumeric name, used to
+address an attribute from an **object entity**, but symbols are
+private to its owning scope, can not be imported from out side
+of the scope, thus serves encapsulation purpose in object
+structure designs.
+
+And symbol values reside in a lexical outer scope are available
+to its lexical inner scopes, e.g. a **symbol** bound to a **module** is
+available to all **procedure**s defined in the **module**, and a **symbol**
+bound within a **class procedure** is available to all its **method**s
+as well as nested **class**es.
+
+### Scope
+
+Especially note that **Edh** has no block **scope** as in **C**
+family languages, **JavaScript** neither does before **ES6**,
+**Python** neither does until now (2020).
+
+There is only **procedure scope** in **Edh**, and there are 2 kinds of
+procedures, see [Procedure](#procedure).
+
+Every **procedure** call will create a new **scope**, with a new
+[entity](#entity) created for it, that:
+
+- if it is a **constructor procedure** call, a new **object** of the
+  called **class**, or the `<module>` class defined by the world,
+  is allocated mounting the **entity**, serving `this` object of the
+  **scope**;
+
+- if it is a **methd procedure** call, no new **object** is created,
+  and the **scope** inherits `this` **object** from the lexical outer
+  **scope**, and the original **object** from which the **method**
+  was obtained, becomes `that` **object** in this **scope**. `that`
+  either contains the **method** in its **entity** as an **attribute**,
+  or inherits the **method** from one of its **supers**.
+
+### No Variable
+
+**variable** is a nonconcept in **Edh**, but given the strong _imperative_
+stylish of **Edh** code, **entity** **attribute**s (see [Attribute](#attribute)
+below) are likely to be misperceived as _variables_ in traditional sense of
+imperative programming languages.
+
+But you should really convert your intuition when coding in **Edh**, for the
+sake of the fact that you are programming transactional concurrency in contrast
+to traditional single-threaded programs, or multi-threaded programs synchronized.
+
+#### Attribute Assignment
+
+Assignments in **Edh** may look like exactly as to change the value of a variable,
+but actually, it is modification to the owning **entity** of the target
+**attribute**.
+
+Without an addressing prefix (`xxx.attr`), assigning to a named attribute
+(`attr = expr`) is to update the **entity** of the nearest lexical **scope**,
+associating with `attr` name as the key, to evaluated value from the
+_right-hand-side_ expr.
+
+See [Object / Class](#object--class) for the concept of an **object**.
+
+With an addressing prefix (`xxx.attr = expr`), `xxx` must evaluate to a value of
+**object** type, assigning to a named attribute (`xxx.attr = expr`) or symbolic
+attribute (`xxx.@sym = expr`), is to update the **entity** underlying the
+**object** specified by the prefix, associating with `attr` or `@sym` as the key,
+to evluated value from the _right-hand-side_ expr.
+
+#### Attribute Read
+
+Similar to the assignment, when `attr` `xxx.attr` and `xxx.@sym` appear in an
+expression to be evaluated, those are not _variable_ reads as it looks like,
+but actually reads of their respective owning **entities**.
+
+#### Transactional Semantics Amplification
+
+As said above, the read / write of attributes are semantically amplified to
+their owning **entities**, to perceive this sense intuitively is crucial in
+writing effective **Edh** code, or working **Edh** code at all. Because there
+will definitely be chances you must delimit transaction boundaries for some
+sections of your **Edh** code, see [The ai keyword](#the-ai-keyword), doing
+that improperly or plainly wrong, you will be punished with excessive **stm**
+retries or even dropped into infinite vain loops without progress.
+
+### Transaction
+
+You get an implicit transaction in each of the following cases:
+
+- Attribute assignment
+  > x = y + z
+  > x += y # desugared to x = x+y
+- Let assignment
+  > let (a.balance, b.balance) = (a.balance + amount, b.balance - amount)
+- Arguments packing for a procedure call
+  > f ( x.pendingItems, x.doneItems )
+- list / tuple / dict construction
+  > for itemOfInterest from [*a.cart, *a.wishlist] do
+  > withItem itemOfInterest
+
+So above cases are intrinsically _atomic_, while for other cases that
+atomicity / isolation are needed, you use:
+
+#### The ai keyword
+
+`ai` stands for **Atomically Isolatedly**, or `AtoIso` for short, it isused
+as the transaction boundary delimiter.
+
+`ai <expr>` is a statement where the expr (being a block is common case) is
+guaranteed to be evaluated in a same transaction.
+
+As based on [stm](http://hackage.haskell.org/package/stm), **Edh** will
+atomically retry the whole transaction if inconsistency found before the tx
+can commit successfully. And **Edh** will
+[trace](https://hackage.haskell.org/package/base/docs/Debug-Trace.html#v:trace)
+out the retries so end users will be aware of them.
+
+Nested **ai** (block) expressions are technically doable, but should be
+considered bad smell in the code under common circumstances.
+
 ### Function (or lack thereof)
 
 To stay conceptually clear for the object system (which is
@@ -831,60 +972,6 @@ There are 2 kinds of procedures:
     which is same as a vanilla **method** procedure except it receives arguments in
     reflective expr forms rather than evaluated values, in addition to the reflective
     `callerScope` as first argument
-
-### Entity
-
-An **entity** in **Edh** is the backing storage for a **scope**, with possibly an
-**object** mounted to it with one **class** and many **supers**
-
-> Well there actually can exist multiple **object**s mounted to one same entity,
-> with different **class**es and/or set of **supers**, but that's the black magic
-> you want to avoid.
-
-#### Attribute
-
-An entity stores **attribute**s associated with alphanumeric or symbolic keys.
-
-#### Symbol
-
-**Symbol** in **Edh** is much the same as
-[Symbol in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol)
-
-A **symbol** can stand in place of an alphanumeric name, used to
-address an attribute from an **object entity**, but symbols are
-private to its owning scope, can not be imported from out side
-of the scope, thus serves encapsulation purpose in object
-structure designs.
-
-And symbol values reside in a lexical outer scope are available
-to its lexical inner scopes, e.g. a **symbol** bound to a **module** is
-available to all **procedure**s defined in the **module**, and a **symbol**
-bound within a **class procedure** is available to all its **method**s
-as well as nested **class**es.
-
-### Scope
-
-Especially note that **Edh** has no block **scope** as in **C**
-family languages, **JavaScript** neither does before **ES6**,
-**Python** neither does until now (2020).
-
-There is only **procedure scope** in **Edh**, and there are 2 kinds of
-procedures, see [Procedure](#procedure).
-
-Every **procedure** call will create a new **scope**, with a new
-[entity](#entity) created for it, that:
-
-- if it is a **constructor procedure** call, a new **object** of the
-  called **class**, or the `<module>` class defined by the world,
-  is allocated mounting the **entity**, serving `this` object of the
-  **scope**;
-
-- if it is a **methd procedure** call, no new **object** is created,
-  and the **scope** inherits `this` **object** from the lexical outer
-  **scope**, and the original **object** from which the **method**
-  was obtained, becomes `that` **object** in this **scope**. `that`
-  either contains the **method** in its **entity** as an **attribute**,
-  or inherits the **method** from one of its **supers**.
 
 ### Value / Type
 
