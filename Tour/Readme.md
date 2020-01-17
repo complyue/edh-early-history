@@ -805,12 +805,12 @@ Despite the existence of
 [MVar](https://hackage.haskell.org/package/base/docs/Control-Concurrent-MVar.html)
 and the very
 [TVar](https://hackage.haskell.org/package/stm/docs/Control-Concurrent-STM-TVar.html)
-and etc. the
+and friends, the
 [word "variable" as applied to **Haskell** variables](https://wiki.haskell.org/Variable)
 is quite misleading.
 
-**Edh** tries to get rid of it completely, by making **variable** a nonconcept,
-but given the strong _imperative_ stylish of **Edh** code, **entity** **attribute**s
+**Edh** tries to get rid of it completely, by making **variable** a nonconcept.
+But given the strong _imperative_ stylish of **Edh** code, **entity** **attribute**s
 (see [Attribute](#attribute)) are likely to be misperceived as _variables_ in
 traditional sense of imperative programming languages.
 
@@ -819,9 +819,10 @@ traditional sense of imperative programming languages.
 > statistics etc. of course), because that's how current generation of computing
 > hardwares work, not how computing works in general.
 >
-> Using _variables_ in thoughts is anti-human, imagine yourself allocating an
-> box area on a piece of paper, writing sth into it, erase it, write sth new,
-> and repeat and repeat ... I would feel ridiculous.
+> Using _variables_ in thoughts is anti-human, imagine yourself allocating a
+> box area on a piece of paper, along with other tasks performed, you write sth
+> into the box, erase it later followed by writing sth new, and repeat and repeat
+> ... I would feel ridiculous.
 
 At least, you should really convert your intuition when coding in **Edh**, for the
 sake of the fact that you are programming transactional concurrency in contrast
@@ -858,7 +859,7 @@ As said above, the read / write of attributes are semantically amplified to
 their owning **entities**, to perceive this sense intuitively is crucial in
 writing effective **Edh** code, or working **Edh** code at all. Because there
 will definitely be chances you must delimit transaction boundaries for some
-sections of your **Edh** code, see [The ai keyword](#the-ai-keyword), doing
+sections of your **Edh** code, see the [ai keyword](#the-ai-keyword), doing
 that improperly or plainly wrong, you will be punished with excessive **stm**
 retries or even dropped into infinite vain loops without progress.
 
@@ -867,7 +868,7 @@ I tell you that you can forget about all kinds of
 [synchronization primitives](http://www.cs.columbia.edu/~hgs/os/sync.html)
 scattered here and there (despite of many **async** frameworks trying to
 mitigate that disputable complexity), with every methods you attempt to
-program concurrency, except within an **Edh** world.
+program concurrency otherwise, when coding an **Edh** world.
 
 ### Transaction (STM)
 
@@ -887,7 +888,7 @@ what seems right to do, and it's done (with
 [CAVEATs](#transactional-semantics-amplification)
 though). It's called
 [Optimistic Locking](http://en.wikipedia.org/wiki/Optimistic_locking)
-else where but the spirit is an upgraded version of **EAFP**.
+elsewhere but the spirit is an upgraded version of **EAFP**.
 
 You get an implicit transaction in each of the following cases:
 
