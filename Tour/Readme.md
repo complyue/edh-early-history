@@ -39,7 +39,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Interpreter Procedures](#interpreter-procedures)
   - [Class (Constructor) Procedures](#class-constructor-procedures)
   - [Inheritance Hierarchy](#inheritance-hierarchy)
-- [Go-Routine / Defer](#go-routine--defer)
+- [Go Routine / Defer](#go-routine--defer)
 - [Event Sink / Reactor](#event-sink--reactor)
 - [Indexing](#indexing)
 - [More Magic Methods](#more-magic-methods)
@@ -793,7 +793,7 @@ manipulation API.
 
 `this` and `that`
 
-## Go-Routine / Defer
+## Go Routine / Defer
 
 ## Event Sink / Reactor
 
@@ -884,11 +884,10 @@ Especially note that **Edh** has no block **scope** as in **C**
 family languages, **JavaScript** neither does before **ES6**,
 **Python** neither does until now (2020).
 
-There is only **procedure scope** in **Edh**, and there are 2 kinds of
-procedures, see [Procedure](#procedure).
+There is only **procedure scope** in **Edh**, see [Procedure](#procedure).
 
-Every **procedure** call will create a new **scope**, with a new
-[entity](#entity) created for it, that:
+Every non-host **procedure** call will create a new **scope**, with
+a new [entity](#entity) created for it, that:
 
 - if it is a **constructor procedure** call, a new **object** of the
   called **class**, or the `<module>` class defined by the world,
@@ -924,9 +923,13 @@ traditional sense of imperative programming languages.
 > statistics etc. of course), because that's how current generation of computing
 > hardwares work, not how computing works in general.
 >
-> I still remember the hard time to wrap my head around `x = x + 1` when learning
-> [BASIC](https://wiki.c2.com/?BasicLanguage), and the pleasure when I finally
-> established the perception. But I'm not happy and feel false faith with it now.
+> I still remember the hard time to wrap my head around `x = x + 1` when I was
+> young and learning [BASIC](https://wiki.c2.com/?BasicLanguage) in enlightenment
+> to programming (in fact to computer at all, on a
+> [80286 computer](https://en.wikipedia.org/wiki/IBM_Personal_Computer_XT#IBM_XT_286)),
+> the pleasure when I finally established the perception.
+>
+> But I'm not happy and feel false faith with that now.
 >
 > Using _variables_ in thoughts is anti-human, imagine yourself allocating a
 > box area on a piece of paper, along with other tasks performed, you write sth
