@@ -72,7 +72,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Go-Routine](#go-routine)
     - [The go keyword](#the-go-keyword)
   - [Event Sink](#event-sink)
-    - [The reactor procedure](#the-reactor-procedure)
+    - [The reactor Procedure](#the-reactor-procedure)
     - [The defer keyword](#the-defer-keyword)
   - [Value / Type](#value--type)
   - [Object / Class](#object--class)
@@ -1157,7 +1157,7 @@ reflective expr forms rather than evaluated values, in addition to the reflectiv
 Checkout [Goroutine](https://tour.golang.org/concurrency) in
 [Go](https://golang.org/), if not already.
 
-**Go** _routine_ in **Edh** is very similar:
+A **go** _routine_ in **Edh** is very similar to **goroutine**:
 
 #### The go keyword
 
@@ -1171,7 +1171,9 @@ The sames as in **Go**:
 
 - Things are prepared before you **go**
 
-  i.e. arguments are packed in a transaction run by the current thread
+  i.e. callee procedure arguments are packed, `case-of` target is evaluated,
+  `for-from-do` loop iterable is constructed, all in a transaction run by the
+  current thread
 
 - There is no _return_
 
@@ -1181,7 +1183,8 @@ Yet there are differences:
 
 - **Edh** can not only **go** a procedure call:
 
-  You can **go** a **for-from-do** loop, a block, or even a single expression.
+  You can **go** a **for-from-do** loop, a block, or even a single expression
+  e.g. a `if-then` or a `case-of`
 
 - Whenever not **go** calling another procedure:
 
@@ -1201,13 +1204,79 @@ Yet there are differences:
 
   Guess what, you have even the same operator (**<-**) on **event sink**s in
   **Edh** as the **channel** operator in **Go**. But just remember a **Go**
-  **channel** does _unicast_ while a **Edh** **sink** does _broadcast_ .
+  **channel** does _unicast_ while an **Edh** **sink** does _broadcast_ .
 
 ### Event Sink
 
-#### The reactor procedure
+An **event sink** is a value of special type in **Edh**, a new **sink** is
+created each time the `sink` keyword is evaluated in **Edh**, as the name
+implies, events from everywhere can flow into a **sink**, a **Go** **channel**
+can have multiple writers so they are similar in this respect.
+
+But write to a **channel** will block when there is no reader (and the buffer
+is full if writing to a buffered **channel**), while write to a **sink**
+will always success immediately, the written event is silently dropped when
+there is no reader draining the sink.
+
+And when there are multiple readers, a **channel** gives one **msg** to a
+unique reader only (i.e. load balancing semantics), while a **sink** gives
+the same **event** to all readers (i.e. broadcasting semantics).
+
+#### The reactor Procedure
+
+There is actually this **reactor** procedure in **Edh** not listed in
+section [Procedure](#procedure) , a **reactor procedure** is a
+[Method Procedure](#method-procedure) per se, but what makes it special
+is that it is not bound to a **scope** (as an attribute of the **scope**
+**entity**), instead, it is associated with an **event sink** and attached
+to a running **Edh** **thread** (**go** routine).
+
+A **reactor** is defined by a `reactor` statement in **Edh** code, specifying
+the **sink** to be associated with, a procedure body consists of **Edh** code,
+and an **arguments receiver** to receive the event value into the procedure
+body's **scope** before running.
+
+Draining of events from each's respective **sink** by **reactor**s attached
+to a thread, are run interleaved with normal transactions on the thread, i.e.
+between each 2 normal tx processed, all **reactors** are tried to process one
+event from its associated **sink**.
+
+Another special mechanism with **reactor** is that it can conditionally
+evaluate to a `<break>` result (by a `break` statement in it's body), in
+which case the thread having it attached will be terminated.
 
 #### The defer keyword
+
+As **Edh** threads can be terminated by `break`s from **reactor**s, even
+exception handlers on the thread can ceased to run on such terminations.
+
+You use **defer** to do necessary cleanups or schedule other computations
+to run upon thread termination.
+
+Similar to [defer](https://golang.org/ref/spec#Defer_statements) in
+**Go**:
+
+- The execution is prepared at scheduling time
+
+  i.e. callee procedure arguments are packed, `case-of` target is evaluated,
+  `for-from-do` loop iterable is constructed, all in a transaction run
+  immediately by the current thread on encounter of the **defer** statement
+
+- Multiple **defer**s are run in _last-in-first-out_ order upon thread
+  termination
+
+Differences with [defer](https://golang.org/ref/spec#Defer_statements) in
+**Go**:
+
+- **Edh** can not only **defer** a procedure call:
+
+  You can **defer** a **for-from-do** loop, a block, or even a single expression
+  e.g. a `if-then` or a `case-of`
+
+- Whenever not **defer** calling another procedure:
+
+  The lexical **scope** is shared among the originating thread and other **defer**
+  computations
 
 ### Value / Type
 
