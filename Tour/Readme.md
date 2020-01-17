@@ -62,7 +62,13 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Operator](#operator)
   - [Procedure](#procedure)
     - [Constructor Procedure](#constructor-procedure)
+      - [Class Procedure](#class-procedure)
+      - [Module Procedure](#module-procedure)
     - [Method Procedure](#method-procedure)
+      - [Vanilla Method Procedure](#vanilla-method-procedure)
+      - [Operator Procedure](#operator-procedure)
+      - [Generator Procedure](#generator-procedure)
+      - [Interpreter Procedure](#interpreter-procedure)
   - [Go-Routine](#go-routine)
     - [The go keyword](#the-go-keyword)
   - [Event Sink](#event-sink)
@@ -1099,52 +1105,52 @@ There are 2 kinds of procedures:
 
 Including:
 
-- **class** procedure
+##### Class Procedure
 
-  Runs with a new object as both `this` and `that`
+Runs with a new object as both `this` and `that`
 
-  Defined by a `class`statement in **Edh** code
+Defined by a `class`statement in **Edh** code
 
-- **module** procedure
+##### Module Procedure
 
-  Runs with the new module object as both `this` and `that`
+Runs with the new module object as both `this` and `that`
 
-  Defined by a `*.edh` file which is imported by **Edh** code
+Defined by a `*.edh` file which is imported by **Edh** code
 
 #### Method Procedure
 
 Runs with _lexical_ `this` and _inheriting descendant_ `that`, including:
 
-- vanilla **method** procedure
+##### Vanilla Method Procedure
 
-  Defined by a `method` statement in **Edh**,
-  which is a vanilla callable after an alphanumeric name
+Defined by a `method` statement in **Edh**,
+which is a vanilla callable after an alphanumeric name
 
-- **operator** procedure
+##### Operator Procedure
 
-  Defined by an `operator` statement in **Edh**,
-  which is a **binary** or **trinary** callable after a name with just operator symbols
-  i.e. `=~!@#$%^&|:<>?+-*/` plus other
-  [Unicode](http://www.unicode.org/reports/tr44/tr44-14.html#GC_Values_Table)
-  [Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
-  .
+Defined by an `operator` statement in **Edh**,
+which is a **binary** or **trinary** callable after a name with just operator symbols
+i.e. `=~!@#$%^&|:<>?+-*/` plus other
+[Unicode](http://www.unicode.org/reports/tr44/tr44-14.html#GC_Values_Table)
+[Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
+.
 
-  The **binary** form receives `left'hand'value` and `right'hand'value` as arguments
+The **binary** form receives `left'hand'value` and `right'hand'value` as arguments
 
-  The **trinary** form receives `callerScope`, `left'hand'expr` and `right'hand'expr`
-  as arguments
+The **trinary** form receives `callerScope`, `left'hand'expr` and `right'hand'expr`
+as arguments
 
-- **generator** procedure
+##### Generator Procedure
 
-  Defined by a `generator` statement in **Edh**,
-  which is only callable by a `for-from-do` loop, and contains `yield` expressions
+Defined by a `generator` statement in **Edh**,
+which is only callable by a `for-from-do` loop, and contains `yield` expressions
 
-- **interpreter** procedure
+##### Interpreter Procedure
 
-  Defined by an `interpreter` statement in **Edh**,
-  which is same as a vanilla **method** procedure except it receives arguments in
-  reflective expr forms rather than evaluated values, in addition to the reflective
-  `callerScope` as first argument
+Defined by an `interpreter` statement in **Edh**,
+which is same as a vanilla **method** procedure except it receives arguments in
+reflective expr forms rather than evaluated values, in addition to the reflective
+`callerScope` as first argument
 
 ### Go-Routine
 
