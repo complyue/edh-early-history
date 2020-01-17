@@ -800,9 +800,9 @@ Every **procedure** call will create a new **scope**, with a new
 ### No Variable
 
 **variable** is a nonconcept in **Edh**, but given the strong _imperative_
-stylish of **Edh** code, **entity** **attribute**s (see [Attribute](#attribute)
-below) are likely to be misperceived as _variables_ in traditional sense of
-imperative programming languages.
+stylish of **Edh** code, **entity** **attribute**s ( see
+[Attribute](#attribute) ) are likely to be misperceived as _variables_ in
+traditional sense of imperative programming languages.
 
 But you should really convert your intuition when coding in **Edh**, for the
 sake of the fact that you are programming transactional concurrency in contrast
@@ -848,15 +848,30 @@ retries or even dropped into infinite vain loops without progress.
 You get an implicit transaction in each of the following cases:
 
 - Attribute assignment
-  > x = y + z
-  > x += y # desugared to x = x+y
+
+```python
+x = y + z
+x += y # desugared to x = x+y
+```
+
 - Let assignment
-  > let (a.balance, b.balance) = (a.balance + amount, b.balance - amount)
+
+```python
+let (a.balance, b.balance) = (a.balance + amount, b.balance - amount)
+```
+
 - Arguments packing for a procedure call
-  > f ( x.pendingItems, x.doneItems )
+
+```python
+f ( x.pendingItems, x.doneItems )
+```
+
 - list / tuple / dict construction
-  > for itemOfInterest from [*a.cart, *a.wishlist] do
-  > withItem itemOfInterest
+
+```python
+for itemOfInterest from [*a.cart, *a.wishlist] do
+  withItem itemOfInterest
+```
 
 So above cases are intrinsically _atomic_, while for other cases that
 atomicity / isolation are needed, you use:
