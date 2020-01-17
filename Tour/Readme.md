@@ -61,6 +61,10 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Operator](#operator)
   - [Procedure](#procedure)
+    - [Host Procedure](#host-procedure)
+      - [Vanilla Host Procedure](#vanilla-host-procedure)
+      - [Host Operator Procedure](#host-operator-procedure)
+      - [Host Generator Procedure](#host-generator-procedure)
     - [Constructor Procedure](#constructor-procedure)
       - [Class Procedure](#class-procedure)
       - [Module Procedure](#module-procedure)
@@ -1100,7 +1104,83 @@ Also see [**operator** procedure] below.
 
 ### Procedure
 
-There are 2 kinds of procedures:
+There are 3 kinds of procedures:
+
+#### Host Procedure
+
+Host procedures are written in the host language (i.e. **Haskell**), and do
+not create new **scope**s when called, including:
+
+##### Vanilla Host Procedure
+
+e.g.
+
+```haskell
+-- | utility null(*args,**kwargs) - null tester
+isNullProc :: EdhProcedure
+isNullProc !argsSender !exit = do
+  !pgs <- ask
+  packEdhArgs argsSender $ \(ArgsPack !args !kwargs) -> if null kwargs
+    then case args of
+      [v] -> contEdhSTM $ do
+        isNull <- EdhBool <$> edhValueNull v
+        exitEdhSTM pgs exit isNull
+      _ -> contEdhSTM $ do
+        argsNulls <- sequence $ ((EdhBool <$>) . edhValueNull) <$> args
+        exitEdhSTM pgs exit (EdhTuple argsNulls)
+    else contEdhSTM $ do
+      argsNulls   <- sequence $ ((EdhBool <$>) . edhValueNull) <$> args
+      kwargsNulls <- sequence $ Map.map ((EdhBool <$>) . edhValueNull) kwargs
+      exitEdhSTM pgs exit (EdhArgsPack $ ArgsPack argsNulls kwargsNulls)
+```
+
+##### Host Operator Procedure
+
+e.g.
+
+```haskell
+-- | operator (:) - pair constructor
+consProc :: EdhProcedure
+consProc [SendPosArg !lhExpr, SendPosArg !rhExpr] !exit = do
+  pgs <- ask
+  -- make sure left hand and right hand values are evaluated in same tx
+  local (const pgs { edh'in'tx = True })
+    $ evalExpr lhExpr
+    $ \(OriginalValue !lhVal _ _) ->
+        evalExpr rhExpr $ \(OriginalValue !rhVal _ _) ->
+          contEdhSTM $ exitEdhSTM pgs exit (EdhPair lhVal rhVal)
+consProc !argsSender _ =
+  throwEdh EvalError $ "Unexpected operator args: " <> T.pack (show argsSender)
+```
+
+##### Host Generator Procedure
+
+e.g.
+
+```haskell
+timelyNotify :: Int -> EdhGenrCaller -> STM ()
+timelyNotify !delayMicros genr'caller@(!pgs', !iter'cb) = do
+  nanos <- (toNanoSecs <$>) $ unsafeIOToSTM $ do
+    threadDelay delayMicros
+    getTime Realtime
+  -- yield the nanosecond timestamp to iterator
+  runEdhProg pgs' $ iter'cb (EdhDecimal $ fromInteger nanos) $ \_ ->
+    timelyNotify delayMicros genr'caller
+
+-- | host generator runtime.everyMicros(n) - with fixed interval
+rtEveryMicrosProc :: EdhProcedure
+rtEveryMicrosProc !argsSender _ = ask >>= \pgs ->
+  case generatorCaller $ edh'context pgs of
+    Nothing          -> throwEdh EvalError "Can only be called as generator"
+    Just genr'caller -> case argsSender of
+      [SendPosArg !nExpr] -> evalExpr nExpr $ \(OriginalValue nVal _ _) ->
+        case nVal of
+          (EdhDecimal (Decimal d e n)) | d == 1 ->
+            contEdhSTM $ timelyNotify (fromIntegral n * 10 ^ e) genr'caller
+          _ -> throwEdh EvalError $ "Invalid argument: " <> T.pack (show nVal)
+      _ ->
+        throwEdh EvalError $ "Invalid argument: " <> T.pack (show argsSender)
+```
 
 #### Constructor Procedure
 

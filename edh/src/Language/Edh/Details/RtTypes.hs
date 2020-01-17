@@ -167,11 +167,11 @@ data OriginalValue = OriginalValue {
 -- family languages, JavaScript neither does before ES6,
 -- Python neither does until now (2020).
 --
--- There is only `procedure scope` in Edh, and there are only 2 kinds
--- of procedures, see https://github.com/e-wrks/edh/Tour/#procedure
+-- There is only `procedure scope` in Edh
+-- also see https://github.com/e-wrks/edh/Tour/#procedure
 --
--- Every procedure call will create a new scope, with a new entity created
--- for it, that:
+-- Every non-host procedure call will create a new scope, with a new
+-- entity created for it, that:
 --
 --  * if it is a constructor procedure call, a new object of the called
 --    class, or the `<module>` class defined by the world, is allocated
