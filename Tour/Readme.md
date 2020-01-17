@@ -60,6 +60,11 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Operator](#operator)
   - [Procedure](#procedure)
+  - [Go-Routine](#go-routine)
+    - [The go keyword](#the-go-keyword)
+  - [Event Sink](#event-sink)
+    - [The reactor procedure](#the-reactor-procedure)
+    - [The defer keyword](#the-defer-keyword)
   - [Value / Type](#value--type)
   - [Object / Class](#object--class)
     - [This reference](#this-reference)
@@ -972,6 +977,16 @@ There are 2 kinds of procedures:
     which is same as a vanilla **method** procedure except it receives arguments in
     reflective expr forms rather than evaluated values, in addition to the reflective
     `callerScope` as first argument
+
+### Go-Routine
+
+#### The go keyword
+
+### Event Sink
+
+#### The reactor procedure
+
+#### The defer keyword
 
 ### Value / Type
 
