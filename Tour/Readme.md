@@ -1224,7 +1224,7 @@ the same **event** to all readers (i.e. broadcasting semantics).
 
 #### The reactor Procedure
 
-There is actually this **reactor** procedure in **Edh** not listed in
+There is actually a special type of **procedure** in **Edh** not listed in
 section [Procedure](#procedure) , a **reactor procedure** is a
 [Method Procedure](#method-procedure) per se, but what makes it special
 is that it is not bound to a **scope** (as an attribute of the **scope**
@@ -1239,7 +1239,7 @@ body's **scope** before running.
 Draining of events from each's respective **sink** by **reactor**s attached
 to a thread, are run interleaved with normal transactions on the thread, i.e.
 between each 2 normal tx processed, all **reactors** are tried to process one
-event from its associated **sink**.
+event from each's associated **sink**.
 
 Another special mechanism with **reactor** is that it can conditionally
 evaluate to a `<break>` result (by a `break` statement in it's body), in
@@ -1248,15 +1248,18 @@ which case the thread having it attached will be terminated.
 #### The defer keyword
 
 As **Edh** threads can be terminated by `break`s from **reactor**s, even
-exception handlers on the thread can ceased to run on such terminations.
+exception handlers on the thread can cease to run on such terminations.
 
 You use **defer** to do necessary cleanups or schedule other computations
 to run upon thread termination.
 
+`defer <expr>` is a statement in **Edh** for the specified computation be
+scheduled to run upon current thread's termination.
+
 Similar to [defer](https://golang.org/ref/spec#Defer_statements) in
 **Go**:
 
-- The execution is prepared at scheduling time
+- Input to the execution is prepared at scheduling time
 
   i.e. callee procedure arguments are packed, `case-of` target is evaluated,
   `for-from-do` loop iterable is constructed, all in a transaction run
@@ -1268,15 +1271,19 @@ Similar to [defer](https://golang.org/ref/spec#Defer_statements) in
 Differences with [defer](https://golang.org/ref/spec#Defer_statements) in
 **Go**:
 
+- A **defer**ed computation runs upon thread termination in **Edh** while in
+  **Go** a **defer**ed function call runs on return of the surrounding
+  function
+
 - **Edh** can not only **defer** a procedure call:
 
-  You can **defer** a **for-from-do** loop, a block, or even a single expression
-  e.g. a `if-then` or a `case-of`
+  You can **defer** a **for-from-do** loop, a block, or even a single
+  expression e.g. a `if-then` or a `case-of`
 
 - Whenever not **defer** calling another procedure:
 
-  The lexical **scope** is shared among the originating thread and other **defer**
-  computations
+  The lexical **scope** is shared among the originating thread and other
+  **defer**ed computations
 
 ### Value / Type
 

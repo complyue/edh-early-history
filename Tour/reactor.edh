@@ -12,7 +12,7 @@
 
     reactor stopSig ev {
       runtime.info <| '  🎬  stopping because: ' ++ ev
-      break # break from a reactor does break the thread (goroutine)
+      break  # break from a reactor terminates the thread
     }
 
     for ev from evs do {
@@ -41,7 +41,7 @@
 
   evs <- '  ☎️  ling.ling..ling...'
 
-  # all descendant threads (goroutines) will be terminated when
+  # all descendant threads (go routines) will be terminated when
   # main thread terminates, need wait here to see any event above
   # being processed.
   for _ from runtime.everySeconds(1) do { break }

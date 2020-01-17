@@ -158,6 +158,11 @@ driveEdhProgram !progCtx !prog = do
       (EdhTxTask pgsReactor False (wuji pgsReactor) (const reactorProg))
     driveEdhThread reactDefers (tryReadTQueue reactTaskQueue)
     atomically $ readTMVar breakThread
+  driveReactors :: [(EdhValue, ReactorRecord)] -> IO Bool
+  driveReactors []               = return False
+  driveReactors ((ev, r) : rest) = driveReactor ev r >>= \case
+    True  -> return True
+    False -> driveReactors rest
 
   driveEdhThread :: TVar [DeferRecord] -> STM (Maybe EdhTxTask) -> IO ()
   driveEdhThread !defers !taskSource = atomically taskSource >>= \case
@@ -169,18 +174,12 @@ driveEdhProgram !progCtx !prog = do
       False -> -- loop another iteration for the thread
         driveEdhThread defers taskSource
 
-  -- TODO busy, later defined reactors can starve earlier defined
-  --      reactors as with current implementation, improve ?
-
   goSTM :: Int -> EdhTxTask -> IO Bool
   goSTM !rtc txTask@(EdhTxTask !pgsThread !wait !input !task) = if wait
     then -- let stm do the retry, for blocking read of a 'TChan' etc.
-         atomically stmJob >>= \case
-      Left (ev, react) -> -- ^ one reactor triggered
-        driveReactor ev react
-      Right () -> -- ^ this task done, thread not terminating
-        return False
+         atomically stmJob >>= driveReactors
     else do -- blocking wait not expected, track stm retries explicitly
+
       when -- todo increase the threshold of reporting?
            (rtc > 0) $ do
         -- trace out the retries so the end users can be aware of them
@@ -190,17 +189,21 @@ driveEdhProgram !progCtx !prog = do
       atomically ((Just <$> stmJob) `orElse` return Nothing) >>= \case
         Nothing -> -- ^ stm failed, do a tracked retry
           goSTM (rtc + 1) txTask
-        Just (Right ()) -> -- ^ this task done
-          return False
-        Just (Left (ev, react)) -> -- ^ one reactor triggered
-          driveReactor ev react
+        Just gotevl -> driveReactors gotevl
+
    where
-    stmJob :: STM (Either (EdhValue, ReactorRecord) ())
-    stmJob = readTVar (edh'reactors pgsThread) >>= reactorChk >>= \case
-      Left  react -> return $ Left react
-      Right ()    -> Right <$> join (runReaderT (task input) pgsThread)
-    reactorChk :: [ReactorRecord] -> STM (Either (EdhValue, ReactorRecord) ())
-    reactorChk []                        = return $ Right ()
-    reactorChk (r@(evc, _, _, _) : rest) = tryReadTChan evc >>= \case
-      Just !ev -> return $ Left (ev, r)
-      Nothing  -> reactorChk rest
+
+    stmJob :: STM [(EdhValue, ReactorRecord)]
+    stmJob =
+      (readTVar (edh'reactors pgsThread) >>= reactorChk []) >>= \gotevl ->
+        if null gotevl
+          then join (runReaderT (task input) pgsThread) >> return []
+          else return gotevl
+    reactorChk
+      :: [(EdhValue, ReactorRecord)]
+      -> [ReactorRecord]
+      -> STM [(EdhValue, ReactorRecord)]
+    reactorChk !gotevl []                        = return gotevl
+    reactorChk !gotevl (r@(evc, _, _, _) : rest) = tryReadTChan evc >>= \case
+      Just !ev -> reactorChk ((ev, r) : gotevl) rest
+      Nothing  -> reactorChk gotevl rest
