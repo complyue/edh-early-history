@@ -980,7 +980,7 @@ Above said may sound pretty dreadful, but it should make you feel better if I
 tell you that, when coding an **Edh** world, you can forget about all kinds of
 [synchronization primitives](http://www.cs.columbia.edu/~hgs/os/sync.html)
 scattered [here](https://docs.python.org/3/library/asyncio-sync.html),
-[there](https://golang.org/pkg/sync) and many _otherwhere_
+[there](https://golang.org/pkg/sync) and many _otherwheres_
 (despite of many **async** frameworks trying to mitigate that disputable
 complexity), with every methods you attempt to program concurrency otherwise.
 
@@ -1025,7 +1025,7 @@ let (a.balance, b.balance) = (a.balance + amount, b.balance - amount)
   which is to be yielded from a generator, published to an event sink etc.
 
 ```python
-f ( x.pendingItems, x.doneItems )
+processItemsOfInterest ( *a.cart, *a.wishlist )
 ```
 
 - pair / tuple / list / dict construction
@@ -1033,9 +1033,9 @@ f ( x.pendingItems, x.doneItems )
   while multi-dimensional index construction (`a[x+o, y-3, z*5]`) is a
   special case of tuple construction
 
-```python
-for itemOfInterest from [*a.cart, *a.wishlist] do
-  withItem (itemOfInterest)
+```haskell
+case (x.pendingItems : x.doneItems) of {( p : d )} -> "Dash:\n"
+  ++ join(p, sep='\n') ++ " --- \n" ++ join(d, sep='\n')
 ```
 
 So above cases are intrinsically _atomic_, while for other cases that
