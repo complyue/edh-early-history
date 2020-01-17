@@ -61,6 +61,8 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Function (or lack thereof)](#function-or-lack-thereof)
   - [Operator](#operator)
   - [Procedure](#procedure)
+    - [Constructor Procedure](#constructor-procedure)
+    - [Method Procedure](#method-procedure)
   - [Go-Routine](#go-routine)
     - [The go keyword](#the-go-keyword)
   - [Event Sink](#event-sink)
@@ -1093,48 +1095,56 @@ Also see [**operator** procedure] below.
 
 There are 2 kinds of procedures:
 
-- **constructor** procedure, including:
+#### Constructor Procedure
 
-  - **class** procedure (runs with a new object as `this`/`that`)
+Including:
 
-    defined by a `class`statement in **Edh** code
+- **class** procedure
 
-  - **module** procedure (runs with the new module object as `this`/`that`)
+  Runs with a new object as both `this` and `that`
 
-    defined by a `*.edh` file which is imported by **Edh** code
+  Defined by a `class`statement in **Edh** code
 
-- **method** procedure (runs with lexical `this` and hierarchical `that`), including:
+- **module** procedure
 
-  - vanilla **method** procedure
+  Runs with the new module object as both `this` and `that`
 
-    defined by a `method` statement in **Edh**,
-    which is a vanilla callable after an alphanumeric name
+  Defined by a `*.edh` file which is imported by **Edh** code
 
-  - **operator** procedure
+#### Method Procedure
 
-    defined by an `operator` statement in **Edh**,
-    which is a **binary** or **trinary** callable after a name with just operator symbols
-    i.e. `=~!@#$%^&|:<>?+-*/` plus other
-    [Unicode](http://www.unicode.org/reports/tr44/tr44-14.html#GC_Values_Table)
-    [Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
-    .
+Runs with _lexical_ `this` and _inheriting descendant_ `that`, including:
 
-    the **binary** form receives `left'hand'value` and `right'hand'value` as arguments
+- vanilla **method** procedure
 
-    the **trinary** form receives `callerScope`, `left'hand'expr` and `right'hand'expr`
-    as arguments
+  Defined by a `method` statement in **Edh**,
+  which is a vanilla callable after an alphanumeric name
 
-  - **generator** procedure
+- **operator** procedure
 
-    defined by a `generator` statement in **Edh**,
-    which is only callable by a `for-from-do` loop, and contains `yield` expressions
+  Defined by an `operator` statement in **Edh**,
+  which is a **binary** or **trinary** callable after a name with just operator symbols
+  i.e. `=~!@#$%^&|:<>?+-*/` plus other
+  [Unicode](http://www.unicode.org/reports/tr44/tr44-14.html#GC_Values_Table)
+  [Symbols](https://hackage.haskell.org/package/base/docs/Data-Char.html#v:isSymbol)
+  .
 
-  - **interpreter** procedure
+  The **binary** form receives `left'hand'value` and `right'hand'value` as arguments
 
-    defined by an `interpreter` statement in **Edh**,
-    which is same as a vanilla **method** procedure except it receives arguments in
-    reflective expr forms rather than evaluated values, in addition to the reflective
-    `callerScope` as first argument
+  The **trinary** form receives `callerScope`, `left'hand'expr` and `right'hand'expr`
+  as arguments
+
+- **generator** procedure
+
+  Defined by a `generator` statement in **Edh**,
+  which is only callable by a `for-from-do` loop, and contains `yield` expressions
+
+- **interpreter** procedure
+
+  Defined by an `interpreter` statement in **Edh**,
+  which is same as a vanilla **method** procedure except it receives arguments in
+  reflective expr forms rather than evaluated values, in addition to the reflective
+  `callerScope` as first argument
 
 ### Go-Routine
 
