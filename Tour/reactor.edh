@@ -1,6 +1,4 @@
-
 {
-
   evs = sink
   stopSig = sink 
 
@@ -20,7 +18,6 @@
     }
 
   }
-
 
   # wait a second
   for _ from runtime.everySeconds(1) do { break }

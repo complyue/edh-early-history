@@ -24,7 +24,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
     - [Compatible with Pythonic arguments](#compatible-with-pythonic-arguments)
     - [pkargs() the utility](#pkargs-the-utility)
     - [Args Unpacking on receiving](#args-unpacking-on-receiving)
-  - [Args Repacking on receiving](#args-repacking-on-receiving)
+    - [Args Repacking on receiving](#args-repacking-on-receiving)
     - [let does args](#let-does-args)
     - [for-from-do loop does args](#for-from-do-loop-does-args)
     - [import does args](#import-does-args)
@@ -45,12 +45,12 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Method Procedures](#method-procedures)
   - [Generator Procedures](#generator-procedures)
   - [Interpreter Procedures](#interpreter-procedures)
-  - [Class (Constructor) Procedures](#class-constructor-procedures)
+  - [Class Procedures](#class-procedures)
   - [Inheritance Hierarchy](#inheritance-hierarchy)
-- [Go Routine / Defer](#go-routine--defer)
-- [Event Sink / Reactor](#event-sink--reactor)
+- [Go Routines](#go-routines)
+- [Event Sink / Reactor / Defer](#event-sink--reactor--defer)
 - [Indexing](#indexing)
-- [More Magic Methods](#more-magic-methods)
+- [Defining More Magic Methods](#defining-more-magic-methods)
 - [Reflection](#reflection)
 - [Terminology](#terminology)
   - [World](#world)
@@ -349,7 +349,7 @@ pkargs( 3, 7, 5, y=11, z=9, )
 Đ:
 ```
 
-### Args Repacking on receiving
+#### Args Repacking on receiving
 
 ```bash
 Đ: method f (*args, **kwargs) [args, kwargs]
@@ -1009,21 +1009,475 @@ And maybe a rival of
 But lacks a well thought out, reflective **AST** (especially **Expr**)
 manipulation API.
 
-### Class (Constructor) Procedures
+### Class Procedures
+
+Checkout [simple-class.edh](./simple-class.edh)
+
+```bash
+Đ: {
+Đ|  1:
+Đ|  2:   class C (a) {
+Đ|  3:     b = 5
+Đ|  4:     method f (n) n*a/b
+Đ|  5:     method g (n) { v = (n+3)/a; return v*b}
+Đ|  6:
+Đ|  7:     method setA(a as this.a) pass
+Đ|  8:     method setB(b as this.b) pass
+Đ|  9:   }
+Đ| 10:
+Đ| 11:   c = C(17); # this semicolon is necessary,
+Đ| 12:   # or the following tuple will parse as a call
+Đ| 13:   # against the assignment result, which is the
+Đ| 14:   # newly constructed C object.
+Đ| 15:
+Đ| 16:   ( c.f(7) , c.g(7) )
+Đ| 17:
+Đ| 18: }
+( 119/5, 50/17, )
+Đ:
+Đ: c.setA(11); c.setB(23)
+Đ:
+Đ: ( c.f(7) , c.g(7) )
+( 77/23, 230/11, )
+Đ:
+```
 
 ### Inheritance Hierarchy
 
-`this` and `that`
+Checkout [inheritance.edh](./inheritance.edh)
 
-## Go Routine / Defer
+Many don't consider **Go** ([GoLang](https://golang.org)) an
+_Object Oriented_ programming language, neither is **Edh** in similar
+respect. **Edh** does pointer-wise
+[Type Embedding](https://go101.org/article/type-embedding.html)
+in **Go** spirit, while it takes a small step further to offer `that`
+reference, which refers to a descendant record from an ancestor
+method, in addition to `this` reference which refers to the lexical
+self record.
 
-## Event Sink / Reactor
+```bash
+Đ: {
+Đ|  1:
+Đ|  2:   class B (name) {
+Đ|  3:       method greeting(guest) {
+Đ|  4:           runtime.info <| ("Hello "++guest++", I am "++name++', your guide.')
+Đ|  5:       }
+Đ|  6:   }
+Đ|  7:
+Đ|  8:   class C () {
+Đ|  9:       extends B('Nobleman')
+Đ| 10:   }
+Đ| 11:
+Đ| 12:   class D () {
+Đ| 13:       extends B('Farmer')
+Đ| 14:
+Đ| 15:       method hello() {
+Đ| 16:           runtime.info <| (`Hello there!`)
+Đ| 17:       }
+Đ| 18:   }
+Đ| 19:
+Đ| 20:   class E () {
+Đ| 21:       extends C()
+Đ| 22:       extends D()
+Đ| 23:       # an E object will contain 2 copies of B object,
+Đ| 24:       # the order above matters in resolving the `greeting` method.
+Đ| 25:   }
+Đ| 26:
+Đ| 27: }
+<class: E>
+Đ:
+Đ: e = E()
+<object: E>
+Đ:
+Đ: e.hello()
+Đ:
+Đ: e.greeting('New Comer')
+ℹ️ <interactive>:16:11
+Hello there!
+Đ:
+Đ: embededD = case e of {{ D:d }} -> d
+ℹ️ <interactive>:4:11
+Hello New Comer, I am Farmer, your guide.
+<object: D>
+Đ: embededD.hello()
+Đ:
+Đ: d = D()
+ℹ️ <interactive>:16:11
+Hello there!
+<object: D>
+Đ: case d of {{ C:c }} -> c
+<fallthrough>
+Đ:
+Đ: embededC = case e of {{ C:c }} -> c
+<object: C>
+Đ: embededC.hello()
+* 😱 *
+💔
+📜 <interactive> 🔎 <adhoc>:1:1
+💣 No such attribute AttrByName "hello" from <object: C>
+👉 <interactive>:1:1
+Đ:
+```
+
+## Go Routines
+
+Checkout [goroutine.edh](./goroutine.edh)
+
+```bash
+Đ: {
+Đ|  1:
+Đ|  2:   n = 0
+Đ|  3:   go for nanos from runtime.everySeconds(1) do runtime.info
+Đ|  4:         <| '  ⏰ tick#' ++ (n+=1) ++ ' ⏲️  ' ++ nanos ++ 'ns'
+Đ|  5:
+Đ|  6:   # after main thread terminated, all forked descendant threads
+Đ|  7:   # will be terminated along with the Edh program too
+Đ|  8:   for _ from runtime.everySeconds(5) do { break }
+Đ|  9:
+Đ| 10: }
+ℹ️ <interactive>:3:3
+  ⏰ tick#1 ⏲️  1.579282582441298693e18ns
+ℹ️ <interactive>:3:3
+  ⏰ tick#2 ⏲️  1.579282583446034569e18ns
+ℹ️ <interactive>:3:3
+  ⏰ tick#3 ⏲️  1.579282584449083228e18ns
+ℹ️ <interactive>:3:3
+  ⏰ tick#4 ⏲️  1.579282585449430099e18ns
+Đ:
+```
+
+## Event Sink / Reactor / Defer
+
+Checkout [reactor.edh](./reactor.edh)
+
+```bash
+Đ: {
+Đ|  1:   evs = sink
+Đ|  2:   stopSig = sink
+Đ|  3:
+Đ|  4:   go {
+Đ|  5:
+Đ|  6:     defer {
+Đ|  7:       runtime.info <| "I'm really done."
+Đ|  8:     }
+Đ|  9:
+Đ| 10:     reactor stopSig ev {
+Đ| 11:       runtime.info <| '  🎬  stopping because: ' ++ ev
+Đ| 12:       break  # break from a reactor terminates the thread
+Đ| 13:     }
+Đ| 14:
+Đ| 15:     for ev from evs do {
+Đ| 16:       runtime.info <| '  🎐  sth happening: ' ++ ev
+Đ| 17:     }
+Đ| 18:
+Đ| 19:   }
+Đ| 20:
+Đ| 21:   # wait a second
+Đ| 22:   for _ from runtime.everySeconds(1) do { break }
+Đ| 23:
+Đ| 24:   evs <- '  🛎️  ding.ding..'
+Đ| 25:
+Đ| 26:   # wait a second
+Đ| 27:   for _ from runtime.everySeconds(1) do { break }
+Đ| 28:
+Đ| 29:   # stopSig <- "don't do that!"
+Đ| 30:
+Đ| 31:   evs <- '  🍃  chill..chill...'
+Đ| 32:
+Đ| 33:   # wait a second
+Đ| 34:   for _ from runtime.everySeconds(1) do { break }
+Đ| 35:
+Đ| 36:   stopSig <- "that's enough!"
+Đ| 37:
+Đ| 38:   evs <- '  ☎️  ling.ling..ling...'
+Đ| 39:
+Đ| 40:   # all descendant threads (go routines) will be terminated when
+Đ| 41:   # main thread terminates, need wait here to see any event above
+Đ| 42:   # being processed.
+Đ| 43:   for _ from runtime.everySeconds(1) do { break }
+Đ| 44:   # runtime.info <| 'main program terminating ...'
+Đ| 45: }
+ℹ️ <interactive>:16:7
+  🎐  sth happening:   🛎️  ding.ding..
+ℹ️ <interactive>:16:7
+  🎐  sth happening:   🍃  chill..chill...
+ℹ️ <interactive>:11:7
+  🎬  stopping because: that's enough!
+ℹ️ <interactive>:7:7
+I'm really done.
+Đ:
+```
 
 ## Indexing
 
-## More Magic Methods
+Checkout [indexable.edh](./indexable.edh)
+
+```bash
+Đ: {
+Đ|  1:   class Data () {
+Đ|  2:
+Đ|  3:     data = {}
+Đ|  4:
+Đ|  5:     # magic method responding to read with an index
+Đ|  6:     method ([]) (ix) {
+Đ|  7:
+Đ|  8:       # runtime.info <| 'Indexing with ' ++ type(ix) ++ ': ' ++ ix
+Đ|  9:
+Đ| 10:       case ix of {
+Đ| 11:
+Đ| 12:         {(start:stop:step)} -> {
+Đ| 13:           runtime.info <| 'Indexing interleaved 1d range: ' ++ ix
+Đ| 14:           break # no way to be success on a dict
+Đ| 15:         }
+Đ| 16:
+Đ| 17:         {(start:stop)} -> {
+Đ| 18:           runtime.info <| 'Indexing contiguous 1d range: ' ++ ix
+Đ| 19:           break # no way to be success on a dict
+Đ| 20:         }
+Đ| 21:
+Đ| 22:         {(dim'1, dim'2)} -> {
+Đ| 23:
+Đ| 24:           runtime.info <| 'Indexing 2d space with: ' ++ ix
+Đ| 25:
+Đ| 26:           case dim'1 of {
+Đ| 27:             {(start:stop:step)} -> {
+Đ| 28:               runtime.info <| 'Indexing interleaved 1st dimension range: ' ++ dim'1
+Đ| 29:               break # no way to be success on a dict
+Đ| 30:             }
+Đ| 31:
+Đ| 32:             {(start:stop)} -> {
+Đ| 33:               runtime.info <| 'Indexing contiguous 1st dimension range: ' ++ dim'1
+Đ| 34:               break # no way to be success on a dict
+Đ| 35:             }
+Đ| 36:           }
+Đ| 37:
+Đ| 38:           # similar can be done for 2nd dimension - dim'2
+Đ| 39:
+Đ| 40:           break # no way to be success on a dict
+Đ| 41:         }
+Đ| 42:
+Đ| 43:       }
+Đ| 44:
+Đ| 45:       case type(ix) of {
+Đ| 46:         DecimalType -> {
+Đ| 47:           runtime.info <| 'Indexing 1d element: ' ++ ix
+Đ| 48:         }
+Đ| 49:         StringType -> {
+Đ| 50:           runtime.info <| 'Indexing column by name: ' ++ ix
+Đ| 51:         }
+Đ| 52:         _ -> {
+Đ| 53:           runtime.info <| 'Suspicious index ' ++ type(ix) ++ ': ' ++ ix
+Đ| 54:           break # avoid actually doing indexing with this ix
+Đ| 55:         }
+Đ| 56:       }
+Đ| 57:
+Đ| 58:       this.data[ix]
+Đ| 59:     }
+Đ| 60:
+Đ| 61:     # magic method responding to write with an index
+Đ| 62:     method ([=]) (ix, val) this.data[ix] = val
+Đ| 63:
+Đ| 64:   }
+Đ| 65: }
+<class: Data>
+Đ:
+Đ: d = Data()
+<object: Data>
+Đ:
+Đ: d[3] = 5
+5
+Đ: d[3]
+5
+Đ:
+Đ: d['price'] = [1.2,1.3,1.1]
+ℹ️ <interactive>:47:11
+Indexing 1d element: 3
+[ 1.2, 1.3, 1.1, ]
+Đ: d['price']
+[ 1.2, 1.3, 1.1, ]
+Đ:
+ℹ️ <interactive>:50:11
+Indexing column by name: price
+Đ: # d[3:5] = 7
+Đ: d[3:5]
+Đ:
+Đ: d[3:5:2, 0:7:3]
+ℹ️ <interactive>:18:11
+Indexing contiguous 1d range: 3:5
+Đ:
+Đ: d[3, 5, 7]
+ℹ️ <interactive>:24:11
+Indexing 2d space with: ( 3:5:2, 0:7:3, )
+ℹ️ <interactive>:28:15
+Indexing interleaved 1st dimension range: 3:5:2
+Đ: ℹ️ <interactive>:53:11
+Suspicious index TupleType: ( 3, 5, 7, )
+Đ:
+```
+
+## Defining More Magic Methods
+
+Checkout [./magic.edh](./magic.edh)
+[batteries/magic/](../edh_modules/batteries/magic/)
+and
+[arith.edh](../edh_modules/batteries/magic/arith.edh)
+
+```bash
+Đ: import * 'batteries/magic'
+<object: <module>>
+Đ:
+Đ: {
+Đ|  1:
+Đ|  2:   class Tensor (name) {
+Đ|  3:
+Đ|  4:     method (+) (other) case type(other) of {
+Đ|  5:       # add to a constant
+Đ|  6:       DecimalType -> Tensor(name= '('++ this.name ++ '+' ++ other ++')')
+Đ|  7:
+Đ|  8:       case other of {{ Tensor:_ }} -> {
+Đ|  9:         # add to another Tensor
+Đ| 10:         return Tensor(name= '('++ this.name ++ '+' ++ other.name ++')')
+Đ| 11:       }
+Đ| 12:
+Đ| 13:       continue # as NotImplemented in Python
+Đ| 14:     }
+Đ| 15:
+Đ| 16:     method (*) (other) case type(other) of {
+Đ| 17:       # mul to a constant
+Đ| 18:       DecimalType -> Tensor(name= '('++ this.name ++ '*' ++ other ++')')
+Đ| 19:
+Đ| 20:       case other of {{ Tensor:_ }} -> {
+Đ| 21:         # mul to another Tensor
+Đ| 22:         return Tensor(name= '('++ this.name ++ '*' ++ other.name ++')')
+Đ| 23:       }
+Đ| 24:
+Đ| 25:       continue # as NotImplemented in Python
+Đ| 26:     }
+Đ| 27:
+Đ| 28:     method (-) (other) case type(other) of {
+Đ| 29:       # sub a constant
+Đ| 30:       DecimalType -> Tensor(name= '('++ this.name ++ '-' ++ other ++')')
+Đ| 31:
+Đ| 32:       case other of {{ Tensor:_ }} -> {
+Đ| 33:         # sub another Tensor
+Đ| 34:         return Tensor(name= '('++ this.name ++ '-' ++ other.name ++')')
+Đ| 35:       }
+Đ| 36:
+Đ| 37:       continue # as NotImplemented in Python
+Đ| 38:     }
+Đ| 39:
+Đ| 40:     method (-@) (other) case type(other) of {
+Đ| 41:       # sub from a constant
+Đ| 42:       DecimalType -> Tensor(name= '('++ other ++ '-' ++ this.name ++')')
+Đ| 43:
+Đ| 44:       case other of {{ Tensor:_ }} -> {
+Đ| 45:         error('not resolved to magic (-) of ' ++ lhv ++ ' ?!')
+Đ| 46:       }
+Đ| 47:
+Đ| 48:       continue # as NotImplemented in Python
+Đ| 49:     }
+Đ| 50:
+Đ| 51:     method (/) (other) case type(other) of {
+Đ| 52:       # div by a constant
+Đ| 53:       DecimalType -> Tensor(name= '('++ this.name ++ '/' ++ other ++')')
+Đ| 54:
+Đ| 55:       case other of {{ Tensor:_ }} -> {
+Đ| 56:         # div by another Tensor
+Đ| 57:         return Tensor(name= '('++ this.name ++ '/' ++ other.name ++')')
+Đ| 58:       }
+Đ| 59:
+Đ| 60:       continue # as NotImplemented in Python
+Đ| 61:     }
+Đ| 62:
+Đ| 63:     method (/@) (other) case type(other) of {
+Đ| 64:       # div to a constant
+Đ| 65:       DecimalType -> Tensor(name= '('++ other ++ '/' ++ this.name ++')')
+Đ| 66:
+Đ| 67:       case other of {{ Tensor:_ }} -> {
+Đ| 68:         error('not resolved to magic (/) of ' ++ lhv ++ ' ?!')
+Đ| 69:       }
+Đ| 70:
+Đ| 71:       continue # as NotImplemented in Python
+Đ| 72:     }
+Đ| 73:
+Đ| 74:   }
+Đ| 75:
+Đ| 76: }
+<class: Tensor>
+Đ:
+Đ: let (x, y) = (Tensor('x'), Tensor('y'))
+Đ:
+Đ: result = x + y; result?name
+(x+y)
+Đ: result = x + 5; result?name
+(x+5)
+Đ: result = 5 + x; result?name
+(x+5)
+Đ: result = x - 5; result?name
+(x-5)
+Đ: result = 5 - x; result?name
+(5-x)
+Đ: result = x * y; result?name
+(x*y)
+Đ: result = x / y; result?name
+(x/y)
+Đ: result = x * 3; result?name
+(x*3)
+Đ: result = 3 * x; result?name
+(x*3)
+Đ: result = x / 3; result?name
+(x/3)
+Đ: result = 3 / x; result?name
+(3/x)
+Đ:
+Đ: result = 3 + x / 7 * (y - 5); result?name
+(((x/7)*(y-5))+3)
+Đ:
+Đ: x + 'z'
+* 😱 *
+💔
+📜 <interactive> 🔎 <adhoc>:1:1
+📜 + 🔎 /qw/m3works/edh/edh_modules/batteries/magic/arith.edh:2:23
+📜 error 🔎 <hostcode>:1:1
+💣 Not possible to do (+) with ObjectType: <object: Tensor> and StringType: z
+👉 <Genesis>:1:1
+Đ:
+```
 
 ## Reflection
+
+Checkout [reflection.edh](./reflection.edh)
+
+```bash
+Đ: {
+Đ|  1:   method f(n) {
+Đ|  2:     method g(m) {
+Đ|  3:       scope()
+Đ|  4:     }
+Đ|  5:     return (scope(), g(5))
+Đ|  6:   }
+Đ|  7: }
+<method: f>
+Đ: let (s1, s2) = (*f(3))
+Đ: s2.traceback()
+<<interactive> *  @ <adhoc>:1:1>
+<f( n, ) @ <interactive>:1:15>
+<scope *  @ <hostcode>:1:1>
+
+Đ: s1.attrs()
+{ "g":<method: g>, "n":3, }
+Đ: s2.attrs()
+{ "m":5, }
+Đ: s2.eval(makeExpr(m/n))
+5/3
+Đ: s2.eval(makeExpr( (t=n/m) ))
+3/5
+Đ: s2.attrs()
+{ "m":5, "t":3/5, }
+Đ: s2.t
+3/5
+Đ:
+```
 
 ## Terminology
 
