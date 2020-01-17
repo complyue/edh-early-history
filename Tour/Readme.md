@@ -1018,11 +1018,14 @@ let (a.balance, b.balance) = (a.balance + amount, b.balance - amount)
 
 - Arguments packing for a procedure call
 
+  including explicit `pkargs(*,**,***)` call to construct an `ArgsPack`,
+  which is to be yielded from a generator, published to an event sink etc.
+
 ```python
 f ( x.pendingItems, x.doneItems )
 ```
 
-- list / tuple / dict construction
+- pair / list / tuple / dict construction
 
 ```python
 for itemOfInterest from [*a.cart, *a.wishlist] do
