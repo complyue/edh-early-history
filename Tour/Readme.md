@@ -1025,7 +1025,10 @@ let (a.balance, b.balance) = (a.balance + amount, b.balance - amount)
 f ( x.pendingItems, x.doneItems )
 ```
 
-- pair / list / tuple / dict construction
+- pair / tuple / list / dict construction
+
+  while multi-dimensional index construction (`a[x+o, y-3, z*5]`) is a
+  special case of tuple construction
 
 ```python
 for itemOfInterest from [*a.cart, *a.wishlist] do
