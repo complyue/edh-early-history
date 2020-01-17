@@ -723,8 +723,10 @@ for an example.
 ### Package
 
 Just a folder tree containing various `*.edh` file, resides directly or nested
-some levels within a `edh_modules` parent directory, so that reachable from
-`import` statements from **Edh** code.
+some levels within the **Edh** interpreter's
+[cwd](https://en.wikipedia.org/wiki/Working_directory)
+or a `edh_modules` parent directory, so that reachable from `import` statements
+from **Edh** code.
 
 See [Package / Module Structures](#package--module-structures)
 
