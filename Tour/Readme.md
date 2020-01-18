@@ -1262,10 +1262,10 @@ and [./concur.edh using that](./concur.edh)
 
 ```bash
 Đ: {
-Đ|  1:
+Đ|  1: 
 Đ|  2:   # fake some time costing works to do
 Đ|  3:   generator allWorksToDo(nJobs=10, leastSeconds=3) {
-Đ|  4:
+Đ|  4: 
 Đ|  5:     # use this proc to capture a local copy of the arguments for the task
 Đ|  6:     method longthyWork(job'num, seconds2take) {
 Đ|  7:       # this anonymous nullary proc defines the task in form of niladic computation
@@ -1282,36 +1282,36 @@ and [./concur.edh using that](./concur.edh)
 Đ| 18:           }
 Đ| 19:       }
 Đ| 20:     }
-Đ| 21:
+Đ| 21: 
 Đ| 22:     for n from range(nJobs) do yield longthyWork(n, leastSeconds + n)
 Đ| 23:   }
-Đ| 24:
+Đ| 24: 
 Đ| 25: }
 <generator: allWorksToDo>
-Đ:
+Đ: 
 Đ: {
-Đ|  1:
+Đ|  1: 
 Đ|  2: {#
 Đ|  3:   # `concur()` is the sorta primitive for concurrency scheduling,
 Đ|  4:   # it's a plain Edh method procedure defined in `batteries/root`
 Đ|  5:   # module so automically available in a Edh runtime, its signature
 Đ|  6:   # looks like following:
-Đ|  7:
+Đ|  7: 
 Đ|  8:   method concur(*tasks, c=6, dbgLogger=0) {
 Đ|  9:     ...
 Đ| 10:   }
 Đ| 11: #}
-Đ| 12:
+Đ| 12: 
 Đ| 13:   concur(
-Đ| 14:
+Đ| 14: 
 Đ| 15:     * (,) =< for work from allWorksToDo(10, 3) do work,
-Đ| 16: #  ^--^--^------positional arguments unpacking
-Đ| 17: #     |--+------tuple comprehension target/tag
-Đ| 18: #        |------comprehension operator in Edh
-Đ| 19:
+Đ| 16: #   ^--^--^------positional arguments unpacking
+Đ| 17: #      |--+------tuple comprehension target/tag
+Đ| 18: #         |------comprehension operator in Edh
+Đ| 19: 
 Đ| 20:     c=5, dbgLogger=runtime.info,
-Đ| 21: #   ^------------^---------------keyword arguments
-Đ| 22:
+Đ| 21: #    ^------------^---------------keyword arguments
+Đ| 22: 
 Đ| 23:   )
 Đ| 24: }
 ℹ️ <interactive>:9:9

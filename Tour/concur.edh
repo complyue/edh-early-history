@@ -42,12 +42,12 @@
   concur(
 
     * (,) =< for work from allWorksToDo(10, 3) do work,
-#  ^--^--^------positional arguments unpacking
-#     |--+------tuple comprehension target/tag
-#        |------comprehension operator in Edh
+#   ^--^--^------positional arguments unpacking
+#      |--+------tuple comprehension target/tag
+#         |------comprehension operator in Edh
 
     c=5, dbgLogger=runtime.info,
-#   ^------------^---------------keyword arguments
+#    ^------------^---------------keyword arguments
 
   )
 }
