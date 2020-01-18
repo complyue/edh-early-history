@@ -19,6 +19,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Paste code snippets from this Tour](#paste-code-snippets-from-this-tour)
 - [Package / Module Structures](#package--module-structures)
 - [Micro Structures](#micro-structures)
+  - [Importing other Edh modules](#importing-other-edh-modules)
   - [Lossless Decimal for Numbers](#lossless-decimal-for-numbers)
   - [Arguments (Un / Re) Packing](#arguments-un--re-packing)
     - [Compatible with Pythonic arguments](#compatible-with-pythonic-arguments)
@@ -207,7 +208,10 @@ the goat is telling a tale
 
 ## Package / Module Structures
 
-Very similar to the deeply-nested
+Checkout the directory/file structure of the mere **Edh** parts of default
+batteries [in this repository](../edh_modules/)
+
+It's very similar to the deeply-nested
 [`node_modules` folder structures](https://nodejs.org/api/modules.html#modules_loading_from_node_modules_folders)
 as with [NodeJS](https://nodejs.org), for an **Edh** program, _Just_
 translate the following folder/file names:
@@ -225,6 +229,72 @@ Note that module `batteries/root` will be imported into root scope of an
 when a **world** is created).
 
 ## Micro Structures
+
+### Importing other Edh modules
+
+**import** in **Edh** works similar to `require()` in **JavaScript**, to
+import from `*.edh` files from the local filesystem. Note you always don't
+include `.edh` file extension name, but the actuall files must have it.
+
+A import path started with `./` (e.g.
+`import * './the/path/to/modu_file'`
+) is relative path, relative to parent directory of the module file which
+contains the very `import` statement. The file must exists at the expected
+path, or the import fails.
+
+Otherwise it's absolute import path (e.g.
+`import * 'pkg/subpkg/modu_file'`), **Edh** will search local filesystem
+for expected path relative to any `edh_modules` directory from the current
+working directory upwards. This is to facility the mechanism for any package
+to localize its specialized versions of dependencies, while commonly agreed
+versions of packages can sit at upper levels as to be shared.
+
+Checkout how [npm](https://www.npmjs.com/) manages
+[NodeJS](https://nodejs.org/en/) packages to see the idea.
+
+You use _argument receiving_ semantics and the same syntax to specify
+what is expected from the source module, and what goes into local scope.
+
+Remember that artifacts with an alphanumerric name started with underscore
+( `_` ) will never be imported (i.e. treated as private to that module),
+and if an artifact is a [Symbol](#symbol) value (don't confuse with a
+symbolic attribute though), it will neither be imported however named
+(symbol values commonly are just alphanumeric named attributes, the name
+for itself would better be brief and meaningful, you'd prefer
+`obj.@name` over `obj.@_the_hidden_name_`, where you'd have
+`name = Symbol('name')` globally in the module)
+
+Using a wild receiver ( `*` ) is suitable to import package local modules,
+this is how from within
+[edh_modules/batteries/magic/\_\_init\_\_.edh](../edh_modules/batteries/magic/__init__.edh)
+
+```js
+import * './arith'
+```
+
+to import everything defined in
+[edh_modules/batteries/magic/arith.edh](../edh_modules/batteries/magic/arith.edh)
+
+Otherwise you should use keyword argument receiver syntax, and the receiving
+need to be _total_, though you can do a wild drop with `**_`
+
+```bash
+Đ: import (**ops) 'batteries/magic'
+<object: <module>>
+Đ: ops
+pkargs( *=<operator: (*) 7>, +=<operator: (+) 6>, -=<operator: (-) 6>, /=<operator: (/) 7>, )
+Đ: import ((+) as the'plus'op, **_) 'batteries/magic'
+<object: <module>>
+Đ: the'plus'op
+<operator: (+) 6>
+Đ: import ((+)) 'batteries/magic'
+* 😱 *
+💔
+📜 <interactive> 🔎 <adhoc>:1:1
+💣 Extraneous keyword arguments: * - /
+👉 <interactive>:1:1
+Đ:
+```
 
 ### Lossless Decimal for Numbers
 
@@ -1659,6 +1729,10 @@ scattered [here](https://docs.python.org/3/library/asyncio-sync.html),
 [there](https://golang.org/pkg/sync) and many _otherwheres_
 (despite of many **async** frameworks trying to mitigate that disputable
 complexity), with every methods you attempt to program concurrency otherwise.
+
+Checkout a way to control concurrency with **Edh**
+[here](../edh_modules/batteries/root/concur.edh)
+and [a working example to use that](./concur.edh) .
 
 ### Transaction (STM)
 

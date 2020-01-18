@@ -1,6 +1,11 @@
-# Đ (Edh) - the next-big-things ought to happen with Haskell instead of C/C++
+# Đ (Edh) - The next-big-things ought to happen with Haskell not C/C++
 
-Impatient? - Take [A Tour of Đ (Edh)](./Tour/)
+## Quick Start
+
+- Take [A Tour of Đ (Edh)](./Tour/)
+- Clone or derive the scaffold: [EdhIm - Đ (Edh) doing Instant Messaging](../edhim/)
+
+## What is Đ (Edh)
 
 **Edh** as a programming language is born just recently,
 but it's vastly neither new, major ideas all come from successful languages
@@ -18,6 +23,8 @@ brought into an _Object_ layer, giving you lock-free (a.k.a optimistic locking)
 transactions, with intuitive as well as pragmatic constructs to
 program data consistency under heavy concurrency.
 
+- [Quick Start](#quick-start)
+- [What is Đ (Edh)](#what-is-%c4%90-edh)
 - [The name](#the-name)
 - [Philosophy](#philosophy)
   - [About Everything](#about-everything)
