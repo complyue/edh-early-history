@@ -1126,8 +1126,6 @@ Checkout [simple-class.edh](./simple-class.edh)
 
 ### Inheritance Hierarchy
 
-Checkout [inheritance.edh](./inheritance.edh)
-
 Many don't consider **Go** ([GoLang](https://golang.org)) an
 _Object Oriented_ programming language, neither is **Edh** in similar
 respect. **Edh** does pointer-wise
@@ -1136,6 +1134,11 @@ in **Go** spirit, while it takes a small step further to offer `that`
 reference, which refers to a descendant record from an ancestor
 method, in addition to `this` reference which refers to the lexical
 self record.
+
+This is yet another much under explored area in **Edh**, trying to do
+traditional style object oriented inheritance is problematic:
+
+Checkout [inheritance.edh](./inheritance.edh)
 
 ```bash
 Đ: {
@@ -1171,21 +1174,24 @@ self record.
 Đ: e = E()
 <object: E>
 Đ:
+Đ: supers(e)
+( <object: D>, <object: C>, )
+Đ:
 Đ: e.hello()
-Đ:
-Đ: e.greeting('New Comer')
-ℹ️ <interactive>:16:11
+Đ: ℹ️ <interactive>:16:11
 Hello there!
-Đ:
-Đ: embededD = case e of {{ D:d }} -> d
-ℹ️ <interactive>:4:11
+
+Đ: e.greeting('New Comer')
+Đ: ℹ️ <interactive>:4:11
 Hello New Comer, I am Farmer, your guide.
+
+Đ: embededD = case e of {{ D:d }} -> d
 <object: D>
 Đ: embededD.hello()
-Đ:
-Đ: d = D()
-ℹ️ <interactive>:16:11
+Đ: ℹ️ <interactive>:16:11
 Hello there!
+
+Đ: d = D()
 <object: D>
 Đ: case d of {{ C:c }} -> c
 <fallthrough>
@@ -1200,6 +1206,25 @@ Hello there!
 👉 <interactive>:1:1
 Đ:
 ```
+
+And `that` reference is not very useful alone, as you can barely make
+any assumption about the record it points to. Well further ideas to leverage
+the inheritance constructs so far may include:
+
+- Use symbols to augment `that` descendant record from ancestor methods
+  If two modules each defines their own `name = Symbol('name')` symbol,
+  assign and use `that.@name = xxx`, there's no clash at all, the
+  augmented symbolic attributes are neither visible to irrelevant
+  parties at all.
+
+- Make several super classes knowing eachother well, for end classes to
+  selective `extends` a combination of them, then any of them can use
+  `cast that of {{ FriendClass:friendInst }} ->` to work with allied
+  records, along with `this` self record.
+
+- Document the expected behavior / attribute set by ancestor classes for
+  decendant classes to follow. Personally I don't like this idea, but it
+  is trivially doable.
 
 ## Go Routines
 

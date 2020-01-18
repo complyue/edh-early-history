@@ -30,6 +30,8 @@
 
 e = E()
 
+supers(e)
+
 e.hello()
 
 e.greeting('New Comer')
