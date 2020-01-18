@@ -49,6 +49,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
   - [Class Procedures](#class-procedures)
   - [Inheritance Hierarchy](#inheritance-hierarchy)
 - [Go Routines](#go-routines)
+- [Programming the Concurrency](#programming-the-concurrency)
 - [Event Sink / Reactor / Defer](#event-sink--reactor--defer)
 - [Indexing](#indexing)
 - [Defining More Magic Methods](#defining-more-magic-methods)
@@ -1250,6 +1251,116 @@ Checkout [goroutine.edh](./goroutine.edh)
   ⏰ tick#3 ⏲️  1.579282584449083228e18ns
 ℹ️ <interactive>:3:3
   ⏰ tick#4 ⏲️  1.579282585449430099e18ns
+Đ:
+```
+
+## Programming the Concurrency
+
+Checkout the implementation of
+[concur](../edh_modules/batteries/root/concur.edh)
+and [./concur.edh using that](./concur.edh)
+
+```bash
+Đ: {
+Đ|  1:
+Đ|  2:   # fake some time costing works to do
+Đ|  3:   generator allWorksToDo(nJobs=10, leastSeconds=3) {
+Đ|  4:
+Đ|  5:     # use this proc to capture a local copy of the arguments for the task
+Đ|  6:     method longthyWork(job'num, seconds2take) {
+Đ|  7:       # this anonymous nullary proc defines the task in form of niladic computation
+Đ|  8:       method _ () {
+Đ|  9:         runtime.info <| '  🏎️  #' ++ job'num ++ ' started'
+Đ| 10:         n = 0
+Đ| 11:         for nanos from runtime.everySeconds(1) do if (n+=1) >= seconds2take
+Đ| 12:           then {
+Đ| 13:             runtime.info <| '  🏁  #' ++ job'num ++ ' done'
+Đ| 14:             break
+Đ| 15:           } else {
+Đ| 16:             # uncomment line below to see even more verbose log
+Đ| 17:             runtime.info <| '  📝  #' ++ job'num ++ ' tick ' ++ nanos
+Đ| 18:           }
+Đ| 19:       }
+Đ| 20:     }
+Đ| 21:
+Đ| 22:     for n from range(nJobs) do yield longthyWork(n, leastSeconds + n)
+Đ| 23:   }
+Đ| 24:
+Đ| 25: }
+<generator: allWorksToDo>
+Đ:
+Đ: {
+Đ|  1:
+Đ|  2: {#
+Đ|  3:   # `concur()` is the sorta primitive for concurrency scheduling,
+Đ|  4:   # it's a plain Edh method procedure defined in `batteries/root`
+Đ|  5:   # module so automically available in a Edh runtime, its signature
+Đ|  6:   # looks like following:
+Đ|  7:
+Đ|  8:   method concur(*tasks, c=6, dbgLogger=0) {
+Đ|  9:     ...
+Đ| 10:   }
+Đ| 11: #}
+Đ| 12:
+Đ| 13:   concur(
+Đ| 14:
+Đ| 15:     * (,) =< for work from allWorksToDo(10, 3) do work,
+Đ| 16: #  ^--^--^------positional arguments unpacking
+Đ| 17: #     |--+------tuple comprehension target/tag
+Đ| 18: #        |------comprehension operator in Edh
+Đ| 19:
+Đ| 20:     c=5, dbgLogger=runtime.info,
+Đ| 21: #   ^------------^---------------keyword arguments
+Đ| 22:
+Đ| 23:   )
+Đ| 24: }
+ℹ️ <interactive>:9:9
+  🏎️  #0 started
+ℹ️ <interactive>:9:9
+  🏎️  #1 started
+ℹ️ <interactive>:9:9
+  🏎️  #2 started
+ℹ️ <interactive>:9:9
+  🏎️  #3 started
+ℹ️ <interactive>:9:9
+  🏎️  #4 started
+ℹ️ <interactive>:17:13
+  📝  #3 tick 1.579333753092014804e18
+ℹ️ <interactive>:17:13
+  📝  #2 tick 1.579333753092287532e18
+ℹ️ <interactive>:17:13
+  📝  #1 tick 1.579333753092451355e18
+ℹ️ <interactive>:17:13
+  📝  #0 tick 1.579333753092594537e18
+ℹ️ <interactive>:17:13
+
+...
+
+  📝  #9 tick 1.579333766119424579e18
+ℹ️ <interactive>:17:13
+  📝  #8 tick 1.579333767121141122e18
+ℹ️ <interactive>:13:13
+  🏁  #7 done
+ℹ️ <interactive>:17:13
+  📝  #9 tick 1.579333767121039419e18
+ℹ️ /home/cyue/m3works/edh/edh_modules/batteries/root/concur.edh:85:5
+  ⏲️  finishing up concur tasks, 2 still running.
+ℹ️ <interactive>:17:13
+  📝  #8 tick 1.579333768122743608e18
+ℹ️ <interactive>:17:13
+  📝  #9 tick 1.57933376812269955e18
+ℹ️ <interactive>:13:13
+  🏁  #8 done
+ℹ️ <interactive>:17:13
+  📝  #9 tick 1.579333769124342985e18
+ℹ️ /home/cyue/m3works/edh/edh_modules/batteries/root/concur.edh:85:5
+  ⏲️  finishing up concur tasks, 1 still running.
+ℹ️ <interactive>:17:13
+  📝  #9 tick 1.579333770126210104e18
+ℹ️ <interactive>:13:13
+  🏁  #9 done
+Đ: ℹ️ /home/cyue/m3works/edh/edh_modules/batteries/root/concur.edh:82:5
+  🎉  all concur tasks done.
 Đ:
 ```
 
