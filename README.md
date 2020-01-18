@@ -3,7 +3,8 @@
 ## Quick Start
 
 - Take [A Tour of Đ (Edh)](./Tour/)
-- Clone or derive the scaffold: [EdhIm - Đ (Edh) doing Instant Messaging](../edhim/)
+- Clone or derive the scaffold:
+  [EdhIm - Đ (Edh) doing Instant Messaging](https://github.com/e-wrks/edhim)
 
 ## What is Đ (Edh)
 
@@ -46,7 +47,7 @@ in **Python**.
 Take the [Tour](./Tour/) to see what **Edh** has to offer.
 
 [**Julia**](https://julialang.org) is an alternative all-in-one solution
-for the **next-big-thing**, but has a learning curve not too less
+for the **next-big-things**, but has a learning curve not too less
 steep than **Haskell**, **Edh** is faithful to get people with just
 **Python**/**JavaScript**/**Go** knowledge and skills started with
 a [world](./Tour/#world) in **Haskell**.
