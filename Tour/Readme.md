@@ -670,7 +670,8 @@ Logging is done by an operator (**<|**) too, surprise!
 
 `runtime.xxx` are just number values to specify the target level of
 a log record, and the process environment variable `EDH_LOG_LEVEL`
-if set, will cause log records with lower target levels be dropped.
+if set, will cause log records with lower target levels be dropped
+(not eval'ed at all in fact).
 
 ```bash
 $ export EDH_LOG_LEVEL=WARN
@@ -678,6 +679,17 @@ $ edhi
 >> Bare Đ (Edh) Interpreter <<
 * Blank Screen Syndrome ? Take the Tour as your companion, checkout:
   https://github.com/e-wrks/edh/Tour/
+Đ: runtime.debug
+10
+Đ: runtime.info
+20
+Đ: runtime.warn
+30
+Đ: runtime.error
+40
+Đ: runtime.fatal
+50
+Đ:
 Đ: runtime.warn <| "You won't see source location info in log if the level is WARN or higher"
 Đ: ⚠️ You won't see source location info in log if the level is WARN or higher
 Đ:
@@ -692,11 +704,6 @@ Source location is informative most of the time, right?
 Đ: runtime.debug <| "Especially when trouble shooting some unexpected results."
 Đ: 🐞 <interactive>:1:1
 Especially when trouble shooting some unexpected results.
-Đ: runtime.warn
-30
-Đ: 30<|'use a number works the same way!'
-Đ: ⚠️ <interactive>:1:1
-use a number works the same way!
 Đ:
 ```
 
@@ -711,6 +718,9 @@ DecimalType
 ( HostProcType, HostOperType, TypeType, )
 Đ: type(pkargs(1,2,k1='a'), type'of'dict={,}, type'of'tuple=(,), type'of'list=[], type'of'nil=nil)
 pkargs( ArgsPackType, type'of'dict=DictType, type'of'list=ListType, type'of'nil=nil, type'of'tuple=TupleType, )
+Đ: 50<|'use a number works the same way!'
+Đ: 🔥 <interactive>:1:1
+use a number works the same way!
 Đ:
 ```
 
@@ -751,7 +761,9 @@ matched with `true`.
 
 Check out [case-of.edh](./case-of.edh)
 
-To match against some value determined at runtime, you use `case-of`:
+To match against some value determined at runtime, you use `case-of`, it
+looks and feels the same as `case of` in **Haskell** except not statically
+typed.
 
 ```bash
 Đ: case type('the question', 5) of (StringType, DecimalType) -> 'yeath'
