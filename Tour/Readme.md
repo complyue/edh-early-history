@@ -52,7 +52,7 @@ See [Edh Im](https://github.com/e-wrks/edhim) for an example.
 - [Event Sink / Reactor / Defer](#event-sink--reactor--defer)
 - [Indexing](#indexing)
 - [Defining More Magic Methods](#defining-more-magic-methods)
-- [Reflection](#reflection)
+- [Reflections](#reflections)
 - [Terminology](#terminology)
   - [World](#world)
   - [Package](#package)
@@ -1319,6 +1319,9 @@ I'm really done.
 
 Checkout [indexable.edh](./indexable.edh)
 
+This is meant to attract people to port **Pandas** and **Numpy** to
+**Haskell** with the aid of **Edh**.
+
 ```bash
 Đ: {
 Đ|  1:   class Data () {
@@ -1395,28 +1398,31 @@ Checkout [indexable.edh](./indexable.edh)
 5
 Đ: d[3]
 5
-Đ:
-Đ: d['price'] = [1.2,1.3,1.1]
-ℹ️ <interactive>:47:11
+Đ: ℹ️ <interactive>:47:11
 Indexing 1d element: 3
+Đ: d['price'] = [1.2,1.3,1.1]
 [ 1.2, 1.3, 1.1, ]
 Đ: d['price']
 [ 1.2, 1.3, 1.1, ]
-Đ:
-ℹ️ <interactive>:50:11
+Đ: ℹ️ <interactive>:50:11
 Indexing column by name: price
-Đ: # d[3:5] = 7
+Đ: d[3:5] = 7
+* 😱 *
+💔
+📜 <interactive> 🔎 <adhoc>:1:1
+📜 [=] 🔎 <interactive>:62:28
+💣 Invalid dict key: PairType: 3:5
+👉 <interactive>:62:28
+Đ:
 Đ: d[3:5]
-Đ:
-Đ: d[3:5:2, 0:7:3]
-ℹ️ <interactive>:18:11
+Đ: ℹ️ <interactive>:18:11
 Indexing contiguous 1d range: 3:5
-Đ:
-Đ: d[3, 5, 7]
-ℹ️ <interactive>:24:11
+Đ: d[3:5:2, 0:7:3]
+Đ: ℹ️ <interactive>:24:11
 Indexing 2d space with: ( 3:5:2, 0:7:3, )
 ℹ️ <interactive>:28:15
 Indexing interleaved 1st dimension range: 3:5:2
+Đ: d[3, 5, 7]
 Đ: ℹ️ <interactive>:53:11
 Suspicious index TupleType: ( 3, 5, 7, )
 Đ:
@@ -1428,6 +1434,9 @@ Checkout [./magic.edh](./magic.edh)
 [batteries/magic/](../edh_modules/batteries/magic/)
 and
 [arith.edh](../edh_modules/batteries/magic/arith.edh)
+
+This is meant to attract people to port **Theano** and **TensorFlow** as well as
+**Pandas** and **Numpy** to **Haskell** with the aid of **Edh**.
 
 ```bash
 Đ: import * 'batteries/magic'
@@ -1551,9 +1560,12 @@ and
 Đ:
 ```
 
-## Reflection
+## Reflections
 
 Checkout [reflection.edh](./reflection.edh)
+
+So far there's only `makeOp` and `makeExpr()` for **AST** manipulation,
+there ought to be comprehensive API to do more useful things.
 
 ```bash
 Đ: {
