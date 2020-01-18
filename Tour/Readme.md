@@ -1218,8 +1218,8 @@ the inheritance constructs so far may include:
   parties at all.
 
 - Make several super classes knowing eachother well, for end classes to
-  selective `extends` a combination of them, then any of them can use
-  `cast that of {{ FriendClass:friendInst }} ->` to work with allied
+  selectively `extends` a combination of them, then any of them can use
+  `case that of {{ FriendClass:friendInst }} ->` to work with allied
   records, along with `this` self record.
 
 - Document the expected behavior / attribute set by ancestor classes for
